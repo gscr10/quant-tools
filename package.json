@@ -5,6 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
+    "test:e2e": "python3 tests/e2e_app.py",
+    "test:e2e:prod": "npm run build && python3 tests/e2e_app.py --preview",
+    "test:providers": "python3 tests/provider_smoke.py",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview"

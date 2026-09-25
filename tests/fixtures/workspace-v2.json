@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "layout": "2h",
+  "timezone": "Etc/UTC",
+  "sync": {},
+  "charts": [
+    {
+      "id": "c1",
+      "symbol": "binance:BTCUSDT.P",
+      "provider": "binance",
+      "timeframe": "30",
+      "priceStyle": "candles",
+      "watermark": true,
+      "indicatorTitles": true,
+      "indicatorValues": true,
+      "rendererConfig": {
+        "version": 1,
+        "chartTypes": {},
+        "layout": {
+          "background": "#151619",
+          "textColor": "#b2b5be",
+          "fontFamily": "sans-serif",
+          "fontSize": 11
+        },
+        "grid": {
+          "vertLines": { "visible": true, "color": "#20222c" },
+          "horzLines": { "visible": true, "color": "#20222c" }
+        },
+        "crosshair": {
+          "color": "#9aa0ad",
+          "width": 1,
+          "style": "dashed",
+          "opacity": 0.4,
+          "labelBackground": "#595959"
+        },
+        "priceScale": {
+          "mode": "price",
+          "log": false,
+          "invert": false,
+          "borderColor": "#2a2b30",
+          "labelsVisible": true,
+          "currentPriceLine": true,
+          "priceLabel": true,
+          "countdown": true,
+          "animateLastPrice": false
+        },
+        "animations": { "zoom": true, "pan": true, "autoscale": true, "intro": true },
+        "panes": { "separatorColor": "#2a2b30" },
+        "margins": { "top": 10, "bottom": 10, "right": 10 },
+        "trades": {
+          "visible": true,
+          "labels": true,
+          "qty": true,
+          "longColor": "#2962ff",
+          "shortColor": "#f23645",
+          "exitColor": "#d500f9"
+        },
+        "timeScale": { "timezone": "UTC" },
+        "marks": { "visible": true, "groups": {} },
+        "candles": {
+          "upColor": "#089981",
+          "downColor": "#f23645",
+          "bodyVisible": true,
+          "borderVisible": false,
+          "borderUpColor": "#089981",
+          "borderDownColor": "#f23645",
+          "wickVisible": true,
+          "wickUpColor": "#089981",
+          "wickDownColor": "#f23645"
+        },
+        "bars": { "upColor": "#089981", "downColor": "#f23645" },
+        "line": { "color": "#3b82f6", "width": 2 },
+        "stacking": { "candles": 0, "series": { "ind-3": -2, "native-1": -1 } },
+        "area": {
+          "lineColor": "#3b82f6",
+          "width": 2,
+          "topColor": "rgba(59,130,246,0.28)",
+          "bottomColor": "rgba(59,130,246,0.02)"
+        },
+        "baseline": {
+          "topLineColor": "#089981",
+          "bottomLineColor": "#f23645",
+          "topFillColor": "rgba(8,153,129,0.25)",
+          "topFillColor2": "rgba(8,153,129,0.05)",
+          "bottomFillColor": "rgba(242,54,69,0.25)",
+          "bottomFillColor2": "rgba(242,54,69,0.05)",
+          "width": 2,
+          "baselineLevel": 50
+        },
+        "series": { "style": "candles", "baseline": null, "spacing": 1 },
+        "sessions": {
+          "premarketColor": "rgba(255,152,0,0.08)",
+          "postmarketColor": "rgba(41,98,255,0.08)",
+          "extendedColor": "rgba(41,98,255,0.08)"
+        }
+      },
+      "drawings": { "version": 1, "drawings": [] },
+      "indicators": { "manifest": [], "natives": ["volume"] },
+      "ext": {
+        "quant-tools.external-indicators": [
+          {
+            "name": "My Indicator",
+            "script": "//@version=6\nindicator(\"My Indicator\", overlay=true)\n\nplot(ta.ema(close, 14), \"EMA 14\", color.orange)\n",
+            "language": "pine",
+            "id": "ind-3",
+            "hidden": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "c2",
+      "symbol": "BTCUSDT",
+      "timeframe": "15",
+      "priceStyle": "candles",
+      "watermark": true,
+      "indicatorTitles": true,
+      "indicatorValues": true,
+      "rendererConfig": {
+        "version": 1,
+        "chartTypes": {},
+        "layout": {
+          "background": "#151619",
+          "textColor": "#b2b5be",
+          "fontFamily": "sans-serif",
+          "fontSize": 11
+        },
+        "grid": {
+          "vertLines": { "visible": true, "color": "#20222c" },
+          "horzLines": { "visible": true, "color": "#20222c" }
+        },
+        "crosshair": {
+          "color": "#9aa0ad",
+          "width": 1,
+          "style": "dashed",
+          "opacity": 0.4,
+          "labelBackground": "#595959"
+        },
+        "priceScale": {
+          "mode": "price",
+          "log": false,
+          "invert": false,
+          "borderColor": "#2a2b30",
+          "labelsVisible": true,
+          "currentPriceLine": true,
+          "priceLabel": true,
+          "countdown": true,
+          "animateLastPrice": false
+        },
+        "animations": { "zoom": true, "pan": true, "autoscale": true, "intro": true },
+        "panes": { "separatorColor": "#2a2b30" },
+        "margins": { "top": 10, "bottom": 10, "right": 10 },
+        "trades": {
+          "visible": true,
+          "labels": true,
+          "qty": true,
+          "longColor": "#2962ff",
+          "shortColor": "#f23645",
+          "exitColor": "#d500f9"
+        },
+        "timeScale": { "timezone": "UTC" },
+        "marks": { "visible": true, "groups": {} },
+        "candles": {
+          "upColor": "#089981",
+          "downColor": "#f23645",
+          "bodyVisible": true,
+          "borderVisible": false,
+          "borderUpColor": "#089981",
+          "borderDownColor": "#f23645",
+          "wickVisible": true,
+          "wickUpColor": "#089981",
+          "wickDownColor": "#f23645"
+        },
+        "bars": { "upColor": "#089981", "downColor": "#f23645" },
+        "line": { "color": "#3b82f6", "width": 2 },
+        "stacking": { "candles": 0, "series": { "ind-2": -2, "native-1": -1 } },
+        "area": {
+          "lineColor": "#3b82f6",
+          "width": 2,
+          "topColor": "rgba(59,130,246,0.28)",
+          "bottomColor": "rgba(59,130,246,0.02)"
+        },
+        "baseline": {
+          "topLineColor": "#089981",
+          "bottomLineColor": "#f23645",
+          "topFillColor": "rgba(8,153,129,0.25)",
+          "topFillColor2": "rgba(8,153,129,0.05)",
+          "bottomFillColor": "rgba(242,54,69,0.25)",
+          "bottomFillColor2": "rgba(242,54,69,0.05)",
+          "width": 2,
+          "baselineLevel": 50
+        },
+        "series": { "style": "candles", "baseline": null, "spacing": 1 },
+        "sessions": {
+          "premarketColor": "rgba(255,152,0,0.08)",
+          "postmarketColor": "rgba(41,98,255,0.08)",
+          "extendedColor": "rgba(41,98,255,0.08)"
+        }
+      },
+      "drawings": { "version": 1, "drawings": [] },
+      "indicators": { "manifest": [], "natives": ["volume"] },
+      "ext": {
+        "quant-tools.external-indicators": [
+          {
+            "name": "E2E Copy",
+            "script": "//@version=6\nindicator(\"Cell Two\", overlay=true)\n\nplot(open)",
+            "language": "pine",
+            "id": "ind-2",
+            "hidden": false
+          }
+        ]
+      }
+    }
+  ],
+  "activeCellId": "c2",
+  "panels": { "open": "quant-pine-editor" }
+}

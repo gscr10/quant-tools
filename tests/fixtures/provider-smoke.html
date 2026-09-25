@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Quant Tools Provider Smoke</title>
+  </head>
+  <body>
+    <script type="module">
+      import { BinanceProvider } from '@luxalgo/vela/providers/binance';
+      import { HyperliquidProvider } from '@luxalgo/vela/providers/hyperliquid';
+
+      const TIMEOUT_MS = 30_000;
+
+      function assertBar(bar, label) {
+        if (!Number.isFinite(bar?.time)) throw new Error(`${label}: invalid time`);
+        for (const field of ['open', 'high', 'low', 'close']) {
+          if (!Number.isFinite(bar?.[field])) throw new Error(`${label}: invalid ${field}`);
+        }
+        if (bar.high < bar.low) throw new Error(`${label}: high is below low`);
+      }
+
+      async function withTimeout(promise, label) {
+        let timer;
+        try {
+          return await Promise.race([
+            promise,
+            new Promise((_, reject) => {
+              timer = setTimeout(() => reject(new Error(`${label} timed out`)), TIMEOUT_MS);
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      async function verifyHistory(provider, symbol, label) {
+        const bars = await withTimeout(
+          provider.getBars(symbol, '15', { limit: 5 }),
+          `${label} history`,
+        );
+        if (bars.length < 2) throw new Error(`${label}: expected historical bars`);
+        bars.forEach((bar) => assertBar(bar, `${label} history`));
+        return bars.length;
+      }
+
+      async function verifyLive(provider, symbol, label) {
+        await withTimeout(new Promise((resolve, reject) => {
+          let settled = false;
+          let unsubscribe = () => {};
+          const finish = (error) => {
+            if (settled) return;
+            settled = true;
+            unsubscribe();
+            if (error) reject(error);
+            else resolve();
+          };
+          try {
+            unsubscribe = provider.subscribe(symbol, '15', (bar) => {
+              try {
+                assertBar(bar, `${label} live`);
+                finish();
+              } catch (error) {
+                finish(error);
+              }
+            });
+          } catch (error) {
+            finish(error);
+          }
+        }), `${label} live update`);
+      }
+
+      window.runProviderSmoke = async () => {
+        const binance = new BinanceProvider();
+        const hyperliquid = new HyperliquidProvider();
+        const [binanceBars, hyperliquidBars] = await Promise.all([
+          verifyHistory(binance, 'BTCUSDT', 'Binance'),
+          verifyHistory(hyperliquid, 'BTC', 'Hyperliquid'),
+        ]);
+        await Promise.all([
+          verifyLive(binance, 'BTCUSDT', 'Binance'),
+          verifyLive(hyperliquid, 'BTC', 'Hyperliquid'),
+        ]);
+        return {
+          binance: { historyBars: binanceBars, live: true },
+          hyperliquid: { historyBars: hyperliquidBars, live: true },
+        };
+      };
+      window.providerSmokeReady = true;
+    </script>
+  </body>
+</html>
