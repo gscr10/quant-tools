@@ -1,0 +1,49 @@
+{
+  "vela-pine:scripts:v1": [
+    {
+      "name": "Legacy Script",
+      "script": "//@version=6\nindicator(\"Legacy Script\")\nplot(close)",
+      "savedAt": 1700000000000,
+      "favorite": true
+    }
+  ],
+  "vela-pine:editor:v1": {
+    "script": "//@version=6\nindicator(\"Legacy Draft\")\nplot(open)",
+    "name": "Legacy Script"
+  },
+  "vela-pine:layout:v1": [
+    {
+      "source": "plot(close)",
+      "visible": false,
+      "savedName": "Legacy Script"
+    }
+  ],
+  "vela-pine:indicator-favorites:v1": [
+    {
+      "key": "native:rsi",
+      "kind": "native",
+      "name": "Relative Strength Index",
+      "nativeType": "rsi",
+      "savedAt": 1700000000001
+    },
+    {
+      "key": "script:legacy",
+      "kind": "script",
+      "name": "Legacy Script",
+      "script": "//@version=6\nindicator(\"Legacy Script\")\nplot(close)",
+      "language": "pine",
+      "savedAt": 1700000000002
+    }
+  ],
+  "vela-pine:workspace-templates:v1": [
+    {
+      "name": "Legacy Template",
+      "state": {
+        "version": 1,
+        "layout": "1",
+        "cells": []
+      },
+      "savedAt": 1700000000003
+    }
+  ]
+}
