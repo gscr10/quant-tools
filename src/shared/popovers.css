@@ -1,0 +1,68 @@
+/* Favorite-indicator and template menus registered beside Indicators. */
+.quant-popover {
+  position: fixed;
+  z-index: 10000;
+  width: 260px;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: #191a1f;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  color: #eff1f5;
+}
+
+.quant-popover.template-popover {
+  width: 230px;
+}
+
+.quant-popover-title {
+  padding: 8px 9px 6px;
+  color: #a5abb6;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.quant-popover-empty {
+  padding: 7px 9px 10px;
+  color: #777e8b;
+  font-size: 11px;
+}
+
+.quant-popover-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #eff1f5;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quant-popover-item:hover:not(:disabled) {
+  background: #282a31;
+}
+
+.quant-popover-item:disabled {
+  color: #747b88;
+  cursor: default;
+}
+
+.quant-popover-hint {
+  color: #747b88;
+  font-size: 10px;
+}
+
+.quant-popover-separator {
+  height: 1px;
+  margin: 4px;
+  background: rgba(255, 255, 255, 0.09);
+}
+
