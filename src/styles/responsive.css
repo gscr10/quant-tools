@@ -1,0 +1,56 @@
+@media (max-width: 720px) {
+  #vela-action-quant-templates {
+    display: none !important;
+  }
+
+  .quant-pine-header-slot {
+    gap: 2px;
+  }
+
+  .quant-script-title {
+    max-width: 150px;
+  }
+
+  .quant-run-button {
+    padding: 0 12px;
+  }
+
+  .quant-indicator-dialog,
+  .quant-indicator-manager {
+    width: 100%;
+    max-width: none;
+  }
+
+  .quant-indicator-list {
+    max-height: none;
+    padding-left: 6px;
+  }
+
+  .quant-indicator-body {
+    min-height: 320px;
+  }
+
+  .quant-indicator-navigation {
+    flex-basis: 118px;
+    padding: 5px;
+  }
+
+  .quant-indicator-category {
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 5px;
+    padding: 0 6px;
+    font-size: 11px;
+  }
+
+  .quant-indicator-category-count {
+    display: none;
+  }
+
+  .quant-indicator-row {
+    padding-inline: 1px;
+  }
+
+  .quant-indicator-action {
+    width: 26px;
+  }
+}
