@@ -3,104 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vela × PineTS — Pine Script 编辑器</title>
+    <meta name="color-scheme" content="dark" />
+    <title>Quant Tools — Vela Pine Editor</title>
   </head>
   <body>
-    <div id="app">
-      <div class="main">
-        <div class="chart-col">
-          <div class="market-bar">
-            <div class="menu-wrap">
-              <button id="symbol-btn" class="symbol-btn" title="选择品种">BTCUSDT</button>
-              <div id="symbol-menu" class="dropdown" hidden></div>
-            </div>
-            <span class="bar-sep"></span>
-            <div class="menu-wrap">
-              <button id="tf-btn" class="tf-btn" title="选择周期">
-                <span id="tf-label">1h</span><span class="caret">▾</span>
-              </button>
-              <div id="tf-menu" class="dropdown" hidden></div>
-            </div>
-            <span class="bar-spacer"></span>
-            <span id="market-state" class="live-badge">连接中…</span>
-            <button id="undo" class="icon-btn" title="撤销 (Ctrl+Z)"></button>
-            <button id="redo" class="icon-btn" title="重做 (Ctrl+Shift+Z)"></button>
-            <button id="bookmark" class="icon-btn" title="收藏的脚本"></button>
-            <button id="ind-dialog-btn" class="ind-btn" title="指标、指标库与策略">
-              <span class="ind-icon"></span>指标<span class="caret">▾</span>
-            </button>
-            <button id="camera" class="icon-btn" title="导出图表截图"></button>
-            <button id="panel-toggle" class="icon-btn" title="显示 / 隐藏编辑器面板"></button>
-          </div>
-          <div class="chart-wrap">
-            <div id="chart"></div>
-          </div>
-          <footer class="global-bar">
-            <span class="brand">Vela × PineTS</span>
-            <span class="sub">自建 Pine Script® 编辑器 · Hyperliquid 实时数据</span>
-            <span id="status" class="status pending">初始化…</span>
-            <span id="clock" class="clock">--:--:--</span>
-          </footer>
-        </div>
-        <aside class="editor-panel" id="editor-panel">
-          <div class="panel-resize" id="panel-resize" title="拖拽调整面板宽度"></div>
-          <div class="editor-head">
-            <div class="script-title-wrap">
-              <button id="script-menu-btn" class="script-title" title="脚本菜单">
-                <span id="script-name">未命名脚本</span>
-                <span class="caret">▾</span>
-              </button>
-              <div id="script-menu" class="dropdown" hidden></div>
-            </div>
-            <span class="head-sep"></span>
-            <button id="save" class="icon-btn" title="保存脚本 (Ctrl+S)"></button>
-            <button id="save-as" class="icon-btn" title="另存为副本"></button>
-            <button id="favorite" class="icon-btn star" title="收藏当前脚本"></button>
-            <button id="run" class="run-btn"><span class="run-icon"></span>Run</button>
-            <button id="panel-close" class="icon-btn" title="收起面板"></button>
-          </div>
-          <div id="editor"></div>
-          <div class="logs-panel" id="logs-panel">
-            <div class="logs-head">
-              <button id="logs-toggle" class="logs-toggle">Logs <span id="logs-count">(0)</span></button>
-              <span class="pine-v6">Pine v6</span>
-            </div>
-            <div id="output"></div>
-          </div>
-        </aside>
-      </div>
-      <div id="ind-dialog" class="modal" hidden>
-        <div class="modal-box wide">
-          <div class="modal-head">
-            <span>指标、指标库与策略</span>
-            <button id="ind-dialog-close" class="icon-btn" title="关闭">×</button>
-          </div>
-          <div class="modal-search">
-            <input id="ind-search" placeholder="搜索脚本…" />
-          </div>
-          <div class="ind-dialog-body">
-            <div id="ind-cats" class="ind-cats"></div>
-            <div id="ind-items" class="ind-items"></div>
-          </div>
-        </div>
-      </div>
-      <div id="save-modal" class="modal" hidden>
-        <div class="modal-box narrow">
-          <div class="modal-head">
-            <span id="save-modal-title">保存脚本</span>
-            <button id="save-modal-close" class="icon-btn" title="关闭">×</button>
-          </div>
-          <div class="save-modal-body">
-            <label class="field-label" for="save-name">脚本名称</label>
-            <input id="save-name" placeholder="输入脚本名称" maxlength="60" />
-            <div class="save-modal-actions">
-              <button id="save-cancel" class="tool-btn">取消</button>
-              <button id="save-ok" class="run-btn small">保存</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <main id="app" aria-label="Quant chart workspace">
+      <div id="workspace"></div>
+    </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

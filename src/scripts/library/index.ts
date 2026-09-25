@@ -1,4 +1,4 @@
-// LuxAlgo Library scripts (CC BY-NC-SA 4.0), fetched from luxalgo.com/library
+// Library scripts retain the license declared in each source file.
 import lib_ind_amd_poc_trade_setup from './ind_amd-poc-trade-setup.pine?raw';
 import lib_ind_average_daily_range from './ind_average-daily-range.pine?raw';
 import lib_ind_elder_safezone_stop from './ind_elder-safezone-stop.pine?raw';
