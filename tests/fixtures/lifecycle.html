@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Quant Tools Lifecycle Fixture</title>
+  </head>
+  <body>
+    <main id="app"><div id="workspace"></div></main>
+    <script type="module">
+      import { createApp } from '/src/app/create-app.ts';
+      import '/src/style.css';
+
+      let app = null;
+      window.mountQuantApp = () => {
+        if (app) throw new Error('App is already mounted');
+        app = createApp('#workspace');
+      };
+      window.destroyQuantApp = () => {
+        app?.destroy();
+        app = null;
+      };
+      window.failQuantAppMount = () => {
+        try {
+          createApp('#missing-workspace');
+          return false;
+        } catch {
+          return true;
+        }
+      };
+      window.mountQuantApp();
+    </script>
+  </body>
+</html>
