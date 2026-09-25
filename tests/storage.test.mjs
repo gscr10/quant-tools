@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 const SCRIPTS_KEY = 'vela-pine:scripts:v1';
 const EDITOR_KEY = 'vela-pine:editor:v1';
@@ -68,6 +69,23 @@ test('rename stores current editor content and keeps favorite state', async () =
   assert.equal(scripts[0].script, 'unsaved editor content');
   assert.equal(scripts[0].favorite, true);
   assert.ok(scripts[0].savedAt > 0);
+});
+
+test('restores the complete pre-refactor v1 storage fixture without migration', async () => {
+  const fixture = JSON.parse(await readFile(
+    new URL('./fixtures/storage-v1.json', import.meta.url),
+    'utf8',
+  ));
+  const serialized = Object.fromEntries(
+    Object.entries(fixture).map(([key, value]) => [key, JSON.stringify(value)]),
+  );
+  const storage = await storageModule('legacy-v1-fixture', serialized);
+
+  assert.deepEqual(storage.listScripts(), fixture[SCRIPTS_KEY]);
+  assert.deepEqual(storage.loadEditorSnapshot(), fixture[EDITOR_KEY]);
+  assert.deepEqual(storage.loadLayout(), fixture[LAYOUT_KEY]);
+  assert.deepEqual(storage.listIndicatorFavorites(), fixture[INDICATOR_FAVORITES_KEY]);
+  assert.deepEqual(storage.listWorkspaceTemplates(), fixture[WORKSPACE_TEMPLATES_KEY]);
 });
 
 test('keeps an in-memory copy when localStorage writes fail', async () => {
