@@ -1,946 +1,1568 @@
-import { Vela } from '@luxalgo/vela';
-import type { EngineContextSnapshot, IndicatorHandle, ScriptRun } from '@luxalgo/vela';
+import { VelaWorkspace } from '@luxalgo/vela/workspace';
+import type { IndicatorHandle, Vela } from '@luxalgo/vela';
+import {
+  getNativeIndicator,
+  registerLegendAction,
+  registerSidePanel,
+  registerStatePersistence,
+  registerWidgetAction,
+} from '@luxalgo/vela/plugin';
+import { Dialog, iconEl, registerIcon, svg16 } from '@luxalgo/vela/ui';
+import { BinanceProvider } from '@luxalgo/vela/providers/binance';
 import { HyperliquidProvider } from '@luxalgo/vela/providers/hyperliquid';
 import { PineWorkerEngine } from '@luxalgo/vela-pinets';
-import './style.css';
 import { basicSetup, EditorView } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
-import { EditorState, StateEffect, StateField, Prec } from '@codemirror/state';
+import { EditorState, Prec, StateEffect, StateField } from '@codemirror/state';
 import { Decoration, keymap } from '@codemirror/view';
-import { undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
-import { setIcon, icon } from './icons';
+import { icon, setIcon } from './icons';
 import { BASIC_SAMPLES } from './samples';
 import { LIBRARY } from './scripts/library';
 import {
-  listScripts,
-  saveScript,
   deleteScript,
-  renameScript,
-  toggleFavorite,
+  deleteWorkspaceTemplate,
   isFavorite,
+  listIndicatorFavorites,
+  listScripts,
+  listWorkspaceTemplates,
   loadEditorSnapshot,
+  renameScript,
   saveEditorSnapshot,
-  loadLayout,
-  saveLayout,
+  saveScript,
+  saveWorkspaceTemplate,
+  toggleFavorite,
+  toggleIndicatorFavorite,
+  type IndicatorFavorite,
 } from './storage';
+import './style.css';
 
-const setRunErrorLine = StateEffect.define<number | null>();
+const WORKSPACE_STORAGE_KEY = 'quant-tools:workspace:v2';
+const EXTERNAL_INDICATORS_KEY = 'quant-tools.external-indicators';
+const PLATFORM_INDICATORS = [
+  ...BASIC_SAMPLES.map((entry) => ({
+    name: entry.name,
+    script: entry.script,
+    language: 'pine',
+    enabled: false,
+    category: 'Examples',
+  })),
+  ...LIBRARY.map((entry) => ({
+    name: entry.name,
+    script: entry.script,
+    language: 'pine',
+    enabled: false,
+    category: 'LuxAlgo',
+  })),
+];
 
-const runErrorLine = StateField.define<number | null>({
-  create: () => null,
-  update(value, tr) {
-    for (const e of tr.effects) if (e.is(setRunErrorLine)) value = e.value;
-    return value;
+let workspace: VelaWorkspace;
+let editorPanel: PineEditorController | null = null;
+let indicatorManager: IndicatorManagerDialog | null = null;
+let openPopover: HTMLElement | null = null;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function extractTitle(source: string): string {
+  const match = /(?:indicator|strategy|library)\s*\(\s*(?:title\s*=\s*)?["']([^"']+)["']/.exec(source);
+  return match?.[1] ?? 'Untitled indicator';
+}
+
+function sourceKey(source: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < source.length; i++) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function nativeFavorite(name: string, nativeType: string): IndicatorFavorite {
+  return {
+    key: `native:${nativeType}`,
+    kind: 'native',
+    name,
+    nativeType,
+    savedAt: Date.now(),
+  };
+}
+
+function scriptFavorite(name: string, script: string, language = 'pine'): IndicatorFavorite {
+  return {
+    key: `script:${sourceKey(script)}`,
+    kind: 'script',
+    name,
+    script,
+    language,
+    savedAt: Date.now(),
+  };
+}
+
+function hasIndicatorFavorite(favorite: IndicatorFavorite): boolean {
+  return listIndicatorFavorites().some((item) => item.key === favorite.key);
+}
+
+function setIndicatorFavorite(favorite: IndicatorFavorite, enabled: boolean) {
+  const existing = listIndicatorFavorites().find((item) => item.key === favorite.key);
+  if (existing) toggleIndicatorFavorite(existing);
+  if (enabled) toggleIndicatorFavorite({ ...favorite, savedAt: Date.now() });
+  if (favorite.kind === 'script') {
+    listScripts()
+      .filter((script) => script.script === favorite.script)
+      .forEach((script) => {
+        if (Boolean(script.favorite) !== enabled) toggleFavorite(script.name);
+      });
+  }
+}
+
+function syncSavedScriptFavorite(name: string, script: string, previousScript?: string) {
+  const enabled = isFavorite(name);
+  if (previousScript && previousScript !== script) {
+    setIndicatorFavorite(scriptFavorite(name, previousScript), false);
+  }
+  setIndicatorFavorite(scriptFavorite(name, script), enabled);
+  indicatorManager?.sync();
+}
+
+function formatTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleString('zh-CN', { hour12: false });
+}
+
+function makeButton(label: string, className = ''): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = className;
+  button.textContent = label;
+  return button;
+}
+
+function closeActivePopover() {
+  openPopover?.remove();
+  openPopover = null;
+  favoriteAnchor()?.setAttribute('aria-expanded', 'false');
+}
+
+function showPopover(anchor: HTMLElement, className: string): HTMLElement {
+  closeActivePopover();
+  const popover = document.createElement('div');
+  popover.className = `quant-popover ${className}`;
+  popover.setAttribute('role', 'menu');
+  document.body.appendChild(popover);
+  const rect = anchor.getBoundingClientRect();
+  const width = className.includes('template') ? 230 : 260;
+  const left = Math.min(rect.left, window.innerWidth - width - 8);
+  popover.style.left = `${Math.max(8, left)}px`;
+  popover.style.top = `${rect.bottom + 6}px`;
+  openPopover = popover;
+  return popover;
+}
+
+function appendPopoverTitle(popover: HTMLElement, text: string) {
+  const title = document.createElement('div');
+  title.className = 'quant-popover-title';
+  title.textContent = text;
+  popover.appendChild(title);
+}
+
+function appendPopoverItem(
+  popover: HTMLElement,
+  label: string,
+  action: (() => void) | null,
+  hint?: string,
+) {
+  const button = makeButton('', 'quant-popover-item');
+  button.setAttribute('role', 'menuitem');
+  const text = document.createElement('span');
+  text.textContent = label;
+  button.appendChild(text);
+  if (hint) {
+    const secondary = document.createElement('span');
+    secondary.className = 'quant-popover-hint';
+    secondary.textContent = hint;
+    button.appendChild(secondary);
+  }
+  if (action) {
+    button.addEventListener('click', () => {
+      closeActivePopover();
+      action();
+    });
+  } else {
+    button.disabled = true;
+  }
+  popover.appendChild(button);
+}
+
+function appendPopoverSeparator(popover: HTMLElement) {
+  const separator = document.createElement('div');
+  separator.className = 'quant-popover-separator';
+  popover.appendChild(separator);
+}
+
+function favoriteAnchor(): HTMLElement | null {
+  return document.getElementById('vela-action-quant-favorites');
+}
+
+function templateAnchor(): HTMLElement | null {
+  return document.getElementById('vela-action-quant-templates');
+}
+
+function addFavoriteToActiveChart(favorite: IndicatorFavorite) {
+  if (favorite.kind === 'native') {
+    workspace.context().addNativeIndicator(favorite.nativeType);
+  } else {
+    workspace.context().addIndicator({
+      name: favorite.name,
+      script: favorite.script,
+      language: favorite.language ?? 'pine',
+    });
+  }
+}
+
+function openScriptInEditor(name: string, script: string, savedName?: string) {
+  workspace.context().togglePanel('quant-pine-editor', true);
+  requestAnimationFrame(() => {
+    if (savedName) editorPanel?.openSavedScript(savedName, script);
+    else editorPanel?.openIndicatorSource(name, script);
+  });
+}
+
+function formatNativeValue(value: unknown): string {
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number' || typeof value === 'boolean' || value == null) return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function openNativeIndicatorInfo(name: string, nativeType: string) {
+  closeActivePopover();
+  const descriptor = getNativeIndicator(nativeType);
+  const defaults = descriptor?.defaultInputs() ?? {};
+  const inputs = descriptor?.inputsSchema() ?? [];
+  const lines = [
+    '// Vela native indicator',
+    `// Name: ${descriptor?.title ?? name}`,
+    `// Type: ${nativeType}`,
+    `// Pane: ${descriptor?.paneHint ?? 'unknown'}`,
+    `// Overlay: ${descriptor?.overlay ?? 'unknown'}`,
+    '',
+    '// Native indicators run inside @luxalgo/vela and do not expose editable Pine source.',
+    '// The locally installed component provides the following input contract:',
+    ...(inputs.length > 0
+      ? inputs.map((input) => `${input.key} = ${formatNativeValue(defaults[input.key])}`)
+      : ['// No configurable inputs.']),
+  ];
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'quant-dialog-backdrop';
+  const dialog = document.createElement('div');
+  dialog.className = 'quant-dialog quant-source-dialog';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-label', `${name} implementation`);
+
+  const heading = document.createElement('div');
+  heading.className = 'quant-dialog-heading';
+  const title = document.createElement('strong');
+  title.textContent = `${name} · implementation`;
+  const close = makeButton('×', 'quant-dialog-close');
+  close.setAttribute('aria-label', 'Close');
+  heading.append(title, close);
+
+  const notice = document.createElement('p');
+  notice.className = 'quant-source-notice';
+  notice.textContent = 'This is a Vela built-in. It has no editable Pine source; its local implementation contract is shown below.';
+  const code = document.createElement('pre');
+  code.className = 'quant-source-code';
+  code.textContent = lines.join('\n');
+  dialog.append(heading, notice, code);
+  backdrop.appendChild(dialog);
+  document.body.appendChild(backdrop);
+
+  const dismiss = () => backdrop.remove();
+  close.addEventListener('click', dismiss);
+  backdrop.addEventListener('click', (event) => {
+    if (event.target === backdrop) dismiss();
+  });
+  dialog.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') dismiss();
+  });
+  requestAnimationFrame(() => close.focus());
+}
+
+function toggleFavoriteIndicatorsPopover() {
+  const anchor = favoriteAnchor();
+  if (!anchor) return;
+  if (openPopover?.classList.contains('favorite-indicators-popover')) {
+    closeActivePopover();
+    return;
+  }
+  const popover = showPopover(anchor, 'favorite-indicators-popover');
+  anchor.setAttribute('aria-expanded', 'true');
+  appendPopoverTitle(popover, 'Favorite indicators');
+  const favorites = listIndicatorFavorites();
+  if (favorites.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'quant-popover-empty';
+    empty.textContent = 'No favorites yet — star any indicator.';
+    popover.appendChild(empty);
+    return;
+  }
+  favorites.forEach((favorite) => {
+    appendPopoverItem(
+      popover,
+      favorite.name,
+      () => addFavoriteToActiveChart(favorite),
+    );
+  });
+}
+
+type TextDialogOptions = {
+  title: string;
+  label: string;
+  initialValue?: string;
+  confirmLabel?: string;
+  onConfirm: (value: string) => string | null;
+};
+
+function openTextDialog(options: TextDialogOptions) {
+  closeActivePopover();
+  const backdrop = document.createElement('div');
+  backdrop.className = 'quant-dialog-backdrop';
+  const dialog = document.createElement('div');
+  dialog.className = 'quant-dialog';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-label', options.title);
+
+  const heading = document.createElement('div');
+  heading.className = 'quant-dialog-heading';
+  const title = document.createElement('strong');
+  title.textContent = options.title;
+  const close = makeButton('×', 'quant-dialog-close');
+  close.setAttribute('aria-label', '关闭');
+  heading.append(title, close);
+
+  const label = document.createElement('label');
+  label.className = 'quant-field-label';
+  label.textContent = options.label;
+  const input = document.createElement('input');
+  input.className = 'quant-field-input';
+  input.value = options.initialValue ?? '';
+  input.maxLength = 80;
+  label.appendChild(input);
+  const error = document.createElement('div');
+  error.className = 'quant-field-error';
+
+  const actions = document.createElement('div');
+  actions.className = 'quant-dialog-actions';
+  const cancel = makeButton('取消', 'quant-secondary-button');
+  const confirm = makeButton(options.confirmLabel ?? '保存', 'quant-primary-button');
+  actions.append(cancel, confirm);
+  dialog.append(heading, label, error, actions);
+  backdrop.appendChild(dialog);
+  document.body.appendChild(backdrop);
+
+  const dismiss = () => backdrop.remove();
+  const submit = () => {
+    const value = input.value.trim();
+    const message = options.onConfirm(value);
+    if (message) {
+      error.textContent = message;
+      input.focus();
+      return;
+    }
+    dismiss();
+  };
+  close.addEventListener('click', dismiss);
+  cancel.addEventListener('click', dismiss);
+  confirm.addEventListener('click', submit);
+  backdrop.addEventListener('click', (event) => {
+    if (event.target === backdrop) dismiss();
+  });
+  input.addEventListener('input', () => { error.textContent = ''; });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') submit();
+    if (event.key === 'Escape') dismiss();
+  });
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+  });
+}
+
+function saveCurrentWorkspaceAsTemplate() {
+  openTextDialog({
+    title: 'New template',
+    label: 'Template name',
+    onConfirm: (name) => {
+      if (!name) return '请输入模板名称';
+      if (listWorkspaceTemplates().some((item) => item.name === name)) {
+        return `模板「${name}」已存在`;
+      }
+      saveWorkspaceTemplate(name, workspace.getState());
+      workspace.context().toast(`Template “${name}” saved`, 'success');
+      return null;
+    },
+  });
+}
+
+function applyWorkspaceTemplate(name: string, state: unknown) {
+  workspace.applyState(state);
+  workspace.context().toast(`Template “${name}” applied`, 'success');
+}
+
+function showAllTemplatesDialog() {
+  closeActivePopover();
+  const backdrop = document.createElement('div');
+  backdrop.className = 'quant-dialog-backdrop';
+  const dialog = document.createElement('div');
+  dialog.className = 'quant-dialog quant-template-dialog';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-label', 'Indicator Templates');
+  const heading = document.createElement('div');
+  heading.className = 'quant-dialog-heading';
+  const title = document.createElement('strong');
+  title.textContent = 'Indicator Templates';
+  const close = makeButton('×', 'quant-dialog-close');
+  close.setAttribute('aria-label', '关闭');
+  heading.append(title, close);
+  const list = document.createElement('div');
+  list.className = 'quant-template-list';
+  dialog.append(heading, list);
+  backdrop.appendChild(dialog);
+  document.body.appendChild(backdrop);
+
+  const render = () => {
+    list.replaceChildren();
+    const templates = listWorkspaceTemplates();
+    if (templates.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'quant-template-empty';
+      empty.textContent = 'No templates yet';
+      list.appendChild(empty);
+      return;
+    }
+    templates.forEach((template) => {
+      const row = document.createElement('div');
+      row.className = 'quant-template-row';
+      const info = document.createElement('div');
+      const name = document.createElement('strong');
+      name.textContent = template.name;
+      const time = document.createElement('span');
+      time.textContent = formatTime(template.savedAt);
+      info.append(name, time);
+      const rowActions = document.createElement('div');
+      const apply = makeButton('Apply', 'quant-primary-button compact');
+      const remove = makeButton('Delete', 'quant-danger-button compact');
+      apply.addEventListener('click', () => {
+        backdrop.remove();
+        applyWorkspaceTemplate(template.name, template.state);
+      });
+      remove.addEventListener('click', () => {
+        deleteWorkspaceTemplate(template.name);
+        render();
+      });
+      rowActions.append(apply, remove);
+      row.append(info, rowActions);
+      list.appendChild(row);
+    });
+  };
+  close.addEventListener('click', () => backdrop.remove());
+  backdrop.addEventListener('click', (event) => {
+    if (event.target === backdrop) backdrop.remove();
+  });
+  render();
+}
+
+function toggleTemplatesPopover() {
+  const anchor = templateAnchor();
+  if (!anchor) return;
+  if (openPopover?.classList.contains('template-popover')) {
+    closeActivePopover();
+    return;
+  }
+  const popover = showPopover(anchor, 'template-popover');
+  appendPopoverTitle(popover, 'Recent templates');
+  const templates = listWorkspaceTemplates().slice(0, 5);
+  if (templates.length === 0) appendPopoverItem(popover, 'No templates yet', null);
+  templates.forEach((template) => {
+    appendPopoverItem(popover, template.name, () => applyWorkspaceTemplate(template.name, template.state));
+  });
+  appendPopoverSeparator(popover);
+  appendPopoverItem(popover, 'Show all', showAllTemplatesDialog);
+  appendPopoverItem(popover, 'New template', saveCurrentWorkspaceAsTemplate);
+}
+
+registerIcon('quant-favorite-caret', svg16('<path d="M3.5 6 8 10.5 12.5 6"/>'));
+registerIcon(
+  'quant-template',
+  svg16('<path d="M3.6 1.8h8.8v12.4L8 11.1l-4.4 3.1Z" stroke-linecap="round" stroke-linejoin="round"/>'),
+);
+registerIcon(
+  'quant-code',
+  svg16('<path d="m5.5 4.5-4 3.5 4 3.5M10.5 4.5l4 3.5-4 3.5"/>'),
+);
+registerIcon(
+  'quant-star',
+  svg16('<path d="m8 1.6 1.8 3.7 4.1.6-3 2.9.7 4.1L8 11l-3.6 1.9.7-4.1-3-2.9 4.1-.6Z"/>'),
+);
+registerIcon(
+  'quant-camera',
+  svg16('<path d="M5.5 4 6.5 2.5h3L10.5 4h3a1 1 0 0 1 1 1v7.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><circle cx="8" cy="8.5" r="2.6"/>'),
+);
+
+registerWidgetAction({
+  id: 'indicators',
+  target: 'topbar',
+  label: 'Indicators',
+  icon: 'indicators',
+  align: 'left',
+  run: () => indicatorManager?.open(),
+});
+
+registerWidgetAction({
+  id: 'quant-favorites',
+  target: 'topbar',
+  label: 'Favorite indicators',
+  icon: 'quant-favorite-caret',
+  iconOnly: true,
+  align: 'left',
+  run: toggleFavoriteIndicatorsPopover,
+});
+
+registerWidgetAction({
+  id: 'quant-templates',
+  target: 'topbar',
+  label: 'Indicator Templates',
+  icon: 'quant-template',
+  iconOnly: true,
+  align: 'left',
+  run: toggleTemplatesPopover,
+});
+
+registerWidgetAction({
+  id: 'screenshot',
+  target: 'topbar',
+  label: 'Screenshot',
+  icon: 'quant-camera',
+  iconOnly: true,
+  run: () => workspace.downloadScreenshot(),
+});
+
+registerLegendAction({
+  id: 'quant-favorite-indicator',
+  icon: 'quant-star',
+  tooltip: 'Add or remove favorite',
+  order: -20,
+  run: (context, indicator) => {
+    if (indicator.source) {
+      const favorite = scriptFavorite(indicator.title, indicator.source);
+      const existed = hasIndicatorFavorite(favorite);
+      setIndicatorFavorite(favorite, !existed);
+      indicatorManager?.sync();
+      context.toast(existed ? 'Removed from favorites' : 'Added to favorites', 'success');
+      return;
+    }
+    const nativeType = workspace.active.chart.indicators()
+      .find((handle) => handle.id === indicator.id)?.nativeType;
+    const native = nativeType
+      ? workspace.active.nativeCatalog.find((item) => item.type === nativeType)
+      : workspace.active.nativeCatalog.find((item) => item.title === indicator.title);
+    if (!native) {
+      context.toast('This indicator cannot be favorited', 'error');
+      return;
+    }
+    const favorite = nativeFavorite(native.title, native.type);
+    const existed = hasIndicatorFavorite(favorite);
+    setIndicatorFavorite(favorite, !existed);
+    indicatorManager?.sync();
+    context.toast(existed ? 'Removed from favorites' : 'Added to favorites', 'success');
   },
 });
 
-const runErrorHighlight = EditorView.decorations.compute([runErrorLine], (state) => {
-  const line = state.field(runErrorLine);
-  if (line == null) return Decoration.none;
-  if (line < 1 || line > state.doc.lines) return Decoration.none;
-  const l = state.doc.line(line);
-  return Decoration.set([Decoration.line({ class: 'cm-run-error' }).range(l.from)]);
+registerLegendAction({
+  id: 'quant-open-indicator-code',
+  icon: 'quant-code',
+  tooltip: 'Open indicator code',
+  order: -19,
+  run: (_context, indicator) => {
+    if (indicator.source) {
+      const savedName = listScripts().find((script) => script.script === indicator.source)?.name;
+      openScriptInEditor(indicator.title, indicator.source, savedName);
+      return;
+    }
+    const nativeType = workspace.active.chart.indicators()
+      .find((handle) => handle.id === indicator.id)?.nativeType;
+    if (nativeType) {
+      openNativeIndicatorInfo(indicator.title, nativeType);
+    }
+  },
 });
 
-const statusEl = document.querySelector<HTMLDivElement>('#status')!;
-const outputEl = document.querySelector<HTMLDivElement>('#output')!;
-const logsCountEl = document.querySelector<HTMLSpanElement>('#logs-count')!;
-const logsToggleBtn = document.querySelector<HTMLButtonElement>('#logs-toggle')!;
-const logsPanelEl = document.querySelector<HTMLElement>('#logs-panel')!;
-const runBtn = document.querySelector<HTMLButtonElement>('#run')!;
-const undoBtn = document.querySelector<HTMLButtonElement>('#undo')!;
-const redoBtn = document.querySelector<HTMLButtonElement>('#redo')!;
-const bookmarkBtn = document.querySelector<HTMLButtonElement>('#bookmark')!;
-const cameraBtn = document.querySelector<HTMLButtonElement>('#camera')!;
-const saveBtn = document.querySelector<HTMLButtonElement>('#save')!;
-const saveAsBtn = document.querySelector<HTMLButtonElement>('#save-as')!;
-const favoriteBtn = document.querySelector<HTMLButtonElement>('#favorite')!;
-const panelToggleBtn = document.querySelector<HTMLButtonElement>('#panel-toggle')!;
-const panelCloseBtn = document.querySelector<HTMLButtonElement>('#panel-close')!;
-const pinePanel = document.querySelector<HTMLElement>('#editor-panel')!;
-const panelResize = document.querySelector<HTMLDivElement>('#panel-resize')!;
-const symbolBtn = document.querySelector<HTMLButtonElement>('#symbol-btn')!;
-const symbolMenuEl = document.querySelector<HTMLDivElement>('#symbol-menu')!;
-const tfBtn = document.querySelector<HTMLButtonElement>('#tf-btn')!;
-const tfLabelEl = document.querySelector<HTMLSpanElement>('#tf-label')!;
-const tfMenuEl = document.querySelector<HTMLDivElement>('#tf-menu')!;
-const marketStateEl = document.querySelector<HTMLSpanElement>('#market-state')!;
-const clockEl = document.querySelector<HTMLSpanElement>('#clock')!;
-const scriptNameEl = document.querySelector<HTMLSpanElement>('#script-name')!;
-const scriptMenuBtn = document.querySelector<HTMLButtonElement>('#script-menu-btn')!;
-const scriptMenuEl = document.querySelector<HTMLDivElement>('#script-menu')!;
-const indDialogBtn = document.querySelector<HTMLButtonElement>('#ind-dialog-btn')!;
-const indDialog = document.querySelector<HTMLDivElement>('#ind-dialog')!;
-const indDialogCloseBtn = document.querySelector<HTMLButtonElement>('#ind-dialog-close')!;
-const indCatsEl = document.querySelector<HTMLDivElement>('#ind-cats')!;
-const indItemsEl = document.querySelector<HTMLDivElement>('#ind-items')!;
-const indSearchInput = document.querySelector<HTMLInputElement>('#ind-search')!;
-const saveModal = document.querySelector<HTMLDivElement>('#save-modal')!;
-const saveModalTitle = document.querySelector<HTMLSpanElement>('#save-modal-title')!;
-const saveModalCloseBtn = document.querySelector<HTMLButtonElement>('#save-modal-close')!;
-const saveNameInput = document.querySelector<HTMLInputElement>('#save-name')!;
-const saveOkBtn = document.querySelector<HTMLButtonElement>('#save-ok')!;
-const saveCancelBtn = document.querySelector<HTMLButtonElement>('#save-cancel')!;
+type PersistedExternalIndicator = {
+  name: string;
+  script: string;
+  language?: string;
+  id?: string;
+  hidden?: boolean;
+  inputs?: Record<string, string | number | boolean>;
+  props?: Record<string, string | number | boolean>;
+};
 
-const SYMBOLS = ['BTC', 'ETH'] as const;
-const TIMEFRAMES = [
-  { vela: '1', label: '1m' },
-  { vela: '5', label: '5m' },
-  { vela: '15', label: '15m' },
-  { vela: '30', label: '30m' },
-  { vela: '60', label: '1h' },
-  { vela: '240', label: '4h' },
-  { vela: 'D', label: '1D' },
-  { vela: 'W', label: '1W' },
-  { vela: 'M', label: '1M' },
-] as const;
+function parsePersistedExternalIndicators(value: unknown): PersistedExternalIndicator[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const name = typeof item.name === 'string' ? item.name.trim() : '';
+    if (!name || typeof item.script !== 'string' || !item.script.trim()) return [];
+    return [{
+      name,
+      script: item.script,
+      ...(typeof item.language === 'string' && item.language.trim() ? { language: item.language } : {}),
+      ...(typeof item.id === 'string' && item.id.trim() ? { id: item.id } : {}),
+      ...(typeof item.hidden === 'boolean' ? { hidden: item.hidden } : {}),
+      ...(isRecord(item.inputs) ? { inputs: item.inputs as Record<string, string | number | boolean> } : {}),
+      ...(isRecord(item.props) ? { props: item.props as Record<string, string | number | boolean> } : {}),
+    }];
+  });
+}
 
-let symbol: (typeof SYMBOLS)[number] = 'BTC';
-let timeframe = '60';
+registerStatePersistence({
+  key: EXTERNAL_INDICATORS_KEY,
+  scope: 'cell',
+  serialize: (context) => {
+    const cell = workspace?.cell(context.cellId);
+    if (!cell) return [];
+    return cell.instances.flatMap((instance) => {
+      if (!instance.external) return [];
+      return [{
+        name: instance.entry.name,
+        script: instance.entry.script,
+        ...(instance.entry.language ? { language: instance.entry.language } : {}),
+        ...(instance.id ? { id: instance.id } : {}),
+        ...(instance.handle ? { hidden: !instance.handle.visible } : {}),
+        ...(instance.values?.inputs ? { inputs: instance.values.inputs } : {}),
+        ...(instance.values?.props ? { props: instance.values.props } : {}),
+      }];
+    });
+  },
+  restore: (payload, context) => {
+    parsePersistedExternalIndicators(payload).forEach((entry) => context.addIndicator(entry));
+  },
+});
 
-const chart = new Vela('#chart', {
-  symbol: `hyperliquid:${symbol}`,
-  timeframe,
-  live: true,
-  theme: 'dark',
-}).registerEngine('pine', new PineWorkerEngine());
+const setRunErrorLine = StateEffect.define<number | null>();
+const runErrorLine = StateField.define<number | null>({
+  create: () => null,
+  update(value, transaction) {
+    for (const effect of transaction.effects) {
+      if (effect.is(setRunErrorLine)) value = effect.value;
+    }
+    return value;
+  },
+});
+const runErrorHighlight = EditorView.decorations.compute([runErrorLine], (state) => {
+  const line = state.field(runErrorLine);
+  if (line == null || line < 1 || line > state.doc.lines) return Decoration.none;
+  const target = state.doc.line(line);
+  return Decoration.set([Decoration.line({ class: 'cm-run-error' }).range(target.from)]);
+});
 
-chart.data.registerProvider('hyperliquid', new HyperliquidProvider());
-
-const NEW_TEMPLATE = `//@version=6
+const NEW_SCRIPT = `//@version=6
 indicator("My Indicator", overlay=true)
 
 plot(ta.ema(close, 14), "EMA 14", color.orange)
 `;
 
-const restoredSnapshot = loadEditorSnapshot();
-const initialDoc = restoredSnapshot?.script ?? BASIC_SAMPLES[0].script;
-const initialName = restoredSnapshot?.name ?? null;
+class PineEditorController {
+  private readonly view: EditorView;
+  private readonly logs: HTMLElement;
+  private readonly logsCount: HTMLElement;
+  private readonly scriptName: HTMLElement;
+  private readonly menu: HTMLElement;
+  private readonly favoriteButton: HTMLButtonElement;
+  private currentName: string | null;
+  private draftTitle: string | null = null;
+  private savedContent: string | null;
+  private snapshotTimer: ReturnType<typeof setTimeout> | null = null;
+  private logCount = 0;
+  private readonly closeMenuOnDocumentClick: (event: MouseEvent) => void;
 
-const bound = new WeakSet<IndicatorHandle>();
-const instanceSources = new Map<string, string>();
+  constructor(body: HTMLElement, headerSlot: HTMLElement) {
+    body.classList.add('quant-pine-body');
+    headerSlot.classList.add('quant-pine-header-slot');
 
-function fmt(v: number | null): string {
-  if (v == null) return 'na';
-  if (Number.isInteger(v)) return String(v);
-  return Math.abs(v) >= 1000 ? v.toFixed(1) : v.toFixed(4);
-}
+    const snapshot = loadEditorSnapshot();
+    const saved = snapshot?.name
+      ? listScripts().find((script) => script.name === snapshot.name) ?? null
+      : null;
+    const initialDoc = snapshot?.script ?? BASIC_SAMPLES[0].script;
+    this.currentName = saved?.name ?? null;
+    this.savedContent = saved?.script ?? (snapshot?.name ? null : initialDoc);
 
-let logsTotal = 0;
+    const titleWrap = document.createElement('div');
+    titleWrap.className = 'quant-script-title-wrap';
+    const titleButton = makeButton('', 'quant-script-title');
+    this.scriptName = document.createElement('span');
+    const caret = document.createElement('span');
+    caret.textContent = '▾';
+    caret.className = 'quant-caret';
+    titleButton.append(this.scriptName, caret);
+    this.menu = document.createElement('div');
+    this.menu.className = 'quant-script-menu';
+    this.menu.hidden = true;
+    titleWrap.append(titleButton, this.menu);
 
-function log(level: 'ok' | 'err' | 'info', text: string) {
-  logsTotal++;
-  logsCountEl.textContent = `(${logsTotal})`;
-  const row = document.createElement('div');
-  row.className = `row ${level}`;
-  const time = document.createElement('span');
-  time.className = 't';
-  time.textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
-  const body = document.createElement('span');
-  body.className = 'body';
-  body.textContent = text;
-  row.append(time, body);
-  outputEl.appendChild(row);
-  while (outputEl.childElementCount > 120) outputEl.firstElementChild!.remove();
-  outputEl.scrollTop = outputEl.scrollHeight;
-}
+    const save = makeButton('', 'quant-editor-icon');
+    save.title = '保存脚本 (Ctrl+S)';
+    save.setAttribute('aria-label', save.title);
+    setIcon(save, 'save', 15);
+    const saveAs = makeButton('', 'quant-editor-icon');
+    saveAs.title = '另存为副本';
+    saveAs.setAttribute('aria-label', saveAs.title);
+    setIcon(saveAs, 'copy', 15);
+    this.favoriteButton = makeButton('', 'quant-editor-icon');
+    this.favoriteButton.setAttribute('aria-label', '收藏当前脚本');
+    const run = makeButton('', 'quant-run-button');
+    run.append(icon('play', 12), document.createTextNode('Run'));
 
-function setStatus(cls: 'pending' | 'ok' | 'err', text: string) {
-  statusEl.className = `status ${cls}`;
-  statusEl.textContent = text;
-}
+    headerSlot.append(titleWrap, save, saveAs, this.favoriteButton, run);
 
-function parseLine(error: Error): number | null {
-  const m = /\b(?:line|Ln)\s*#?(\d+)/i.exec(error.message);
-  return m ? Number(m[1]) : null;
-}
+    const editorHost = document.createElement('div');
+    editorHost.className = 'quant-editor-host';
+    const logsPanel = document.createElement('div');
+    logsPanel.className = 'quant-logs-panel';
+    const logsHeading = document.createElement('div');
+    logsHeading.className = 'quant-logs-heading';
+    const logsToggle = makeButton('', 'quant-logs-toggle');
+    logsToggle.append(document.createTextNode('Logs '));
+    this.logsCount = document.createElement('span');
+    this.logsCount.textContent = '(0)';
+    logsToggle.appendChild(this.logsCount);
+    const language = document.createElement('span');
+    language.className = 'quant-language-badge';
+    language.textContent = 'Pine v6';
+    logsHeading.append(logsToggle, language);
+    this.logs = document.createElement('div');
+    this.logs.className = 'quant-logs';
+    logsPanel.append(logsHeading, this.logs);
+    body.append(editorHost, logsPanel);
 
-function highlightErrorLine(error: Error | null) {
-  const line = error ? parseLine(error) : null;
-  view.dispatch({ effects: setRunErrorLine.of(line) });
-}
-
-function showFailure(error: Error, context: EngineContextSnapshot | null) {
-  setStatus('err', '脚本失败');
-  log('err', error.message);
-  if (context) {
-    log('info', `context: phase=${context.phase} barIndex=${context.barIndex} title=${context.meta?.title ?? '—'}`);
-  }
-  highlightErrorLine(error);
-}
-
-function bindHandle(h: IndicatorHandle) {
-  if (bound.has(h)) return;
-  bound.add(h);
-  h.on('ready', () => {
-    setStatus('ok', `${chart.indicators().length} 个指标运行中`);
-    log('ok', `ready · ${h.title}`);
-    persistLayout();
-  });
-  h.on('error', ({ error }) => showFailure(error, null));
-}
-
-function persistLayout() {
-  const items = chart.indicators()
-    .filter((h) => h.source != null)
-    .map((h) => ({
-      source: h.source as string,
-      visible: h.visible,
-      savedName: instanceSources.get(h.id) ?? null,
-    }));
-  saveLayout(items);
-}
-
-function findHandle(id: string): IndicatorHandle | null {
-  return chart.indicators().find((h) => h.id === id) ?? null;
-}
-
-let runChain: Promise<void> = Promise.resolve();
-
-function enqueue(fn: () => Promise<void>) {
-  runChain = runChain.then(fn, fn);
-}
-
-let lastRunHandleId: string | null = null;
-
-async function addIndicator(source: string, savedName: string | null) {
-  const result = await chart.runIndicator(source);
-  if (result.ok && result.handle) {
-    bindHandle(result.handle);
-    if (savedName) instanceSources.set(result.handle.id, savedName);
-    else lastRunHandleId = result.handle.id;
-    log('ok', `已添加指标 · ${result.handle.title} (id=${result.handle.id})`);
-    refreshList();
-    highlightErrorLine(null);
-  } else {
-    showFailure(result.error ?? new Error('unknown error'), result.context);
-  }
-}
-
-function runCurrent(source: string | null = null, savedName: string | null = null) {
-  enqueue(async () => {
-    await addIndicator(source ?? view.state.doc.toString(), savedName);
-  });
-}
-
-function syncInstances(name: string, doc: string) {
-  const ids = [...instanceSources.entries()]
-    .filter(([, n]) => n === name)
-    .map(([id]) => id);
-  let updated = 0;
-  ids.forEach((id) => {
-    const h = findHandle(id);
-    if (h) {
-      h.updateCode(doc);
-      updated++;
-    }
-  });
-  if (updated > 0) log('info', `已同步更新图上 ${updated} 个「${name}」实例`);
-}
-
-function refreshList() {
-  const count = chart.indicators().length;
-  setStatus(count > 0 ? 'ok' : 'pending', count > 0 ? `${count} 个指标在图` : '图表为空');
-  renderFavoriteBtn();
-}
-
-function startNew() {
-  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: NEW_TEMPLATE } });
-  highlightErrorLine(null);
-  currentName = null;
-  savedContent = NEW_TEMPLATE;
-  lastRunHandleId = null;
-  renderScriptBar();
-  persistEditorNow();
-  refreshList();
-  log('info', '新建脚本草稿，点 Run 上图为一个新指标');
-}
-
-const runKeymap = Prec.high(
-  keymap.of([
-    {
-      key: 'Mod-Enter',
-      preventDefault: true,
-      run: () => {
-        runCurrent();
-        return true;
+    const editorKeymap = Prec.high(keymap.of([
+      {
+        key: 'Mod-Enter',
+        preventDefault: true,
+        stopPropagation: true,
+        run: () => { this.run(); return true; },
       },
-    },
-    {
-      key: 'Mod-s',
-      preventDefault: true,
-      run: () => {
-        saveFlow();
-        return true;
+      {
+        key: 'Mod-s',
+        preventDefault: true,
+        stopPropagation: true,
+        run: () => { this.save(); return true; },
       },
-    },
-  ]),
-);
-
-function syncUndoButtons() {
-  undoBtn.disabled = undoDepth(view.state) === 0;
-  redoBtn.disabled = redoDepth(view.state) === 0;
-}
-
-const view = new EditorView({
-  parent: document.querySelector<HTMLDivElement>('#editor')!,
-  state: EditorState.create({
-    doc: initialDoc,
-    extensions: [
-      basicSetup,
-      javascript(),
-      runErrorLine,
-      runErrorHighlight,
-      runKeymap,
-      EditorView.updateListener.of((u) => {
-        if (u.docChanged) {
-          renderScriptBar();
-          persistEditor();
-        }
-        syncUndoButtons();
+    ]));
+    this.view = new EditorView({
+      parent: editorHost,
+      state: EditorState.create({
+        doc: initialDoc,
+        extensions: [
+          basicSetup,
+          javascript(),
+          runErrorLine,
+          runErrorHighlight,
+          editorKeymap,
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) {
+              this.renderTitle();
+              this.persistSoon();
+            }
+          }),
+        ],
       }),
-    ],
-  }),
-});
-
-let currentName: string | null = initialName;
-let savedContent: string | null = initialDoc;
-
-function extractTitle(source: string): string {
-  const m = /(?:indicator|strategy|library)\s*\(\s*["']([^"']+)["']/.exec(source);
-  return m?.[1] ?? '未命名脚本';
-}
-
-function renderScriptBar() {
-  const dirty = view.state.doc.toString() !== savedContent;
-  scriptNameEl.textContent = `${currentName ?? '未命名脚本'}${dirty ? ' *' : ''}`;
-}
-
-let snapshotTimer: ReturnType<typeof setTimeout> | null = null;
-
-function persistEditorNow() {
-  if (snapshotTimer) {
-    clearTimeout(snapshotTimer);
-    snapshotTimer = null;
-  }
-  saveEditorSnapshot({ script: view.state.doc.toString(), name: currentName });
-}
-
-function persistEditor() {
-  if (snapshotTimer) clearTimeout(snapshotTimer);
-  snapshotTimer = setTimeout(persistEditorNow, 300);
-}
-
-function loadScript(name: string, script: string, savedName: string | null = null, autoRun = true) {
-  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: script } });
-  highlightErrorLine(null);
-  currentName = savedName;
-  savedContent = script;
-  lastRunHandleId = null;
-  renderScriptBar();
-  renderFavoriteBtn();
-  persistEditorNow();
-  if (savedName) log('info', `已打开「${savedName}」`);
-  else log('info', `加载「${name}」`);
-  if (autoRun) runCurrent(script, savedName);
-}
-
-type SaveModalMode = 'save' | 'saveAs' | 'rename';
-let saveModalMode: SaveModalMode = 'save';
-
-function openSaveModal(m: SaveModalMode, prefill: string) {
-  saveModalMode = m;
-  saveModalTitle.textContent =
-    m === 'save' ? '保存脚本' : m === 'saveAs' ? '另存为副本' : '重命名脚本';
-  saveNameInput.value = prefill;
-  saveModal.hidden = false;
-  saveNameInput.focus();
-  saveNameInput.select();
-}
-
-function closeSaveModal() {
-  saveModal.hidden = true;
-}
-
-function confirmSaveModal() {
-  const name = saveNameInput.value.trim();
-  if (!name) {
-    saveNameInput.focus();
-    return;
-  }
-  const doc = view.state.doc.toString();
-  if (saveModalMode === 'rename' && currentName) {
-    const oldName = currentName;
-    renameScript(oldName, name);
-    for (const [id, n] of instanceSources) {
-      if (n === oldName) instanceSources.set(id, name);
-    }
-    currentName = name;
-    log('ok', `已重命名「${oldName}」→「${name}」`);
-  } else {
-    saveScript(name, doc);
-    currentName = name;
-    if (lastRunHandleId && findHandle(lastRunHandleId)) {
-      instanceSources.set(lastRunHandleId, name);
-      lastRunHandleId = null;
-    }
-    log('ok', `已保存脚本「${name}」（localStorage，共 ${listScripts().length} 个）`);
-  }
-  savedContent = doc;
-  closeSaveModal();
-  renderScriptBar();
-  renderFavoriteBtn();
-  persistEditorNow();
-  syncInstances(name, doc);
-}
-
-function saveFlow() {
-  if (!currentName) {
-    openSaveModal('save', extractTitle(view.state.doc.toString()));
-    return;
-  }
-  const doc = view.state.doc.toString();
-  saveScript(currentName, doc);
-  savedContent = doc;
-  renderScriptBar();
-  renderFavoriteBtn();
-  persistEditorNow();
-  log('ok', `已保存「${currentName}」`);
-  syncInstances(currentName, doc);
-}
-
-function saveAsFlow() {
-  openSaveModal('saveAs', currentName ? `${currentName} copy` : extractTitle(view.state.doc.toString()));
-}
-
-function renameFlow() {
-  if (currentName) openSaveModal('rename', currentName);
-  else openSaveModal('saveAs', extractTitle(view.state.doc.toString()));
-}
-
-function renderFavoriteBtn() {
-  const active = currentName != null && isFavorite(currentName);
-  favoriteBtn.classList.toggle('active', active);
-  setIcon(favoriteBtn, active ? 'star-filled' : 'star', 14);
-  favoriteBtn.title = active ? `取消收藏「${currentName}」` : '收藏当前脚本';
-}
-
-function injectIcons() {
-  setIcon(undoBtn, 'undo-2', 14);
-  setIcon(redoBtn, 'redo-2', 14);
-  setIcon(bookmarkBtn, 'bookmark', 14);
-  setIcon(cameraBtn, 'camera', 14);
-  setIcon(panelToggleBtn, 'code-xml', 14);
-  setIcon(saveBtn, 'save', 14);
-  setIcon(saveAsBtn, 'copy', 14);
-  setIcon(panelCloseBtn, 'x', 14);
-  setIcon(indDialogCloseBtn, 'x', 14);
-  setIcon(saveModalCloseBtn, 'x', 14);
-  document.querySelector('.ind-icon')?.replaceWith(icon('chart-line', 14));
-  document.querySelector('.run-icon')?.replaceWith(icon('play', 12));
-  renderFavoriteBtn();
-  syncUndoButtons();
-}
-
-undoBtn.addEventListener('click', () => undo(view));
-redoBtn.addEventListener('click', () => redo(view));
-bookmarkBtn.addEventListener('click', () => openIndDialog('favorites'));
-cameraBtn.addEventListener('click', () => {
-  const url = chart.renderer.screenshot();
-  if (!url) {
-    log('info', '图表尚未就绪，无法截图');
-    return;
-  }
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${symbol}-${tfLabel(timeframe)}-${Date.now()}.png`;
-  a.click();
-  log('ok', '已导出图表截图 PNG');
-});
-
-favoriteBtn.addEventListener('click', () => {
-  if (!currentName) {
-    log('info', '先保存脚本（Ctrl+S）才能收藏');
-    return;
-  }
-  toggleFavorite(currentName);
-  renderFavoriteBtn();
-  log('ok', isFavorite(currentName) ? `已收藏「${currentName}」` : `已取消收藏「${currentName}」`);
-});
-
-function fmtTime(ts: number): string {
-  return new Date(ts).toLocaleString('zh-CN', { hour12: false });
-}
-
-function closeScriptMenu() {
-  scriptMenuEl.hidden = true;
-}
-
-function menuNote(text: string) {
-  const el = document.createElement('div');
-  el.className = 'menu-note';
-  el.textContent = text;
-  return el;
-}
-
-function menuGroupLabel(text: string) {
-  const el = document.createElement('div');
-  el.className = 'menu-group-label';
-  el.textContent = text;
-  return el;
-}
-
-function menuItem(label: string, hint: string | null, action: () => void) {
-  const btn = document.createElement('button');
-  btn.className = 'menu-item';
-  const l = document.createElement('span');
-  l.textContent = label;
-  btn.appendChild(l);
-  if (hint) {
-    const h = document.createElement('span');
-    h.className = 'menu-hint';
-    h.textContent = hint;
-    btn.appendChild(h);
-  }
-  btn.addEventListener('click', () => {
-    closeScriptMenu();
-    action();
-  });
-  return btn;
-}
-
-function renderScriptMenu() {
-  scriptMenuEl.innerHTML = '';
-  scriptMenuEl.appendChild(menuGroupLabel('FAVORITE SCRIPTS'));
-  const favs = listScripts().filter((s) => s.favorite);
-  if (favs.length === 0) {
-    scriptMenuEl.appendChild(menuNote('还没有收藏的脚本 — 点 ★ 收藏正在编辑的脚本'));
-  } else {
-    favs.forEach((s) => {
-      scriptMenuEl.appendChild(
-        menuItem(s.name, fmtTime(s.savedAt), () => loadScript(s.name, s.script, s.name, false)),
-      );
     });
-  }
-  scriptMenuEl.appendChild(sepEl());
-  scriptMenuEl.appendChild(menuGroupLabel('RECENT SCRIPTS'));
-  const recent = listScripts().slice(0, 5);
-  if (recent.length === 0) {
-    scriptMenuEl.appendChild(menuNote('还没有保存的脚本'));
-  } else {
-    recent.forEach((s) => {
-      scriptMenuEl.appendChild(
-        menuItem(s.name, fmtTime(s.savedAt), () => loadScript(s.name, s.script, s.name, false)),
-      );
+
+    titleButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (this.menu.hidden) this.renderMenu();
+      this.menu.hidden = !this.menu.hidden;
     });
+    save.addEventListener('click', () => this.save());
+    saveAs.addEventListener('click', () => this.saveAs());
+    this.favoriteButton.addEventListener('click', () => this.toggleCurrentFavorite());
+    run.addEventListener('click', () => this.run());
+    logsToggle.addEventListener('click', () => logsPanel.classList.toggle('collapsed'));
+    this.closeMenuOnDocumentClick = (event) => {
+      if (!this.menu.hidden && !this.menu.contains(event.target as Node)) this.menu.hidden = true;
+    };
+    document.addEventListener('click', this.closeMenuOnDocumentClick);
+    this.renderTitle();
+    this.renderFavorite();
   }
-  scriptMenuEl.appendChild(sepEl());
-  scriptMenuEl.appendChild(menuItem('保存脚本', 'Ctrl+S', saveFlow));
-  scriptMenuEl.appendChild(menuItem('另存为副本', null, saveAsFlow));
-  scriptMenuEl.appendChild(menuItem(currentName ? '重命名' : '保存为新脚本', null, renameFlow));
-  scriptMenuEl.appendChild(menuItem('打开脚本…', null, () => openIndDialog('personal')));
-  scriptMenuEl.appendChild(sepEl());
-  scriptMenuEl.appendChild(menuItem('+ 新建脚本', null, startNew));
-}
 
-function sepEl() {
-  const el = document.createElement('div');
-  el.className = 'menu-sep';
-  return el;
-}
-
-scriptMenuBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (scriptMenuEl.hidden) {
-    renderScriptMenu();
-    scriptMenuEl.hidden = false;
-  } else {
-    closeScriptMenu();
+  destroy() {
+    document.removeEventListener('click', this.closeMenuOnDocumentClick);
+    if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
+    this.view.destroy();
+    if (editorPanel === this) editorPanel = null;
   }
-});
-document.addEventListener('click', (e) => {
-  if (!scriptMenuEl.hidden && !scriptMenuEl.contains(e.target as Node)) closeScriptMenu();
-});
 
-type CatKey = 'favorites' | 'basic' | 'library' | 'personal';
-let activeCat: CatKey = 'personal';
-
-interface CatDef {
-  key: CatKey;
-  name: string;
-}
-
-const CAT_GROUPS: Array<{ label: string | null; items: CatDef[] }> = [
-  { label: null, items: [{ key: 'favorites', name: '收藏' }] },
-  {
-    label: '内置',
-    items: [
-      { key: 'basic', name: '内置示例' },
-      { key: 'library', name: 'LuxAlgo Library' },
-    ],
-  },
-  { label: '个人', items: [{ key: 'personal', name: '我的脚本' }] },
-];
-
-interface CatEntry {
-  name: string;
-  script?: string;
-  savedAt?: number;
-  favorite?: boolean;
-}
-
-function catEntries(cat: CatKey): CatEntry[] {
-  if (cat === 'favorites') return listScripts().filter((s) => s.favorite);
-  if (cat === 'personal') return listScripts();
-  if (cat === 'basic') return BASIC_SAMPLES.map((s) => ({ name: s.name, script: s.script }));
-  return LIBRARY.map((s) => ({ name: s.name, script: s.script }));
-}
-
-function renderIndDialog() {
-  indCatsEl.innerHTML = '';
-  CAT_GROUPS.forEach((group) => {
-    if (group.label) {
-      const gl = document.createElement('div');
-      gl.className = 'cat-group-label';
-      gl.textContent = group.label;
-      indCatsEl.appendChild(gl);
-    }
-    group.items.forEach((c) => {
-      const btn = document.createElement('button');
-      btn.className = `cat-item${c.key === activeCat ? ' active' : ''}`;
-      const label = document.createElement('span');
-      label.textContent = c.name;
-      const count = document.createElement('span');
-      count.className = 'cat-count';
-      count.textContent = String(catEntries(c.key).length);
-      btn.append(label, count);
-      btn.addEventListener('click', () => {
-        activeCat = c.key;
-        indSearchInput.value = '';
-        renderIndDialog();
-      });
-      indCatsEl.appendChild(btn);
-    });
-  });
-
-  const q = indSearchInput.value.trim().toLowerCase();
-  const entries = catEntries(activeCat).filter((s) => !q || s.name.toLowerCase().includes(q));
-  const isSaved = activeCat === 'personal' || activeCat === 'favorites';
-  indItemsEl.innerHTML = '';
-  if (entries.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'saved-empty';
-    empty.textContent = activeCat === 'personal' && !q
-      ? '还没有保存的脚本，在 Pine Editor 里写好后点「保存」'
-      : activeCat === 'favorites' && !q
-        ? '还没有收藏的脚本 — 在「我的脚本」里点条目星标收藏'
-        : '没有匹配的脚本';
-    indItemsEl.appendChild(empty);
-    return;
+  openSavedScript(name: string, source: string) {
+    this.replaceDocument(source, name, null);
+    this.view.focus();
   }
-  entries.forEach((entry) => {
+
+  openIndicatorSource(name: string, source: string) {
+    this.replaceDocument(source, null, name);
+    this.view.focus();
+  }
+
+  openNewScript() {
+    this.replaceDocument(NEW_SCRIPT, null, null);
+    this.view.focus();
+  }
+
+  detachDeletedScript(name: string) {
+    if (this.currentName !== name) return;
+    this.currentName = null;
+    this.draftTitle = name;
+    this.savedContent = null;
+    this.persistNow();
+    this.renderTitle();
+    this.renderFavorite();
+    this.log('info', `已删除保存的脚本「${name}」，编辑区内容保留为草稿`);
+  }
+
+  log(level: 'info' | 'ok' | 'error', message: string) {
+    this.logCount++;
+    this.logsCount.textContent = `(${this.logCount})`;
     const row = document.createElement('div');
-    row.className = 'ind-item';
-
-    if (isSaved) {
-      const star = document.createElement('button');
-      star.className = `item-star${entry.favorite ? ' on' : ''}`;
-      star.textContent = entry.favorite ? '★' : '☆';
-      star.title = entry.favorite ? '取消收藏' : '收藏';
-      star.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleFavorite(entry.name);
-        renderIndDialog();
-      });
-      row.appendChild(star);
-    }
-
-    const info = document.createElement('div');
-    info.className = 'saved-info';
-    const name = document.createElement('span');
-    name.className = 'saved-name';
-    name.textContent = entry.name;
-    info.appendChild(name);
-    if (entry.savedAt) {
-      const time = document.createElement('span');
-      time.className = 'saved-time';
-      time.textContent = fmtTime(entry.savedAt);
-      info.appendChild(time);
-    }
-
-    const bar = document.createElement('span');
-    bar.className = 'ind-actions';
-
-    if (isSaved && entry.script) {
-      const edit = document.createElement('button');
-      edit.textContent = '编辑';
-      edit.title = '打开到编辑器（不上图）';
-      edit.addEventListener('click', (e) => {
-        e.stopPropagation();
-        indDialog.hidden = true;
-        loadScript(entry.name, entry.script!, entry.name, false);
-      });
-      const del = document.createElement('button');
-      del.textContent = '删除';
-      del.className = 'danger';
-      del.addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteScript(entry.name);
-        renderIndDialog();
-        renderFavoriteBtn();
-        log('info', `已删除保存的脚本「${entry.name}」`);
-      });
-      bar.append(edit, del);
-    }
-
-    const add = document.createElement('button');
-    add.textContent = '添加';
-    add.className = 'primary small';
-    add.title = '作为新指标添加到图表';
-    add.addEventListener('click', (e) => {
-      e.stopPropagation();
-      loadScript(entry.name, entry.script!, isSaved ? entry.name : null, true);
-    });
-    bar.appendChild(add);
-
-    row.addEventListener('click', () => {
-      loadScript(entry.name, entry.script!, isSaved ? entry.name : null, true);
-    });
-
-    row.append(info, bar);
-    indItemsEl.appendChild(row);
-  });
-}
-
-function openIndDialog(cat: CatKey = activeCat) {
-  activeCat = cat;
-  indSearchInput.value = '';
-  renderIndDialog();
-  indDialog.hidden = false;
-}
-
-indDialogBtn.addEventListener('click', () => openIndDialog());
-indDialogCloseBtn.addEventListener('click', () => {
-  indDialog.hidden = true;
-});
-indDialog.addEventListener('click', (e) => {
-  if (e.target === indDialog) indDialog.hidden = true;
-});
-indSearchInput.addEventListener('input', renderIndDialog);
-
-saveBtn.addEventListener('click', saveFlow);
-saveAsBtn.addEventListener('click', saveAsFlow);
-saveOkBtn.addEventListener('click', confirmSaveModal);
-saveCancelBtn.addEventListener('click', closeSaveModal);
-saveModalCloseBtn.addEventListener('click', closeSaveModal);
-saveModal.addEventListener('click', (e) => {
-  if (e.target === saveModal) closeSaveModal();
-});
-saveNameInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') confirmSaveModal();
-  if (e.key === 'Escape') closeSaveModal();
-});
-
-runBtn.addEventListener('click', () => runCurrent());
-
-function expandPanel() {
-  pinePanel.classList.remove('collapsed');
-  panelToggleBtn.classList.add('active');
-}
-
-function collapsePanel() {
-  pinePanel.classList.add('collapsed');
-  panelToggleBtn.classList.remove('active');
-}
-
-panelCloseBtn.addEventListener('click', collapsePanel);
-panelToggleBtn.addEventListener('click', () => {
-  if (pinePanel.classList.contains('collapsed')) expandPanel();
-  else collapsePanel();
-});
-
-panelResize.addEventListener('mousedown', (e) => {
-  e.preventDefault();
-  const onMove = (ev: MouseEvent) => {
-    const w = Math.min(760, Math.max(360, window.innerWidth - ev.clientX));
-    pinePanel.style.width = `${w}px`;
-  };
-  const onUp = () => {
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
-  };
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
-});
-logsToggleBtn.addEventListener('click', () => {
-  logsPanelEl.classList.toggle('collapsed');
-});
-
-function tickClock() {
-  clockEl.textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
-}
-setInterval(tickClock, 1000);
-tickClock();
-
-panelToggleBtn.classList.add('active');
-injectIcons();
-
-chart.on('script:run', (runInfo: ScriptRun) => {
-  if (runInfo.cause === 'tick' || runInfo.cause === 'viewport') return;
-  const plots = Object.entries(runInfo.plots)
-    .map(([k, v]) => `${k}=${fmt(v)}`)
-    .join(' · ');
-  const strat = runInfo.strategy
-    ? ` · pos=${runInfo.strategy.position} equity=${fmt(runInfo.strategy.equity)}`
-    : '';
-  log('info', `script:run · ${runInfo.title} · cause=${runInfo.cause} bar=${runInfo.bar}${strat}`);
-  if (plots) log('ok', `plots@bar: ${plots}`);
-});
-
-chart.on('indicator:added', ({ id }) => {
-  const h = chart.indicators().find((x) => x.id === id);
-  if (h) bindHandle(h);
-  refreshList();
-});
-
-chart.on('indicator:removed', ({ id }) => {
-  instanceSources.delete(id);
-  persistLayout();
-  refreshList();
-});
-
-chart.on('load:end', ({ bars }) => {
-  if (bars > 0) {
-    marketStateEl.textContent = `hyperliquid · ${symbol}USDT ${tfLabel(timeframe)} · live`;
-    marketStateEl.classList.add('on');
-  } else {
-    marketStateEl.textContent = '加载失败';
-    marketStateEl.classList.remove('on');
+    row.className = `quant-log-row ${level}`;
+    const time = document.createElement('span');
+    time.className = 'quant-log-time';
+    time.textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    const text = document.createElement('span');
+    text.textContent = message;
+    row.append(time, text);
+    this.logs.appendChild(row);
+    while (this.logs.childElementCount > 150) this.logs.firstElementChild?.remove();
+    this.logs.scrollTop = this.logs.scrollHeight;
   }
-});
 
-window.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-    e.preventDefault();
-    saveFlow();
+  reportError(error: Error, source?: string) {
+    this.log('error', error.message);
+    if (source && source !== this.view.state.doc.toString()) return;
+    const match = /\b(?:line|Ln)\s*#?(\d+)/i.exec(error.message);
+    this.view.dispatch({ effects: setRunErrorLine.of(match ? Number(match[1]) : null) });
   }
-});
 
-window.addEventListener('resize', () => chart.resize());
-
-function tfLabel(v: string): string {
-  return TIMEFRAMES.find((t) => t.vela === v)?.label ?? v;
-}
-
-function closeMarketMenus() {
-  symbolMenuEl.hidden = true;
-  tfMenuEl.hidden = true;
-}
-
-function renderMarketMenus() {
-  symbolMenuEl.innerHTML = '';
-  (SYMBOLS as readonly string[]).forEach((s) => {
-    const b = document.createElement('button');
-    b.className = `menu-item pick${s === symbol ? ' active' : ''}`;
-    b.textContent = `${s}USDT`;
-    b.addEventListener('click', () => {
-      closeMarketMenus();
-      if (s === symbol) return;
-      symbol = s as (typeof SYMBOLS)[number];
-      renderMarket();
-      void chart.setMarket({ symbol: `hyperliquid:${symbol}` });
-      log('info', `切换品种 → ${symbol}USDT`);
-    });
-    symbolMenuEl.appendChild(b);
-  });
-  tfMenuEl.innerHTML = '';
-  TIMEFRAMES.forEach((t) => {
-    const b = document.createElement('button');
-    b.className = `menu-item pick${t.vela === timeframe ? ' active' : ''}`;
-    b.textContent = t.label;
-    b.addEventListener('click', () => {
-      closeMarketMenus();
-      if (t.vela === timeframe) return;
-      timeframe = t.vela;
-      renderMarket();
-      void chart.setMarket({ timeframe });
-      log('info', `切换周期 → ${t.label}`);
-    });
-    tfMenuEl.appendChild(b);
-  });
-}
-
-function renderMarket() {
-  symbolBtn.textContent = `${symbol}USDT`;
-  tfLabelEl.textContent = tfLabel(timeframe);
-  renderMarketMenus();
-}
-renderMarket();
-
-symbolBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  const wasHidden = symbolMenuEl.hidden;
-  closeMarketMenus();
-  if (wasHidden) {
-    symbolMenuEl.hidden = false;
+  private renderTitle() {
+    const dirty = this.view.state.doc.toString() !== this.savedContent;
+    this.scriptName.textContent = `${this.currentName ?? this.draftTitle ?? '未命名脚本'}${dirty ? ' *' : ''}`;
   }
-});
-tfBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  const wasHidden = tfMenuEl.hidden;
-  closeMarketMenus();
-  if (wasHidden) {
-    tfMenuEl.hidden = false;
-  }
-});
-document.addEventListener('click', (e) => {
-  const t = e.target as Node;
-  if (!symbolMenuEl.hidden && !symbolMenuEl.contains(t)) symbolMenuEl.hidden = true;
-  if (!tfMenuEl.hidden && !tfMenuEl.contains(t)) tfMenuEl.hidden = true;
-});
 
-void (async () => {
-  await chart.ready();
-  await chart.historyComplete().catch(() => undefined);
-  log('info', '图表就绪 · Hyperliquid 免认证实时数据（BTC/ETH，1m–1M）');
-  const layout = loadLayout();
-  if (layout.length > 0) {
-    let ok = 0;
-    for (const item of layout) {
-      const r = await chart.runIndicator(item.source);
-      if (r.ok && r.handle) {
-        bindHandle(r.handle);
-        if (item.savedName) instanceSources.set(r.handle.id, item.savedName);
-        if (!item.visible) r.handle.setVisible(false);
-        ok++;
-      } else if (r.error) {
-        log('err', `布局恢复跳过一个指标: ${r.error.message}`);
-      }
+  private renderFavorite() {
+    const active = this.currentName != null && isFavorite(this.currentName);
+    this.favoriteButton.classList.toggle('active', active);
+    setIcon(this.favoriteButton, active ? 'star-filled' : 'star', 15);
+    this.favoriteButton.title = active ? '取消收藏当前脚本' : '收藏当前脚本';
+  }
+
+  private persistNow() {
+    if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
+    this.snapshotTimer = null;
+    saveEditorSnapshot({ script: this.view.state.doc.toString(), name: this.currentName });
+  }
+
+  private persistSoon() {
+    if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
+    this.snapshotTimer = setTimeout(() => this.persistNow(), 250);
+  }
+
+  private replaceDocument(source: string, name: string | null, draftTitle: string | null = null) {
+    this.view.dispatch({ changes: { from: 0, to: this.view.state.doc.length, insert: source } });
+    this.view.dispatch({ effects: setRunErrorLine.of(null) });
+    this.currentName = name;
+    this.draftTitle = draftTitle;
+    this.savedContent = source;
+    this.renderTitle();
+    this.renderFavorite();
+    this.persistNow();
+  }
+
+  private run() {
+    const source = this.view.state.doc.toString();
+    try {
+      workspace.context().addIndicator({ name: extractTitle(source), script: source, language: 'pine' });
+      this.view.dispatch({ effects: setRunErrorLine.of(null) });
+      this.log('info', `已提交运行 · ${extractTitle(source)}`);
+    } catch (reason) {
+      this.reportError(reason instanceof Error ? reason : new Error(String(reason)), source);
     }
-    refreshList();
-    if (ok > 0) {
-      log('ok', `已恢复上次的图表布局（${ok}/${layout.length} 个指标）`);
-      if (restoredSnapshot) {
-        renderScriptBar();
-        log(
-          'info',
-          restoredSnapshot.name
-            ? `编辑器恢复「${restoredSnapshot.name}」`
-            : '编辑器恢复上次未保存的草稿',
-        );
-      }
+  }
+
+  private save() {
+    const source = this.view.state.doc.toString();
+    if (!this.currentName) {
+      this.openSaveDialog('保存脚本', this.draftTitle ?? extractTitle(source), false);
       return;
     }
+    const previous = listScripts().find((script) => script.name === this.currentName)?.script;
+    saveScript(this.currentName, source);
+    syncSavedScriptFavorite(this.currentName, source, previous);
+    this.savedContent = source;
+    this.persistNow();
+    this.renderTitle();
+    this.renderFavorite();
+    this.log('ok', `已保存「${this.currentName}」`);
   }
-  if (restoredSnapshot) {
-    renderScriptBar();
-    log(
-      'info',
-      restoredSnapshot.name ? `编辑器恢复「${restoredSnapshot.name}」` : '编辑器恢复上次未保存的草稿',
+
+  private saveAs() {
+    const suggestion = this.currentName
+      ? `${this.currentName} copy`
+      : this.draftTitle ?? extractTitle(this.view.state.doc.toString());
+    this.openSaveDialog('另存为副本', suggestion, false);
+  }
+
+  private openSaveDialog(title: string, initialValue: string, rename: boolean) {
+    openTextDialog({
+      title,
+      label: '脚本名称',
+      initialValue,
+      onConfirm: (name) => {
+        if (!name) return '请输入脚本名称';
+        const duplicate = listScripts().some((script) => script.name === name);
+        if (duplicate && !(rename && name === this.currentName)) return `脚本「${name}」已存在`;
+        const source = this.view.state.doc.toString();
+        if (rename && this.currentName) {
+          const oldName = this.currentName;
+          const previous = listScripts().find((script) => script.name === oldName)?.script;
+          renameScript(oldName, name, source);
+          syncSavedScriptFavorite(name, source, previous);
+          this.log('ok', `已重命名「${oldName}」→「${name}」`);
+        } else {
+          saveScript(name, source);
+          indicatorManager?.sync();
+          this.log('ok', `已保存脚本「${name}」`);
+        }
+        this.currentName = name;
+        this.draftTitle = null;
+        this.savedContent = source;
+        this.persistNow();
+        this.renderTitle();
+        this.renderFavorite();
+        return null;
+      },
+    });
+  }
+
+  private toggleCurrentFavorite() {
+    if (!this.currentName) {
+      this.log('info', '请先保存脚本，再收藏');
+      return;
+    }
+    const saved = listScripts().find((script) => script.name === this.currentName);
+    const scripts = toggleFavorite(this.currentName);
+    const enabled = scripts.some((script) => script.name === this.currentName && script.favorite);
+    if (saved) setIndicatorFavorite(scriptFavorite(saved.name, saved.script), enabled);
+    indicatorManager?.sync();
+    this.renderFavorite();
+    this.log('ok', isFavorite(this.currentName) ? `已收藏「${this.currentName}」` : `已取消收藏「${this.currentName}」`);
+  }
+
+  private renderMenu() {
+    this.menu.replaceChildren();
+    const addSection = (title: string) => {
+      const heading = document.createElement('div');
+      heading.className = 'quant-script-menu-heading';
+      heading.textContent = title;
+      this.menu.appendChild(heading);
+    };
+    const addItem = (label: string, action: () => void, hint?: string) => {
+      const button = makeButton('', 'quant-script-menu-item');
+      const text = document.createElement('span');
+      text.textContent = label;
+      button.appendChild(text);
+      if (hint) {
+        const secondary = document.createElement('span');
+        secondary.textContent = hint;
+        button.appendChild(secondary);
+      }
+      button.addEventListener('click', () => {
+        this.menu.hidden = true;
+        action();
+      });
+      this.menu.appendChild(button);
+    };
+    const separator = () => {
+      const element = document.createElement('div');
+      element.className = 'quant-script-menu-separator';
+      this.menu.appendChild(element);
+    };
+
+    addSection('FAVORITE SCRIPTS');
+    const favorites = listScripts().filter((script) => script.favorite);
+    if (favorites.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'quant-script-menu-empty';
+      empty.textContent = '还没有收藏的脚本';
+      this.menu.appendChild(empty);
+    } else {
+      favorites.forEach((script) => addItem(
+        script.name,
+        () => this.replaceDocument(script.script, script.name),
+        formatTime(script.savedAt),
+      ));
+    }
+    separator();
+    addSection('RECENT SCRIPTS');
+    const recent = listScripts().slice(0, 6);
+    if (recent.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'quant-script-menu-empty';
+      empty.textContent = '还没有保存的脚本';
+      this.menu.appendChild(empty);
+    } else {
+      recent.forEach((script) => addItem(
+        script.name,
+        () => this.replaceDocument(script.script, script.name),
+        formatTime(script.savedAt),
+      ));
+    }
+    separator();
+    addItem('保存脚本', () => this.save(), 'Ctrl+S');
+    addItem('另存为副本', () => this.saveAs());
+    addItem(this.currentName ? '重命名脚本' : '保存为新脚本', () => {
+      this.openSaveDialog(
+        this.currentName ? '重命名脚本' : '保存为新脚本',
+        this.currentName ?? this.draftTitle ?? extractTitle(this.view.state.doc.toString()),
+        this.currentName != null,
+      );
+    });
+    if (this.currentName) {
+      addItem('删除当前脚本', () => {
+        const deletedName = this.currentName;
+        if (!deletedName) return;
+        const saved = listScripts().find((script) => script.name === deletedName);
+        deleteScript(deletedName);
+        if (saved) setIndicatorFavorite(scriptFavorite(saved.name, saved.script), false);
+        this.currentName = null;
+        this.draftTitle = deletedName;
+        this.savedContent = null;
+        this.persistNow();
+        this.renderTitle();
+        this.renderFavorite();
+        this.log('info', `已删除保存的脚本「${deletedName}」，编辑区内容保留为草稿`);
+        indicatorManager?.sync();
+      });
+    }
+    addItem('+ 新建脚本', () => this.replaceDocument(NEW_SCRIPT, null, null));
+  }
+}
+
+type IndicatorManagerRow = {
+  name: string;
+  meta?: string;
+  favorite: IndicatorFavorite;
+  code:
+    | { kind: 'native'; nativeType: string }
+    | { kind: 'script'; script: string; savedName?: string };
+  add?: () => void;
+  remove?: () => void;
+  removeSaved?: () => void;
+};
+
+type IndicatorManagerSection = {
+  id: 'on-chart' | 'favorites' | 'built-ins' | 'personal';
+  title: string;
+  rows: IndicatorManagerRow[];
+  empty: string;
+};
+
+class IndicatorManagerDialog {
+  private readonly dialog: Dialog;
+  private readonly search: HTMLInputElement;
+  private readonly navigation: HTMLElement;
+  private readonly list: HTMLElement;
+  private renderedRows: IndicatorManagerRow[] = [];
+  private activeSectionId: IndicatorManagerSection['id'] = 'on-chart';
+
+  constructor() {
+    const doc = workspace.root.ownerDocument;
+    this.search = doc.createElement('input');
+    this.search.className = 'quant-indicator-search';
+    this.search.placeholder = 'Search indicators…';
+    this.search.spellcheck = false;
+    this.search.setAttribute('aria-label', 'Search indicators');
+
+    const searchRow = doc.createElement('div');
+    searchRow.className = 'quant-indicator-search-row';
+    searchRow.append(iconEl('search', doc), this.search);
+
+    this.list = doc.createElement('div');
+    this.list.className = 'quant-indicator-list';
+    this.list.addEventListener('click', (event) => this.onListClick(event));
+
+    this.navigation = doc.createElement('nav');
+    this.navigation.className = 'quant-indicator-navigation';
+    this.navigation.setAttribute('aria-label', 'Indicator categories');
+    this.navigation.addEventListener('click', (event) => this.onNavigationClick(event));
+
+    const body = doc.createElement('div');
+    body.className = 'quant-indicator-body';
+    body.append(this.navigation, this.list);
+
+    const content = doc.createElement('div');
+    content.className = 'quant-indicator-manager';
+    content.addEventListener('keydown', (event) => event.stopPropagation());
+    content.append(searchRow, body);
+
+    this.dialog = new Dialog({
+      title: 'Indicators',
+      host: workspace.root,
+      draggable: true,
+      closeOnInteractOutside: true,
+      closeOnBackdrop: true,
+      className: 'quant-indicator-dialog',
+      content,
+      initialFocusEl: () => this.search,
+      onOpenChange: (open) => {
+        if (!open) return;
+        this.activeSectionId = 'on-chart';
+        this.search.value = '';
+        this.refresh();
+        if (!this.search.closest('[data-layout="mobile"]')) setTimeout(() => this.search.focus(), 0);
+      },
+    });
+    this.search.addEventListener('input', () => this.refresh());
+  }
+
+  open() {
+    closeActivePopover();
+    workspace.cells().forEach((cell) => cell.chart.renderer.closeDialogs());
+    this.migrateLegacyScriptFavorites();
+    this.dialog.show();
+  }
+
+  sync() {
+    if (this.dialog.open) this.refresh();
+  }
+
+  private migrateLegacyScriptFavorites() {
+    listScripts().forEach((script) => {
+      const favorite = scriptFavorite(script.name, script.script);
+      const indicatorStarred = hasIndicatorFavorite(favorite);
+      if (script.favorite && !indicatorStarred) {
+        toggleIndicatorFavorite(favorite);
+      } else if (!script.favorite && indicatorStarred) {
+        toggleFavorite(script.name);
+      }
+    });
+  }
+
+  private sections(): IndicatorManagerSection[] {
+    const active = workspace.active;
+    const onChartRows = active.onChartRows();
+    const nativeCount = onChartRows.filter((row) => row.native).length;
+    const onChart = onChartRows.flatMap((row, index): IndicatorManagerRow[] => {
+      let favorite: IndicatorFavorite | null = null;
+      let code: IndicatorManagerRow['code'] | null = null;
+      if (row.native && row.nativeType) {
+        favorite = nativeFavorite(row.name, row.nativeType);
+        code = { kind: 'native', nativeType: row.nativeType };
+      } else {
+        const instance = active.instances[index - nativeCount];
+        if (instance) {
+          favorite = scriptFavorite(
+            row.name,
+            instance.entry.script,
+            instance.entry.language ?? 'pine',
+          );
+          code = {
+            kind: 'script',
+            script: instance.entry.script,
+            savedName: listScripts().find(
+              (script) => script.script === instance.entry.script,
+            )?.name,
+          };
+        }
+      }
+      if (!favorite || !code) return [];
+      return [{
+        name: row.name,
+        favorite,
+        code,
+        remove: () => workspace.active.removeFromChart(index),
+      }];
+    });
+
+    const favorites = listIndicatorFavorites().map((favorite): IndicatorManagerRow => {
+      const savedName = favorite.kind === 'script'
+        ? listScripts().find((script) => script.script === favorite.script)?.name
+        : undefined;
+      return {
+        name: favorite.name,
+        favorite,
+        code: favorite.kind === 'native'
+          ? { kind: 'native', nativeType: favorite.nativeType }
+          : { kind: 'script', script: favorite.script, savedName },
+        add: () => addFavoriteToActiveChart(favorite),
+      };
+    });
+
+    let manifestIndex = 0;
+    const builtIns = active.libraryRows().flatMap((row, libraryIndex): IndicatorManagerRow[] => {
+      if (row.native && row.nativeType) {
+        return [{
+          name: row.name,
+          meta: row.beta ? 'Beta' : undefined,
+          favorite: nativeFavorite(row.name, row.nativeType),
+          code: { kind: 'native', nativeType: row.nativeType },
+          add: () => workspace.active.addFromLibrary(libraryIndex),
+        }];
+      }
+      const definition = PLATFORM_INDICATORS[manifestIndex++];
+      if (!definition) return [];
+      return [{
+        name: definition.name,
+        favorite: scriptFavorite(definition.name, definition.script, definition.language),
+        code: { kind: 'script', script: definition.script },
+        add: () => workspace.active.addFromLibrary(libraryIndex),
+      }];
+    });
+
+    const personal = listScripts().map((script): IndicatorManagerRow => ({
+      name: script.name,
+      meta: formatTime(script.savedAt),
+      favorite: scriptFavorite(script.name, script.script),
+      code: { kind: 'script', script: script.script, savedName: script.name },
+      add: () => workspace.context().addIndicator({
+        name: script.name,
+        script: script.script,
+        language: 'pine',
+      }),
+      removeSaved: () => this.deletePersonalScript(script.name, script.script),
+    }));
+
+    return [
+      { id: 'on-chart', title: 'On chart', rows: onChart, empty: 'No indicators on this chart.' },
+      { id: 'favorites', title: 'Favorites', rows: favorites, empty: 'Star an indicator to keep it here.' },
+      { id: 'personal', title: 'My indicators', rows: personal, empty: 'Save a Pine script to manage it here.' },
+      { id: 'built-ins', title: 'Built-ins', rows: builtIns, empty: 'No built-in indicators available.' },
+    ];
+  }
+
+  private refresh() {
+    const query = this.search.value.trim().toLocaleLowerCase();
+    this.renderedRows = [];
+    this.list.replaceChildren();
+    const sections = this.sections();
+    this.renderNavigation(sections);
+    const active = sections.find((section) => section.id === this.activeSectionId) ?? sections[0];
+    const rows = active.rows.filter((row) => !query || row.name.toLocaleLowerCase().includes(query));
+    this.renderSection(active, rows, Boolean(query));
+  }
+
+  private renderNavigation(sections: IndicatorManagerSection[]) {
+    const doc = this.navigation.ownerDocument;
+    this.navigation.replaceChildren();
+    const icons: Record<IndicatorManagerSection['id'], string> = {
+      'on-chart': 'chart-line',
+      favorites: 'star-filled',
+      personal: 'code-xml',
+      'built-ins': 'bookmark',
+    };
+    sections.forEach((section) => {
+      const button = makeButton('', 'quant-indicator-category');
+      button.dataset.section = section.id;
+      button.classList.toggle('active', section.id === this.activeSectionId);
+      button.setAttribute('aria-current', section.id === this.activeSectionId ? 'page' : 'false');
+      const categoryIcon = doc.createElement('span');
+      categoryIcon.className = 'quant-indicator-category-icon';
+      setIcon(categoryIcon, icons[section.id], 15);
+      const label = doc.createElement('span');
+      label.className = 'quant-indicator-category-label';
+      label.textContent = section.title;
+      const count = doc.createElement('span');
+      count.className = 'quant-indicator-category-count';
+      count.textContent = String(section.rows.length);
+      button.append(categoryIcon, label, count);
+      this.navigation.appendChild(button);
+    });
+  }
+
+  private renderSection(section: IndicatorManagerSection, rows: IndicatorManagerRow[], searching: boolean) {
+    const doc = this.list.ownerDocument;
+    const heading = doc.createElement('div');
+    heading.className = 'quant-indicator-list-heading';
+    const title = doc.createElement('strong');
+    title.textContent = section.title;
+    const count = doc.createElement('span');
+    count.textContent = String(rows.length);
+    heading.append(title, count);
+    this.list.appendChild(heading);
+
+    if (rows.length === 0) {
+      const empty = doc.createElement('div');
+      empty.className = searching ? 'quant-indicator-global-empty' : 'quant-indicator-empty';
+      empty.textContent = searching ? 'No indicators match your search.' : section.empty;
+      this.list.appendChild(empty);
+      if (section.id === 'personal' && !searching) {
+        const create = makeButton('Create in Pine editor', 'quant-indicator-create');
+        create.addEventListener('click', () => this.openNewPersonalScript());
+        this.list.appendChild(create);
+      }
+    } else {
+      rows.forEach((row) => this.list.appendChild(this.renderRow(row)));
+    }
+  }
+
+  private renderRow(row: IndicatorManagerRow): HTMLElement {
+    const doc = this.list.ownerDocument;
+    const rowIndex = this.renderedRows.push(row) - 1;
+    const element = doc.createElement('div');
+    element.className = 'quant-indicator-row';
+
+    const main = row.add
+      ? makeButton('', 'quant-indicator-main')
+      : doc.createElement('div');
+    main.className = 'quant-indicator-main';
+    if (row.add) {
+      main.dataset.action = 'add';
+      main.dataset.row = String(rowIndex);
+      main.title = `Add ${row.name} to chart`;
+    }
+    const copy = doc.createElement('span');
+    copy.className = 'quant-indicator-copy';
+    const name = doc.createElement('span');
+    name.className = 'quant-indicator-name';
+    name.textContent = row.name;
+    copy.appendChild(name);
+    if (row.meta) {
+      const meta = doc.createElement('span');
+      meta.className = 'quant-indicator-meta';
+      meta.textContent = row.meta;
+      copy.appendChild(meta);
+    }
+    main.appendChild(copy);
+    element.appendChild(main);
+
+    const actions = doc.createElement('div');
+    actions.className = 'quant-indicator-actions';
+    const favorite = this.actionButton(
+      rowIndex,
+      'favorite',
+      hasIndicatorFavorite(row.favorite) ? 'Remove from favorites' : 'Add to favorites',
     );
-    setStatus('pending', '点 Run 或从「指标」对话框上图');
-    return;
+    const starred = hasIndicatorFavorite(row.favorite);
+    favorite.classList.toggle('active', starred);
+    setIcon(favorite, starred ? 'star-filled' : 'star', 14);
+    actions.appendChild(favorite);
+
+    const code = this.actionButton(
+      rowIndex,
+      'code',
+      row.code.kind === 'native' ? 'View implementation details' : 'Open in Pine editor',
+    );
+    setIcon(code, 'code-xml', 14);
+    actions.appendChild(code);
+    if (row.remove) {
+      const remove = this.actionButton(rowIndex, 'remove', 'Remove from chart', true);
+      remove.appendChild(iconEl('trash', doc));
+      actions.appendChild(remove);
+    }
+    if (row.removeSaved) {
+      const removeSaved = this.actionButton(rowIndex, 'delete', 'Delete saved indicator', true);
+      removeSaved.appendChild(iconEl('trash', doc));
+      actions.appendChild(removeSaved);
+    }
+    element.appendChild(actions);
+    return element;
   }
-  setStatus('pending', '首次注入…');
-  loadScript('EMA 20 + Bands (overlay)', BASIC_SAMPLES[0].script);
-})();
+
+  private actionButton(row: number, action: string, label: string, danger = false) {
+    const button = makeButton('', `quant-indicator-action${danger ? ' danger' : ''}`);
+    button.dataset.row = String(row);
+    button.dataset.action = action;
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    return button;
+  }
+
+  private onListClick(event: MouseEvent) {
+    const button = (event.target as Element).closest<HTMLElement>('[data-action][data-row]');
+    if (!button || !this.list.contains(button)) return;
+    const row = this.renderedRows[Number(button.dataset.row)];
+    if (!row) return;
+    switch (button.dataset.action) {
+      case 'add':
+        row.add?.();
+        break;
+      case 'remove':
+        row.remove?.();
+        break;
+      case 'favorite': {
+        const enabled = !hasIndicatorFavorite(row.favorite);
+        setIndicatorFavorite(row.favorite, enabled);
+        workspace.context().toast(enabled ? 'Added to favorites' : 'Removed from favorites', 'success');
+        break;
+      }
+      case 'code':
+        this.openIndicatorCode(row);
+        return;
+      case 'delete':
+        row.removeSaved?.();
+        return;
+    }
+    this.refresh();
+  }
+
+  private onNavigationClick(event: MouseEvent) {
+    const button = (event.target as Element).closest<HTMLElement>('[data-section]');
+    if (!button || !this.navigation.contains(button)) return;
+    const id = button.dataset.section as IndicatorManagerSection['id'];
+    if (!['on-chart', 'favorites', 'personal', 'built-ins'].includes(id)) return;
+    this.activeSectionId = id;
+    this.refresh();
+  }
+
+  private openIndicatorCode(row: IndicatorManagerRow) {
+    this.dialog.hide();
+    if (row.code.kind === 'native') {
+      openNativeIndicatorInfo(row.name, row.code.nativeType);
+      return;
+    }
+    openScriptInEditor(row.name, row.code.script, row.code.savedName);
+  }
+
+  private openNewPersonalScript() {
+    this.dialog.hide();
+    workspace.context().togglePanel('quant-pine-editor', true);
+    requestAnimationFrame(() => editorPanel?.openNewScript());
+  }
+
+  private deletePersonalScript(name: string, script: string) {
+    if (!window.confirm(`Delete saved indicator “${name}”?`)) return;
+    deleteScript(name);
+    setIndicatorFavorite(scriptFavorite(name, script), false);
+    editorPanel?.detachDeletedScript(name);
+    workspace.context().toast(`Deleted “${name}”`, 'success');
+    this.refresh();
+  }
+}
+
+registerSidePanel({
+  id: 'quant-pine-editor',
+  title: 'Pine editor',
+  icon: 'quant-code',
+  order: 20,
+  width: 600,
+  minWidth: 380,
+  maxWidth: 960,
+  resizable: true,
+  mount: (_context, body, header) => {
+    header.setTitle('');
+    const controller = new PineEditorController(body, header.slot);
+    editorPanel = controller;
+    return { destroy: () => controller.destroy() };
+  },
+});
+
+workspace = new VelaWorkspace('#workspace', {
+  layout: '1',
+  symbol: 'BTCUSDT',
+  timeframe: '15',
+  live: true,
+  theme: 'dark',
+  timezone: 'Etc/UTC',
+  defaultLanguage: 'pine',
+  providers: {
+    binance: () => new BinanceProvider(),
+    hyperliquid: () => new HyperliquidProvider(),
+  },
+  engines: { pine: () => new PineWorkerEngine() },
+  indicators: PLATFORM_INDICATORS,
+  topbar: {
+    left: [
+      'symbol',
+      'timeframes',
+      'style',
+      'layout',
+      'indicators',
+      'quant-favorites',
+      'quant-templates',
+      'undo-redo',
+    ],
+    right: ['panels', 'screenshot'],
+  },
+  drawingToolbar: true,
+  persist: WORKSPACE_STORAGE_KEY,
+  autofocus: true,
+});
+
+indicatorManager = new IndicatorManagerDialog();
+
+function syncCustomActionA11y() {
+  const anchor = favoriteAnchor();
+  if (!anchor) return;
+  anchor.setAttribute('aria-haspopup', 'menu');
+  if (!anchor.hasAttribute('aria-expanded')) anchor.setAttribute('aria-expanded', 'false');
+}
+
+syncCustomActionA11y();
+new MutationObserver(syncCustomActionA11y).observe(workspace.root, { childList: true, subtree: true });
+
+const boundHandles = new WeakSet<IndicatorHandle>();
+const boundCharts = new WeakSet<Vela>();
+
+function bindHandle(handle: IndicatorHandle) {
+  if (boundHandles.has(handle)) return;
+  boundHandles.add(handle);
+  handle.on('ready', () => {
+    const title = handle.title && handle.title !== 'Indicator'
+      ? handle.title
+      : extractTitle(handle.source ?? '');
+    editorPanel?.log('ok', `ready · ${title}`);
+  });
+  handle.on('error', ({ error }) => editorPanel?.reportError(error, handle.source));
+}
+
+function bindChart(chart: Vela) {
+  if (boundCharts.has(chart)) return;
+  boundCharts.add(chart);
+  chart.indicators().forEach(bindHandle);
+  chart.on('indicator:added', ({ id }) => {
+    const handle = chart.indicators().find((item) => item.id === id);
+    if (handle) bindHandle(handle);
+  });
+}
+
+workspace.cells().forEach((cell) => bindChart(cell.chart));
+workspace.on('cell:created', ({ id }) => {
+  const cell = workspace.cell(id);
+  if (cell) bindChart(cell.chart);
+  indicatorManager?.sync();
+});
+workspace.on('cell:active', () => indicatorManager?.sync());
+workspace.on('state:changed', () => indicatorManager?.sync());
+workspace.on('script:run', (run) => {
+  if (run.cause === 'tick' || run.cause === 'viewport') return;
+  editorPanel?.log('info', `script:run · ${run.title} · ${run.cell} · ${run.cause}`);
+});
+
+document.addEventListener('pointerdown', (event) => {
+  if (!openPopover) return;
+  const target = event.target as Node;
+  if (openPopover.contains(target) || favoriteAnchor()?.contains(target) || templateAnchor()?.contains(target)) return;
+  closeActivePopover();
+});
+window.addEventListener('resize', closeActivePopover);
+
+if (new URLSearchParams(window.location.search).get('chart') === 'maximized') {
+  document.body.classList.add('chart-maximized');
+}
