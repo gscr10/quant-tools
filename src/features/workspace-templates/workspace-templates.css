@@ -1,0 +1,50 @@
+.quant-template-list {
+  max-height: min(520px, calc(100vh - 130px));
+  overflow: auto;
+  padding: 8px;
+}
+
+.quant-template-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 54px;
+  padding: 7px 8px;
+  border-radius: 6px;
+}
+
+.quant-template-row:hover {
+  background: #23252b;
+}
+
+.quant-template-row > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.quant-template-row > div:first-child strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quant-template-row > div:first-child span {
+  color: #777e8b;
+  font-size: 10px;
+}
+
+.quant-template-row > div:last-child {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.quant-template-empty {
+  padding: 28px 12px;
+  color: #777e8b;
+  text-align: center;
+}
+
