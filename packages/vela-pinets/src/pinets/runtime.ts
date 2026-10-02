@@ -974,7 +974,7 @@ export async function secondaryKlines(
     // throw from `toKlines()`; a rejected Promise is deliberately preserved so
     // provider error metadata can reach the Pine session error channel.
     if (!Array.isArray(fetched)) return [];
-    const bars = fetched.flatMap((bar): OHLCV[] => {
+    const normalized = fetched.flatMap((bar): OHLCV[] => {
         try {
             if (bar === null || typeof bar !== 'object') return [];
             const candidate = bar as Partial<OHLCV>;
@@ -1002,6 +1002,13 @@ export async function secondaryKlines(
             return [];
         }
     });
+    // request.security consumers require a deterministic chronological series.
+    // Provider gateways normally already enforce this, but a late/merged
+    // response can contain duplicate or out-of-order candles. Keep the newest
+    // occurrence for a timestamp, matching the primary history normalizer.
+    const byTime = new Map<number, OHLCV>();
+    for (const bar of normalized) byTime.set(bar.time, bar);
+    const bars = [...byTime.values()].sort((a, b) => a.time - b.time);
     return toKlines(bars, tf, syminfo);
 }
 
