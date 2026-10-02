@@ -19,5 +19,5 @@ export const WORKSPACE_TOPBAR = {
     'quant-templates',
     'undo-redo',
   ],
-  right: ['panels', 'screenshot'],
+  right: ['quant-build-version', 'panels', 'screenshot'],
 };

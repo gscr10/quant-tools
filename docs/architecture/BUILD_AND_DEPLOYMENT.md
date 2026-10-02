@@ -42,6 +42,9 @@ npm run preview -- --host 0.0.0.0
 
 服务就绪以日志出现 `VITE ... ready` 或实际 HTTP 200 为准，不使用固定 sleep 推断。
 
+构建会把当前 Git commit 的短 ID 注入顶部工具栏版本标识；CI/无 `.git` 环境可通过
+`VITE_COMMIT_ID` 显式传入，未提供时显示 `dev`。
+
 ## 当前非阻塞事项
 
 主应用 bundle 仍有大 chunk warning。Highcharts 已经按功能动态加载；后续应基于 gzip
