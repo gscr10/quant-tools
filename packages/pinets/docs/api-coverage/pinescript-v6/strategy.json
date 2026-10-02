@@ -1,0 +1,126 @@
+{
+  "Account Info": {
+    "strategy.account_currency": true,
+    "strategy.equity": true,
+    "strategy.grossloss": true,
+    "strategy.grossloss_percent": true,
+    "strategy.grossprofit": true,
+    "strategy.grossprofit_percent": true,
+    "strategy.initial_capital": true,
+    "strategy.margin_liquidation_price": true,
+    "strategy.netprofit": true,
+    "strategy.netprofit_percent": true
+  },
+  "Trade Statistics": {
+    "strategy.avg_losing_trade": true,
+    "strategy.avg_losing_trade_percent": true,
+    "strategy.avg_trade": true,
+    "strategy.avg_trade_percent": true,
+    "strategy.avg_winning_trade": true,
+    "strategy.avg_winning_trade_percent": true,
+    "strategy.closedtrades": true,
+    "strategy.eventrades": true,
+    "strategy.losstrades": true,
+    "strategy.opentrades": true,
+    "strategy.wintrades": true
+  },
+  "Closed Trades": {
+    "strategy.closedtrades.first_index": true,
+    "strategy.closedtrades.commission()": true,
+    "strategy.closedtrades.entry_bar_index()": true,
+    "strategy.closedtrades.entry_comment()": true,
+    "strategy.closedtrades.entry_id()": true,
+    "strategy.closedtrades.entry_price()": true,
+    "strategy.closedtrades.entry_time()": true,
+    "strategy.closedtrades.exit_bar_index()": true,
+    "strategy.closedtrades.exit_comment()": true,
+    "strategy.closedtrades.exit_id()": true,
+    "strategy.closedtrades.exit_price()": true,
+    "strategy.closedtrades.exit_time()": true,
+    "strategy.closedtrades.max_drawdown()": true,
+    "strategy.closedtrades.max_drawdown_percent()": true,
+    "strategy.closedtrades.max_runup()": true,
+    "strategy.closedtrades.max_runup_percent()": true,
+    "strategy.closedtrades.profit()": true,
+    "strategy.closedtrades.profit_percent()": true,
+    "strategy.closedtrades.size()": true
+  },
+  "Drawdown & Runup": {
+    "strategy.max_contracts_held_all": true,
+    "strategy.max_contracts_held_long": true,
+    "strategy.max_contracts_held_short": true,
+    "strategy.max_drawdown": true,
+    "strategy.max_drawdown_percent": true,
+    "strategy.max_runup": true,
+    "strategy.max_runup_percent": true
+  },
+  "Position Info": {
+    "strategy.openprofit": true,
+    "strategy.openprofit_percent": true,
+    "strategy.position_avg_price": true,
+    "strategy.position_entry_name": true,
+    "strategy.position_size": true
+  },
+  "Open Trades": {
+    "strategy.opentrades.capital_held": true,
+    "strategy.opentrades.commission()": true,
+    "strategy.opentrades.entry_bar_index()": true,
+    "strategy.opentrades.entry_comment()": true,
+    "strategy.opentrades.entry_id()": true,
+    "strategy.opentrades.entry_price()": true,
+    "strategy.opentrades.entry_time()": true,
+    "strategy.opentrades.max_drawdown()": true,
+    "strategy.opentrades.max_drawdown_percent()": true,
+    "strategy.opentrades.max_runup()": true,
+    "strategy.opentrades.max_runup_percent()": true,
+    "strategy.opentrades.profit()": true,
+    "strategy.opentrades.profit_percent()": true,
+    "strategy.opentrades.size()": true
+  },
+  "Constants": {
+    "strategy.cash": true,
+    "strategy.fixed": true,
+    "strategy.long": true,
+    "strategy.percent_of_equity": true,
+    "strategy.short": true
+  },
+  "Commission": {
+    "strategy.commission.cash_per_contract": true,
+    "strategy.commission.cash_per_order": true,
+    "strategy.commission.percent": true
+  },
+  "Direction": {
+    "strategy.direction.all": true,
+    "strategy.direction.long": true,
+    "strategy.direction.short": true
+  },
+  "OCA": {
+    "strategy.oca.cancel": true,
+    "strategy.oca.none": true,
+    "strategy.oca.reduce": true
+  },
+  "Order Management": {
+    "strategy.cancel()": true,
+    "strategy.cancel_all()": true
+  },
+  "Position Management": {
+    "strategy.close()": true,
+    "strategy.close_all()": true,
+    "strategy.entry()": true,
+    "strategy.exit()": true,
+    "strategy.order()": true
+  },
+  "Conversion": {
+    "strategy.convert_to_account()": true,
+    "strategy.convert_to_symbol()": true,
+    "strategy.default_entry_qty()": true
+  },
+  "Risk Management": {
+    "strategy.risk.allow_entry_in()": true,
+    "strategy.risk.max_cons_loss_days()": true,
+    "strategy.risk.max_drawdown()": true,
+    "strategy.risk.max_intraday_filled_orders()": true,
+    "strategy.risk.max_intraday_loss()": true,
+    "strategy.risk.max_position_size()": true
+  }
+}

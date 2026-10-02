@@ -1,0 +1,11 @@
+{
+    "Bar State Flags": {
+        "barstate.isconfirmed": true,
+        "barstate.isfirst": true,
+        "barstate.ishistory": true,
+        "barstate.islast": true,
+        "barstate.islastconfirmedhistory": true,
+        "barstate.isnew": true,
+        "barstate.isrealtime": true
+    }
+}

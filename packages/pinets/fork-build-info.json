@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "packageName": "pinets",
+  "packageVersion": "0.9.34",
+  "upstreamSha": "beacd587e83aa7ee061023f8cea66b2e887d5676",
+  "localPatchRevision": "quant-tools-g8.1",
+  "reportSchemaVersion": 4,
+  "sentinel": "pinets-local-build-v1",
+  "buildFingerprint": "pinets@0.9.34|upstream=beacd587e83aa7ee061023f8cea66b2e887d5676|patch=quant-tools-g8.1|schema=4"
+}

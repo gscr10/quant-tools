@@ -1,0 +1,87 @@
+{
+    "Volume Indicators": {
+        "ta.accdist": true,
+        "ta.iii": true,
+        "ta.nvi": true,
+        "ta.obv": true,
+        "ta.pvi": true,
+        "ta.pvt": true,
+        "ta.wad": true,
+        "ta.wvad": true
+    },
+    "Volatility & Range": {
+        "ta.tr": true,
+        "ta.atr()": true,
+        "ta.bb()": true,
+        "ta.bbw()": true,
+        "ta.dev()": true,
+        "ta.kc()": true,
+        "ta.kcw()": true,
+        "ta.range()": true,
+        "ta.stdev()": true,
+        "ta.tr()": true,
+        "ta.variance()": true
+    },
+    "Moving Averages": {
+        "ta.vwap": true,
+        "ta.alma()": true,
+        "ta.ema()": true,
+        "ta.hma()": true,
+        "ta.linreg()": true,
+        "ta.rma()": true,
+        "ta.sma()": true,
+        "ta.swma()": true,
+        "ta.vwap()": true,
+        "ta.vwma()": true,
+        "ta.wma()": true
+    },
+    "Utility Functions": {
+        "ta.barssince()": true,
+        "ta.cum()": true,
+        "ta.rci()": true,
+        "ta.valuewhen()": true
+    },
+    "Oscillators & Momentum": {
+        "ta.cci()": true,
+        "ta.change()": true,
+        "ta.cmo()": true,
+        "ta.cog()": true,
+        "ta.macd()": true,
+        "ta.mfi()": true,
+        "ta.mom()": true,
+        "ta.roc()": true,
+        "ta.rsi()": true,
+        "ta.stoch()": true,
+        "ta.tsi()": true,
+        "ta.wpr()": true
+    },
+    "Statistical Functions": {
+        "ta.correlation()": true,
+        "ta.highest()": true,
+        "ta.highestbars()": true,
+        "ta.lowest()": true,
+        "ta.lowestbars()": true,
+        "ta.max()": true,
+        "ta.median()": true,
+        "ta.min()": true,
+        "ta.mode()": true,
+        "ta.percentile_linear_interpolation()": true,
+        "ta.percentile_nearest_rank()": true,
+        "ta.percentrank()": true
+    },
+    "Trend Analysis": {
+        "ta.cross()": true,
+        "ta.crossover()": true,
+        "ta.crossunder()": true,
+        "ta.dmi()": true,
+        "ta.falling()": true,
+        "ta.rising()": true,
+        "ta.sar()": true,
+        "ta.supertrend()": true
+    },
+    "Support & Resistance": {
+        "ta.pivot_point_levels()": true,
+        "ta.pivothigh()": true,
+        "ta.pivotlow()": true
+    }
+}

@@ -5,9 +5,15 @@ import type {
   WorkspaceIndicatorItem,
 } from '../../domain/indicators.ts';
 import type { WorkspacePort } from '../../domain/ports/workspace-port.ts';
+import type { BacktestExecutionFocus } from '../../domain/ports/workspace-port.ts';
+import { focusBacktestExecution } from './backtest-chart-adapter.ts';
 
 export class VelaWorkspaceAdapter implements WorkspacePort {
-  constructor(private readonly workspace: VelaWorkspace) {}
+  private readonly workspace: VelaWorkspace;
+
+  constructor(workspace: VelaWorkspace) {
+    this.workspace = workspace;
+  }
 
   get root(): HTMLElement {
     return this.workspace.root;
@@ -105,5 +111,9 @@ export class VelaWorkspaceAdapter implements WorkspacePort {
       ? active.nativeCatalog.find((item) => item.type === nativeType)
       : active.nativeCatalog.find((item) => item.title === title);
     return native ? { title: native.title, type: native.type } : undefined;
+  }
+
+  focusBacktestExecution(input: BacktestExecutionFocus): boolean {
+    return focusBacktestExecution(this.workspace, input);
   }
 }

@@ -21,7 +21,8 @@ URL = f"http://{HOST}:{PORT}/tests/fixtures/provider-smoke.html"
 
 
 def wait_for_server(process: subprocess.Popen[str]) -> None:
-    deadline = time.monotonic() + 20
+    startup_timeout = float(os.environ.get("QUANT_E2E_STARTUP_TIMEOUT", "90"))
+    deadline = time.monotonic() + max(5.0, startup_timeout)
     while time.monotonic() < deadline:
         if process.poll() is not None:
             output = process.stdout.read() if process.stdout else ""

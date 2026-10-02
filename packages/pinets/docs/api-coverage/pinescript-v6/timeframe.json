@@ -1,0 +1,22 @@
+{
+    "Timeframe Type Checks": {
+        "timeframe.isdaily": true,
+        "timeframe.isdwm": true,
+        "timeframe.isintraday": true,
+        "timeframe.isminutes": true,
+        "timeframe.ismonthly": true,
+        "timeframe.isseconds": true,
+        "timeframe.isticks": true,
+        "timeframe.isweekly": true
+    },
+    "Timeframe Properties": {
+        "timeframe.main_period": true,
+        "timeframe.multiplier": true,
+        "timeframe.period": true
+    },
+    "Timeframe Functions": {
+        "timeframe.change()": true,
+        "timeframe.from_seconds()": true,
+        "timeframe.in_seconds()": true
+    }
+}

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Backtest Performance Fixture</title>
+    <style>
+      html,
+      body,
+      #fixture-host {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      #fixture-host {
+        position: relative;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="fixture-host"></div>
+    <script type="module">
+      import { BacktestWorkbench } from '/src/features/backtesting/backtest-workbench.ts';
+      import { getReportChartResourceStats } from '/src/features/backtesting/highcharts-renderer.ts';
+
+      const params = new URLSearchParams(location.search);
+      const requestedCount = Number(params.get('count') ?? 100_000);
+      const count = Number.isSafeInteger(requestedCount) && requestedCount > 0
+        ? Math.min(requestedCount, 100_000)
+        : 100_000;
+      const start = Date.UTC(2024, 0, 1);
+      const trades = Array.from({ length: count }, (_, index) => {
+        const pnl = (index % 101) - 50;
+        const entryTime = start + index * 3_600_000;
+        return {
+          id: `perf-trade-${index + 1}`,
+          number: index + 1,
+          direction: index % 2 === 0 ? 'long' : 'short',
+          status: 'closed',
+          entryTime,
+          exitTime: entryTime + 1_800_000,
+          entryPrice: 40_000 + (index % 1_000),
+          exitPrice: 40_000 + (index % 1_000) + pnl / 10,
+          size: 1,
+          netPnl: pnl,
+          mfe: Math.max(0, pnl) + 1,
+          mae: Math.max(0, -pnl) + 1,
+          cumulativePnl: ((index + 1) * (index % 101 - 50)) / 2,
+        };
+      });
+      const curve = Array.from({ length: count }, (_, index) => ({
+        x: start + index * 3_600_000,
+        y: Math.sin(index / 37) * 10 + (index === Math.floor(count * 0.73) ? 10_000 : 0),
+      }));
+      const netProfit = trades.reduce((sum, trade) => sum + trade.netPnl, 0);
+      const wins = trades.filter((trade) => trade.netPnl > 0).length;
+      const losses = trades.filter((trade) => trade.netPnl < 0).length;
+      const report = {
+        key: { cellId: 'performance-cell', indicatorId: 'performance-strategy' },
+        revision: 1,
+        runId: 'performance-run',
+        strategyName: `${count.toLocaleString('en-US')} trade performance fixture`,
+        status: 'ready',
+        range: { from: start, to: start + count * 3_600_000 },
+        currency: 'USD',
+        metrics: {
+          netProfit,
+          trades: count,
+          winRate: count > 0 ? wins / count * 100 : 0,
+          winningTrades: wins,
+          losingTrades: losses,
+          maxDrawdown: 500,
+          maxDrawdownPercent: 0.5,
+          profitFactor: losses ? 1.1 : 0,
+        },
+        summary: { netProfit, trades: count, winRate: count > 0 ? wins / count * 100 : 0 },
+        cumulativePnl: curve,
+        equity: curve,
+        cumulativePnlSource: 'exact-equity',
+        trades,
+      };
+      const workbench = new BacktestWorkbench('#fixture-host', {
+        initialReport: report,
+        onResize: () => {},
+      });
+
+      window.__backtestPerformance = {
+        ready: true,
+        count,
+        report,
+        openViewer: () => workbench.openViewer(),
+        selectTab: (tab) => {
+          const control = document.querySelector(`.quant-backtest-tab[data-tab="${tab}"]`);
+          if (!(control instanceof HTMLElement)) throw new Error(`Unknown tab: ${tab}`);
+          control.click();
+        },
+        chartResources: () => getReportChartResourceStats(),
+        liveUpdate: (netProfit, tailValue, status = 'updating') => {
+          const nextCurve = report.cumulativePnl.map((point, index, points) => (
+            index === points.length - 1 ? { ...point, y: tailValue } : point
+          ));
+          workbench.setReport({
+            ...report,
+            status,
+            revision: report.revision + 1,
+            metrics: { ...report.metrics, netProfit },
+            summary: { ...report.summary, netProfit },
+            cumulativePnl: nextCurve,
+            equity: nextCurve,
+          });
+        },
+        liveMetricOnly: (netProfit, status = 'updating') => {
+          // Keep the plotted series byte-for-byte identical while changing
+          // the mark-to-market scalar. This exercises the Viewer path that
+          // must refresh KPIs without rebuilding chart hosts.
+          workbench.setReport({
+            ...report,
+            status,
+            revision: report.revision + 1,
+            metrics: { ...report.metrics, netProfit },
+            summary: { ...report.summary, netProfit },
+          });
+        },
+        newRunSameData: () => {
+          // Keep every plotted/KPI value identical while changing the engine
+          // run identity and strategy label. The Viewer must still replace
+          // run-scoped chrome instead of treating this as a no-op snapshot.
+          workbench.setReport({
+            ...report,
+            runId: 'performance-run-2',
+            strategyName: `${count.toLocaleString('en-US')} trade performance fixture (new run)`,
+            revision: report.revision + 1,
+          });
+        },
+        terminalError: (message = 'Fixture failure') => {
+          // Keep all chart/metric data identical while changing only the
+          // terminal status. The Viewer must leave the chart surface and
+          // announce the error instead of treating it as a no-op snapshot.
+          workbench.setReport({
+            ...report,
+            status: 'error',
+            revision: report.revision + 1,
+            error: message,
+          });
+        },
+        restoreReady: () => {
+          workbench.setReport({
+            ...report,
+            status: 'ready',
+            revision: report.revision + 2,
+          });
+        },
+        state: () => ({
+          count,
+          tableRows: document.querySelectorAll('.quant-backtest-trade-table tbody tr').length,
+          pageStatus: document.querySelector('.quant-backtest-trade-pagination-status')?.textContent ?? null,
+          chartHosts: [...document.querySelectorAll('[data-quant-report-chart]')].map((host) => ({
+            raw: Number(host.dataset.rawPointCount ?? 0),
+            render: Number(host.dataset.renderPointCount ?? 0),
+            downsampled: host.dataset.downsampled === 'true',
+          })),
+          resources: getReportChartResourceStats(),
+        }),
+        destroy: () => workbench.destroy(),
+      };
+    </script>
+  </body>
+</html>

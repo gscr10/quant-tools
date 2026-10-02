@@ -104,6 +104,23 @@
 *.log
 **/logs/
 
+# Audit runner scratch files. Evidence results should use JSON/PNG and an
+# explicit README or status manifest; process IDs and shell captures are
+# regenerated locally and must not be committed.
+**/*.pid
+**/*.stdout
+**/*.stderr
+**/*.exit
+**/start.txt
+
+# Local-only audit archives and working reports. These materials can be large,
+# contain environment-specific evidence, and are not required to build or run
+# the application. Keep them on the audit workstation or in a private archive.
+/audit-evidence/
+/docs/audit/
+/docs/backtesting/reports/
+/artifacts/
+
 # Environment and secrets
 **/.env
 **/.env.local

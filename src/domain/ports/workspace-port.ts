@@ -3,6 +3,15 @@ import type {
   WorkspaceIndicatorItem,
 } from '../indicators.ts';
 
+export interface BacktestExecutionFocus {
+  readonly cellId: string;
+  readonly indicatorId: string;
+  readonly barIndex?: number | null;
+  readonly time: number;
+  readonly price?: number | null;
+  readonly side: 'entry' | 'exit';
+}
+
 export interface WorkspacePort {
   readonly root: HTMLElement;
   getState(): unknown;
@@ -16,4 +25,10 @@ export interface WorkspacePort {
   getOnChartIndicators(): WorkspaceIndicatorItem[];
   getBuiltInIndicators(): WorkspaceIndicatorItem[];
   resolveNativeIndicator(id: string, title: string): NativeIndicatorIdentity | undefined;
+  /**
+   * Focus a backtest execution through the public chart seam.  The adapter is
+   * responsible for activation, viewport framing, external crosshair and
+   * focus restoration; feature code never reaches into Vela internals.
+   */
+  focusBacktestExecution(input: BacktestExecutionFocus): boolean;
 }
