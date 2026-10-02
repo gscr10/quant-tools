@@ -606,6 +606,14 @@ def run_gate(update: bool) -> dict[str, object]:
                         else:
                             page.locator('.quant-backtest-dock [aria-label="Open backtest viewer"]').click()
                         viewer.wait_for(state="visible")
+                    # Dock goldens describe the unfocused shell. Opening or
+                    # returning from the dock intentionally leaves the trigger
+                    # focused for keyboard users, so clear only that transient
+                    # ring before capture; keyboard focus behavior is asserted
+                    # separately by keyboard_audit(). Other states retain their
+                    # established scroll/focus capture.
+                    if state == "dock":
+                        page.evaluate("document.activeElement?.blur()")
                     path = SCREENSHOT_ROOT / f"{label}-{state}.png"
                     if update:
                         path.parent.mkdir(parents=True, exist_ok=True)
