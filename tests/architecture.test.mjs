@@ -38,6 +38,7 @@ test('workspace defaults, toolbar composition, providers, and dependency version
     layout: '1',
     symbol: 'BTCUSDT',
     timeframe: '15',
+    bars: 2000,
     live: true,
     theme: 'dark',
     timezone: 'Etc/UTC',
@@ -86,6 +87,18 @@ test('workspace defaults, toolbar composition, providers, and dependency version
   assert.equal(manifest.dependencies['@luxalgo/vela-pinets'], 'file:./packages/vela-pinets');
   assert.equal(manifest.dependencies.pinets, 'file:./packages/pinets');
   assert.deepEqual(manifest.workspaces, ['packages/pinets', 'packages/vela-pinets']);
+});
+
+test('workspace persistence upgrades old chart history depth without changing other state', async () => {
+  const { migrateWorkspaceState } = await import('../src/integrations/storage/workspace-storage.ts');
+  const raw = JSON.stringify({
+    layout: '1',
+    charts: [{ symbol: 'BTCUSDT', bars: 500, rendererConfig: { bars: { upColor: '#fff' } } }],
+  });
+  const migrated = JSON.parse(migrateWorkspaceState(raw));
+  assert.equal(migrated.charts[0].bars, 2000);
+  assert.deepEqual(migrated.charts[0].rendererConfig.bars, { upColor: '#fff' });
+  assert.equal(migrateWorkspaceState(JSON.stringify({ charts: [{ bars: 2500 }] })), JSON.stringify({ charts: [{ bars: 2500 }] }));
 });
 
 test('workspace destroy also terminates the per-cell Pine worker registry', async () => {
