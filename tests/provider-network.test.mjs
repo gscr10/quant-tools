@@ -42,6 +42,114 @@ test('workspace defaults bound provider network and symbol-index paths', () => {
   assert.equal(hyperliquid.__quantToolsNetworkGuard, true);
 });
 
+test('Binance shares one in-flight JSON request but does not cache the settled response', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  let release;
+  let settled = false;
+  try {
+    globalThis.fetch = async (input) => {
+      calls.push(String(input));
+      if (settled) return jsonResponse({ ok: true });
+      await new Promise((resolve) => { release = resolve; });
+      settled = true;
+      return jsonResponse({ ok: true });
+    };
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 100 }).binance();
+    const url = 'https://fapi.binance.com/fapi/v1/exchangeInfo?symbol=BTCUSDT';
+    const first = provider.json(url);
+    const second = provider.json(url);
+    assert.equal(calls.length, 1, 'concurrent identical requests should share transport');
+    release();
+    assert.deepEqual(await Promise.all([first, second]), [{ ok: true }, { ok: true }]);
+
+    const third = provider.json(url);
+    release();
+    await third;
+    assert.equal(calls.length, 2, 'settled responses must not become a long-lived cache');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Binance request dedupe is scoped by URL and failed requests can retry', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  let phase = 0;
+  let release;
+  try {
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      calls.push(url);
+      if (phase === 0 && url === firstUrl) {
+        await new Promise((resolve) => { release = resolve; });
+        return jsonResponse({ error: true }, 400);
+      }
+      return jsonResponse({ url });
+    };
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 100 }).binance();
+    const firstUrl = 'https://fapi.binance.com/fapi/v1/exchangeInfo?symbol=BTCUSDT';
+    const secondUrl = 'https://fapi.binance.com/fapi/v1/exchangeInfo?symbol=ETHUSDT';
+    const failedOne = provider.json(firstUrl);
+    const failedTwo = provider.json(firstUrl);
+    const different = provider.json(secondUrl);
+    assert.equal(calls.length, 2, 'different URLs must not share a request');
+    release();
+    await assert.rejects(failedOne, /HTTP 400/);
+    await assert.rejects(failedTwo, /HTTP 400/);
+    assert.deepEqual(await different, { url: secondUrl });
+
+    phase = 1;
+    assert.deepEqual(await provider.json(firstUrl), { url: firstUrl });
+    assert.equal(calls.filter((url) => url === firstUrl).length, 2,
+      'a failed request must be removed so a later caller can retry');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Hyperliquid shares semantically identical concurrent POST bodies', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  let release;
+  try {
+    globalThis.fetch = async (input, init = {}) => {
+      calls.push({ url: String(input), body: init.body });
+      await new Promise((resolve) => { release = resolve; });
+      return jsonResponse([{ ok: true }]);
+    };
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 100 }).hyperliquid();
+    const first = provider.post({ type: 'meta', coin: 'BTC', nested: { z: 1, a: true } });
+    const second = provider.post({ nested: { a: true, z: 1 }, coin: 'BTC', type: 'meta' });
+    assert.equal(calls.length, 1, 'equivalent bodies should share one Hyperliquid POST');
+    release();
+    assert.deepEqual(await Promise.all([first, second]), [[{ ok: true }], [{ ok: true }]]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('identical requests on separate provider instances never share transport', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  try {
+    globalThis.fetch = async (input) => {
+      calls.push(String(input));
+      return jsonResponse({ ok: true });
+    };
+    const first = createWorkspaceProviders({ requestTimeoutMs: 100 }).binance();
+    const second = createWorkspaceProviders({ requestTimeoutMs: 100 }).binance();
+    const url = 'https://fapi.binance.com/fapi/v1/exchangeInfo?symbol=BTCUSDT';
+    await Promise.all([first.json(url), second.json(url)]);
+    assert.equal(calls.length, 2, 'provider instances must have isolated in-flight maps');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Binance aborts a stalled global request and recovers through the US mirror', async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];

@@ -27,6 +27,54 @@ type ProviderRuntime = DataProvider & {
   spotBaseProbe?: Promise<string> | null;
 };
 
+/**
+ * Serialize the small JSON request bodies used by the Hyperliquid provider in
+ * a deterministic way.  The provider frequently creates equivalent objects
+ * at different call sites (for example `{ type, coin, interval }` versus the
+ * same keys in another insertion order); those requests should share one
+ * in-flight transport.  This is intentionally not a response cache: entries
+ * live only until their request settles.
+ */
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value) ?? String(value);
+  }
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) => (
+    `${JSON.stringify(key)}:${canonicalJson(record[key])}`
+  )).join(',')}}`;
+}
+
+function requestKey(provider: ProviderKind, url: string, body?: unknown): string {
+  return `${provider}|${url}|${body === undefined ? '' : canonicalJson(body)}`;
+}
+
+/**
+ * Share only concurrent work for one provider instance.  The map is scoped to
+ * the guarded instance, so a Binance request can never satisfy a Hyperliquid
+ * request or a request from another cell/provider.  Failed requests are
+ * removed just like successful ones, allowing the next caller to retry.
+ */
+function inFlightRequest<T>(
+  requests: Map<string, Promise<T>>,
+  key: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const existing = requests.get(key);
+  if (existing) return existing;
+
+  const request = operation();
+  requests.set(key, request);
+  const clear = (): void => {
+    if (requests.get(key) === request) requests.delete(key);
+  };
+  // Do not replace the returned promise with `finally()`: that would create a
+  // second rejection path which callers could accidentally leave unhandled.
+  request.then(clear, clear);
+  return request;
+}
+
 class ProviderHttpError extends Error {
   readonly provider: ProviderKind;
   readonly status: number;
@@ -238,16 +286,21 @@ export function guardProviderNetwork<T extends DataProvider>(
   const guarded = provider as ProviderRuntime;
   if (guarded.__quantToolsNetworkGuard) return provider;
   const timeoutMs = requestTimeoutMs(options.requestTimeoutMs);
+  const inFlight = new Map<string, Promise<unknown>>();
 
   if (kind === 'binance') {
     guardBinanceSpotBase(guarded);
     Object.defineProperty(guarded, 'json', {
       configurable: true,
       enumerable: false,
-      value: (url: string) => fetchBinanceJson(
-        url,
-        timeoutMs,
-        (successfulUrl) => rememberBinanceEndpoint(guarded, successfulUrl),
+      value: (url: string) => inFlightRequest(
+        inFlight,
+        requestKey('binance', url),
+        () => fetchBinanceJson(
+          url,
+          timeoutMs,
+          (successfulUrl) => rememberBinanceEndpoint(guarded, successfulUrl),
+        ),
       ),
       writable: true,
     });
@@ -255,7 +308,11 @@ export function guardProviderNetwork<T extends DataProvider>(
     Object.defineProperty(guarded, 'post', {
       configurable: true,
       enumerable: false,
-      value: (body: unknown) => postHyperliquid(body, timeoutMs),
+      value: (body: unknown) => inFlightRequest(
+        inFlight,
+        requestKey('hyperliquid', HYPERLIQUID_INFO_URL, body),
+        () => postHyperliquid(body, timeoutMs),
+      ),
       writable: true,
     });
   }
