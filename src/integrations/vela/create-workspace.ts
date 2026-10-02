@@ -4,6 +4,7 @@ import { WORKSPACE_DEFAULTS, WORKSPACE_TOPBAR } from '../../config/workspace-opt
 import { createPineEngineRegistry } from '../pinets/create-engine.ts';
 import { createWorkspaceProviders } from './provider-registry.ts';
 import { observeWorkspaceHistory } from './workspace-history-observer.ts';
+import { createMigratingWorkspaceStorage, WORKSPACE_HISTORY_BARS } from '../storage/workspace-storage.ts';
 
 export const WORKSPACE_STORAGE_KEY = 'quant-tools:workspace:v2';
 export type QuantWorkspace = VelaWorkspace;
@@ -36,6 +37,7 @@ export function createWorkspace(container: HTMLElement | string): VelaWorkspace 
       engines: { pine: pineEngines.create },
       indicators: PLATFORM_INDICATORS,
       topbar: WORKSPACE_TOPBAR,
+      storage: createMigratingWorkspaceStorage(undefined, WORKSPACE_HISTORY_BARS),
       drawingToolbar: true,
       persist: WORKSPACE_STORAGE_KEY,
       autofocus: true,
