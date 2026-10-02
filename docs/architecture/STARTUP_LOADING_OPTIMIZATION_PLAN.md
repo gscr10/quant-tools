@@ -196,6 +196,7 @@ flowchart TD
 npm test
 npm run test:regression:existing
 npm run test:forks
+npm run test:forks:offline
 npm run build
 npm run check:dependencies
 npm run check:dist:independence
@@ -215,6 +216,8 @@ git diff --check
 ```
 
 kill-switch 测试后重新进行普通 production build，避免遗留禁用回测的 dist。新增启动测试必须运行实际 App；受控行情用于确定性和故障时序，真实网络 smoke 用于证明真实接入，两者不可互相替代。外部网络失败记录为未验证，不算 PASS；重复失败先诊断 endpoint/网络再重试。
+
+`test:forks` 保留上游完整联网语义；本地和 CI 的无网络门禁使用 `test:forks:offline`，避免把 Binance/DNS 故障误报为 fork 回归。
 
 ## 6. 自动推进与完成标准
 
