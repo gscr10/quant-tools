@@ -3,9 +3,9 @@ import { defineConfig } from 'vite';
 
 function resolveBuildCommit(): string {
   const fromEnvironment = process.env.VITE_COMMIT_ID?.trim();
-  if (fromEnvironment) return fromEnvironment.slice(0, 12);
+  if (fromEnvironment) return fromEnvironment.slice(0, 7);
   try {
-    return execSync('git rev-parse --short=12 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+    return execSync('git rev-parse --short=7 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
       .toString()
       .trim() || 'dev';
   } catch {
