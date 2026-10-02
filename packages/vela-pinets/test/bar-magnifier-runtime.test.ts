@@ -200,6 +200,20 @@ describe('Bar Magnifier runtime request resolution', () => {
         expect(calls).toBe(2);
     });
 
+    it('does not retain mixed malformed lower rows, allowing a later retry to recover', async () => {
+        const cache = new LowerTimeframeFetchCache({ ttlMs: Infinity });
+        let calls = 0;
+        const valid = { time: 1, open: 1, high: 1, low: 1, close: 1, volume: 1 };
+        const fetcher = async (): Promise<OHLCV[]> => {
+            calls += 1;
+            return calls === 1 ? [valid, { time: Number.NaN } as OHLCV] : [valid];
+        };
+        const range = { from: 1, to: 2, limit: 2 };
+        await expect(cache.fetch(fetcher, 'BTCUSDT', '60', range)).resolves.toHaveLength(2);
+        await expect(cache.fetch(fetcher, 'BTCUSDT', '60', range)).resolves.toEqual([valid]);
+        expect(calls).toBe(2);
+    });
+
     it('evicts old windows at the session bound while leaving request.security uncached', async () => {
         const cache = new LowerTimeframeFetchCache(2);
         let calls = 0;
