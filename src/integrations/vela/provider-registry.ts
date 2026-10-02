@@ -23,6 +23,8 @@ export interface WorkspaceProviderOptions {
    * mistaken for an outage.
    */
   indexTimeoutMs?: number;
+  /** Successful symbol/metadata index cache lifetime (default 5 minutes). */
+  metadataCacheTtlMs?: number;
   /**
    * Called once when a complete index arrives after this provider already had
    * to expose its fallback.  A workspace uses this to re-register the same
@@ -55,13 +57,16 @@ const PROVIDER_INDEX_FALLBACKS: Record<'binance' | 'hyperliquid', readonly Symbo
 export function guardProviderIndex<T extends DataProvider>(
   provider: T,
   kind: 'binance' | 'hyperliquid',
-  options: Pick<WorkspaceProviderOptions, 'indexTimeoutMs' | 'onIndexRecovered'> = {},
+  options: Pick<WorkspaceProviderOptions, 'indexTimeoutMs' | 'metadataCacheTtlMs' | 'onIndexRecovered'> = {},
 ): T {
   const listSymbols = provider.listSymbols?.bind(provider);
   if (!listSymbols) return provider;
 
   const timeoutMs = normalizeIndexTimeout(options.indexTimeoutMs);
+  const cacheTtlMs = normalizeMetadataCacheTtl(options.metadataCacheTtlMs);
   let cachedSymbols: SymbolDescriptor[] | undefined;
+  let cachedUntil = 0;
+  let cachedUpstreamPromise: Promise<unknown> | undefined;
   type IndexAttempt = {
     active: boolean;
     promise: Promise<SymbolDescriptor[]>;
@@ -122,6 +127,8 @@ export function guardProviderIndex<T extends DataProvider>(
         }
         if (attempt.active && inFlight === attempt) {
           cachedSymbols = normalized;
+          cachedUntil = Date.now() + cacheTtlMs;
+          cachedUpstreamPromise = attempt.upstreamPromise;
           if (fallbackExposed && !recoveryNotified && options.onIndexRecovered) {
             recoveryNotified = true;
             // Keep the provider promise independent from host lifecycle code.
@@ -182,7 +189,16 @@ export function guardProviderIndex<T extends DataProvider>(
   };
 
   const boundedLoad = async (): Promise<SymbolDescriptor[]> => {
-    if (cachedSymbols) return cachedSymbols.map((symbol) => ({ ...symbol }));
+    if (cachedSymbols && Date.now() < cachedUntil) return cachedSymbols.map((symbol) => ({ ...symbol }));
+    if (cachedSymbols) {
+      // Expiry invalidates only this provider instance's metadata promise. A
+      // new request may then retry, while other provider instances remain
+      // completely isolated.
+      cachedSymbols = undefined;
+      cachedUntil = 0;
+      resetProviderIndexCaches(provider, cachedUpstreamPromise);
+      cachedUpstreamPromise = undefined;
+    }
     supersedeTimedOutAttempt();
     const attempt = load();
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -289,6 +305,11 @@ function resetProviderIndexCaches(
 function normalizeIndexTimeout(value: number | undefined): number {
   if (!Number.isFinite(value) || (value as number) <= 0) return 30_000;
   return Math.max(1, Math.floor(value as number));
+}
+
+function normalizeMetadataCacheTtl(value: number | undefined): number {
+  if (!Number.isFinite(value) || (value as number) <= 0) return 5 * 60_000;
+  return Math.max(1_000, Math.floor(value as number));
 }
 
 function prepareProvider<T extends DataProvider>(
