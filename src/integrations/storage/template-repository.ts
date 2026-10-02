@@ -35,7 +35,10 @@ export function listWorkspaceTemplates(): WorkspaceTemplate[] {
 }
 
 export function saveWorkspaceTemplate(name: string, state: unknown): WorkspaceTemplate[] {
-  const normalized = name.trim();
+  // The public port is typed, but persisted/UI boundaries are runtime data.
+  // Treat a malformed caller value as an ignored save rather than allowing a
+  // `.trim()` TypeError to break the workspace recovery path.
+  const normalized = typeof name === 'string' ? name.trim() : '';
   if (!normalized || !isRecord(state)) return listWorkspaceTemplates();
   const rest = listWorkspaceTemplates().filter((item) => item.name !== normalized);
   const next = [{ name: normalized, state, savedAt: Date.now() }, ...rest];

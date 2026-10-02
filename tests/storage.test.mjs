@@ -181,5 +181,7 @@ test('ignores templates whose state cannot be applied as a workspace document', 
     { name: 'Valid', state: { version: 1, charts: [] }, savedAt: 4 },
   ]);
   storage.saveWorkspaceTemplate('Ignored', null);
+  storage.saveWorkspaceTemplate(undefined, { version: 1 });
+  storage.saveWorkspaceTemplate({ trim: () => 'bad' }, { version: 1 });
   assert.deepEqual(storage.listWorkspaceTemplates().map((item) => item.name), ['Valid']);
 });
