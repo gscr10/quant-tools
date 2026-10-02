@@ -47,7 +47,11 @@ function validNumber(value: unknown): value is number {
  * never turn into an unbounded request merely because a new provider added a
  * resolution this adapter does not know yet.
  */
-function timeframeDurationMs(timeframe: string): number | undefined {
+function timeframeDurationMs(timeframe: unknown): number | undefined {
+  // Provider calls are typed, but this is an integration boundary and can be
+  // reached from JavaScript/Vela runtime values. Invalid timeframe input must
+  // not turn the point-range recovery path into an incidental TypeError.
+  if (typeof timeframe !== 'string') return undefined;
   const value = timeframe.trim();
   const upper = value.toUpperCase();
   // `m` = minute but `M` = month in Pine/Vela, so month detection must remain

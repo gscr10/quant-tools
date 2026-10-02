@@ -105,6 +105,11 @@ test('R11 successful HTTP with an invalid candle envelope is an error, never emp
   } finally { globalThis.fetch = original; }
 });
 
+test('malformed runtime timeframe does not throw during point-range recovery', async () => {
+  const provider = guardProviderHistory({ getBars: async () => [] });
+  assert.deepEqual(await provider.getBars('BTCUSDT', undefined, { from: 1_000, to: 1_000, limit: 1 }), []);
+});
+
 test('R11 shared-provider failure does not invalidate independent full-depth completion', async () => {
   const provider = guardProviderHistory({ getBars: async () => { throw Error('other cell range unavailable'); } });
   const first = observed(provider), second = observed(provider);
