@@ -208,6 +208,8 @@ kill-switch 测试后重新进行普通 production build，避免遗留禁用回
 
 当前已通过：根测试 441/441、Vela-PineTS 283/283、TypeScript、构建、依赖契约、dist 独立性、主开发/生产 E2E、Settings、故障隔离、多 Cell、三浏览器 fixture 和性能 smoke。`packages/pinets` 全套测试仍受本机 Binance 网络依赖影响（曾出现 26 文件/150 用例超时），不能作为本轮业务回归通过证据；必须在可用网络或完全离线 fixture 下补跑。
 
+2026-10-02 追加验证：根测试 445/445；Vela-PineTS 283/283；Binance/Hyperliquid provider smoke 均取得 5 根历史并启用 live；Chromium/Firefox/WebKit 启动首绘约 282/503/439ms（受控 150ms 索引、80ms K 线延迟），首批 1000 根随后完成 2000 根；开发/生产 E2E、Settings、故障隔离、多 Cell、性能 strict、视觉/a11y、离线 smoke 均通过。离线 smoke 的外部 Provider 请求按测试策略被阻断，不能替代真实 Provider 长时故障验收；生产构建仍有约 2.27MB 主 chunk / 825KB Worker chunk 的非阻断 warning。
+
 完整完成条件：所有必做阶段有实际证据，全部硬性不变量满足，受控性能预算达标且真实网络功能有效，正常/回退模式均通过，已给出可人工检查的服务。当前文档完成不代表这些实现门禁已通过。
 
 ## 7. GitHub 仓库纪律
