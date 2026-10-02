@@ -308,7 +308,13 @@ function normalizeIndexTimeout(value: number | undefined): number {
 }
 
 function normalizeMetadataCacheTtl(value: number | undefined): number {
-  if (!Number.isFinite(value) || (value as number) <= 0) return 5 * 60_000;
+  // Keep this aligned with provider-network.ts: an explicit non-positive
+  // value means "do not retain a settled index".  The previous fallback to
+  // five minutes made `metadataCacheTtlMs: 0` disable REST metadata caching
+  // while silently leaving the symbol picker index cached, so a venue switch
+  // could keep stale search results until the default TTL elapsed.
+  if (value !== undefined && (!Number.isFinite(value) || (value as number) <= 0)) return 0;
+  if (value === undefined) return 5 * 60_000;
   return Math.max(1_000, Math.floor(value as number));
 }
 

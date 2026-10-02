@@ -508,6 +508,18 @@ test('provider metadata index is reused within its TTL and refreshed after expir
   }
 });
 
+test('provider metadata index cache can be disabled without stale picker results', async () => {
+  let calls = 0;
+  const provider = guardProviderIndex({
+    getBars: async () => [],
+    listSymbols: async () => [{ ticker: `ETH${++calls}`, type: 'crypto' }],
+  }, 'binance', { metadataCacheTtlMs: 0 });
+
+  assert.deepEqual(await provider.listSymbols(), [{ ticker: 'ETH1', type: 'crypto' }]);
+  assert.deepEqual(await provider.listSymbols(), [{ ticker: 'ETH2', type: 'crypto' }]);
+  assert.equal(calls, 2);
+});
+
 test('provider metadata cache is instance-local and failed indexes are never cached', async () => {
   let calls = 0;
   const create = () => ({
@@ -942,5 +954,41 @@ test('Vela feed reaches getBars instead of parking a bare symbol after index fai
   assert.deepEqual(bars, []);
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0], ['BTCUSDT', '15', { limit: 1, session: undefined }]);
+  feed.destroy();
+});
+
+test('multi-provider symbol search keeps venue ownership and explicit routing', async () => {
+  const requests = [];
+  const feed = new MultiProviderFeed();
+  await feed.registerProvider('binance', guardProviderIndex({
+    listSymbols: async () => [
+      { ticker: 'BTCUSDT', description: 'BTC / USDT', type: 'crypto' },
+      { ticker: 'ETHUSDT', description: 'ETH / USDT', type: 'crypto' },
+    ],
+    getBars: async (ticker) => {
+      requests.push(`binance:${ticker}`);
+      return [];
+    },
+  }, 'binance'));
+  await feed.registerProvider('hyperliquid', guardProviderIndex({
+    listSymbols: async () => [{ ticker: 'BTC', description: 'BTC / USD Perpetual', type: 'futures' }],
+    getBars: async (ticker) => {
+      requests.push(`hyperliquid:${ticker}`);
+      return [];
+    },
+  }, 'hyperliquid'));
+
+  const pool = feed.symbols();
+  assert.deepEqual(pool.map((symbol) => `${symbol.provider}:${symbol.ticker}`), [
+    'binance:BTCUSDT', 'binance:ETHUSDT', 'hyperliquid:BTC',
+  ]);
+  assert.equal(feed.resolveSymbol('BTCUSDT')?.provider, 'binance');
+  assert.equal(feed.resolveSymbol('BTC')?.provider, 'hyperliquid');
+  assert.equal(feed.resolveSymbol('binance:ETHUSDT')?.provider, 'binance');
+  assert.equal(feed.resolveSymbol('hyperliquid:BTC')?.provider, 'hyperliquid');
+
+  await feed.load({ symbol: 'binance:ETHUSDT', timeframe: '15', bars: 1 });
+  await feed.load({ symbol: 'hyperliquid:BTC', timeframe: '15', bars: 1 });
+  assert.deepEqual(requests, ['binance:ETHUSDT', 'hyperliquid:BTC']);
   feed.destroy();
 });

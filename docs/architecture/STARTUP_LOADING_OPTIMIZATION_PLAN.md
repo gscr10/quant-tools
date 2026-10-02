@@ -1,13 +1,17 @@
 # 首次加载与行情初始化优化计划
 
-日期：2026-10-02。代码基线：`93b5281`。工作分支：`feature/startup-loading-optimization`。
+日期：2026-10-02。代码基线：`309a4ba`（后续未提交改动以本轮验证为准）。工作分支：`feature/startup-loading-optimization`。
 
 状态：执行中。默认历史、渐进加载、Worker 懒加载、存储降级、Provider 去重/短 TTL 和主要回归门禁已落地；长时 Provider、D-01 动态边界、真实制品 rollback 及完整线上验收仍未关闭。本文件同时记录执行状态，不替代独立性能报告。
 
 ### 2026-10-02 本轮实现进展
 
+- 渐进历史遇到短页时增加可取消的单根历史探测：只有探测确认无更早数据才宣布 genesis；若探测到更早数据则继续分页，探测失败保留已绘制前缀但发布错误事实，避免短页造成静默缺历史。
+- 统一 `metadataCacheTtlMs <= 0` 对 REST 元数据和 symbol index 的禁用语义；模板仓储拒绝无法作为 Workspace document 应用的 null/数组/原语状态，并增加对应回归测试。
+- 为 `packages/pinets` 增加显式 `test:offline` / `test:network`（根目录分别为 `npm run test:pinets:offline` / `npm run test:pinets:network`）入口；离线套件 1,637 tests 通过。原有 `test` 保留上游完整联网语义，不用空响应掩盖网络故障。
+
 - 修复 Binance spot 异步解析 WebSocket 地址时的 unsubscribe 竞态：`spotWsBase()` 尚未完成时不提前恢复构造器 guard，Promise settle 后再让出一个 task 覆盖 `await` 后的迟到 `new WebSocket()`。
-- 覆盖 Hyperliquid 重连、迟到 `onopen`、多订阅嵌套释放顺序及重复 unsubscribe；Provider 生命周期专项 7/7，通过 TypeScript、根测试 454/454。
+- 覆盖 Hyperliquid 重连、迟到 `onopen`、多订阅嵌套释放顺序及重复 unsubscribe；Provider 生命周期专项 7/7，通过 TypeScript、根测试 460/460。
 - 本修复只位于集成层和测试层，未修改 `node_modules` 或 Vela 产物；长时真实网络故障、断网恢复和部署平台 rollback 仍保持开放，不能因专项通过而关闭 S5。
 
 ## 1. 目标与边界
@@ -94,7 +98,7 @@ flowchart TD
 
 ### P0 / S0：基线与前置可靠性
 
-1. 新增 `tests/startup_loading.py`（建议名），对真实 App 执行网络时间线、首屏和最终报告观测；支持 dev/preview、三浏览器、独立临时端口和 profile。
+1. 新增 `tests/startup_loading.py`（根命令 `npm run test:startup`），对真实 App 执行网络时间线、首屏和最终报告观测；支持 dev/preview、三浏览器、独立临时端口和 profile。
 2. 新增存储边界测试：读取 `window.localStorage` getter 抛错、get/set/remove 抛错、quota、坏 JSON、多 Cell、缺省/500/2000/>2000、绘图中的同名 bars 字段。
 3. 修复当前存储适配器创建时可能因 SecurityError 阻断 Workspace；存储不可用则会话内继续，禁止清空其他用户数据。将默认深度与迁移阈值统一来源，并明确现行“至少 2000”策略。
 4. 对真实 Vela 恢复路径验证迁移生效，而非只对 JSON 函数做断言。
@@ -106,7 +110,7 @@ flowchart TD
 
 修改候选：`create-workspace.ts`、`provider-registry.ts`；必要时新增独立路由模块。
 
-- 已完成受控浏览器验证：默认 `binance:BTCUSDT` 在 2s 索引延迟时比裸 `BTCUSDT` 首绘提前约 1.07s；接入后仍需完成完整品种搜索及存储/模板兼容回归。
+- 已完成受控浏览器验证：默认 `binance:BTCUSDT` 在 2s 索引延迟时比裸 `BTCUSDT` 首绘提前约 1.07s；本地多 Provider 搜索池、venue 所属、显式路由、模板有效/损坏恢复已覆盖，真实交易所长期索引恢复仍开放。
 - 不把所有 BTCUSDT 强行迁移为 Binance：已显式指定的 venue 和未知裸 ticker 保持原行为。
 - 索引仍注册且可恢复；保留 30 秒 fallback、onIndexRecovered、online 重试。先解除阻塞，不为减少请求删除交易品选择器能力。
 - 若索引后台并发不阻塞，不做无收益的“延迟所有索引”；仅在测量表明确有竞争时通过公共注册机制延迟非当前 Provider。
@@ -204,16 +208,16 @@ kill-switch 测试后重新进行普通 production build，避免遗留禁用回
 | 任务 | 当前状态 | 完成证据 |
 | --- | --- | --- |
 | 新分支、基于代码的计划 | 已完成 | 分支与本文件 |
-| S0 基线、观测和可靠性 | 部分完成 | `tests/startup_loading.py`；显式/裸路由、2s 索引延迟、存储 getter 故障实际浏览器证据；仍需完整多轮冷/热样本 |
-| S1 路由和索引 | 部分完成 | 默认 Binance 显式路由，受控首绘提前约 1.07s；仍需完整品种搜索、模板及所有 Provider 回归 |
-| S2 渐进加载 | 部分完成 | Binance 原生 2000 根 progressive 模块、错误/取消/分页单测及真实 App 2×1000 请求；仍需真实首批策略门控、双引擎逐笔等价与长链路故障证据 |
+| S0 基线、观测和可靠性 | 部分完成 | `npm run test:startup`；三浏览器多样本、显式/裸路由、2s 索引延迟、存储 getter/methods 故障均有证据；跨机器长期 p95 和真实网络长时样本仍开放 |
+| S1 路由和索引 | 部分完成 | 默认 Binance 显式路由，受控首绘提前约 1.07s；多 Provider 搜索/显式路由/模板恢复本地回归通过；真实交易所长期索引恢复仍开放 |
+| S2 渐进加载 | 部分完成 | Binance 原生 2000 根 progressive 模块、短页 genesis 探测、错误/取消/分页单测及真实 App 2×1000 请求；长历史真实网络、低周期聚合和逐笔等价的完整证据仍开放 |
 | S3 去重 | 已完成（有界缓存 + live 生命周期） | `provider-network.ts` 对 Binance JSON 和 Hyperliquid POST 做 provider-instance 级并发去重，并对 exchange metadata 使用可配置短 TTL；`provider-registry.ts` 对 symbol index 使用同一实例隔离 TTL；`provider-live.ts` 覆盖 async spot endpoint、重连和嵌套订阅释放。失败自动释放并可重试，网络专项 30 项、live 专项 7 项通过；受控启动中 Binance `exchangeInfo` 从 4 次降至 2 次，历史 K 线请求仍保持 2 次 |
 | S4 资源延迟加载 | 已完成基础门禁，长期观测仍开放 | Pine Worker 独立懒加载 chunk；主 JS 约 3.71MB 降至 2.27MB，Worker 约 825KB；新增 `npm run check:bundle-size`，对 main/worker/highcharts 同时检查 raw/gzip budgets；跨浏览器、性能门禁和视觉/a11y 门禁通过，长时资源观测仍开放 |
-| S5 组合回归/回滚/人工入口 | 部分完成 | 根测试 454/454、Provider live 7/7、Vela-PineTS 283/283、开发/生产 E2E、Settings、故障隔离、多 Cell、跨浏览器、性能和视觉/a11y 均通过；仍需人工线上入口、长时 Provider/断网恢复、真实制品 rollback 验收 |
+| S5 组合回归/回滚/人工入口 | 部分完成 | 根测试 460/460、Provider live 7/7、Vela-PineTS 283/283、PineTS 离线 1,637 tests、开发/生产 E2E、Settings、故障隔离、多 Cell、跨浏览器、性能和视觉/a11y 均通过；仍需人工线上入口、长时 Provider/断网恢复、真实制品 rollback 验收 |
 
 发现问题自主处理，不因一个失败路径停下；仍保留待办直到证据关闭。不可用“413/414 等历史测试数量”推断完成。性能无收益则自动调整方案或撤回该项代码，保留测量结论；业务回归必须修复后再前进。
 
-当前已通过：根测试 454/454、Provider network/progressive/live 52/52、Vela-PineTS 283/283、TypeScript、构建、依赖契约、dist 独立性、主开发/生产 E2E、Settings、故障隔离、多 Cell、三浏览器 fixture、性能 strict、视觉/a11y 和 Provider smoke。`packages/pinets` 全套测试仍受本机 Binance 网络依赖影响（曾出现 26 文件/150 用例超时），不能作为本轮业务回归通过证据；必须在可用网络或完全离线 fixture 下补跑。
+当前已通过：根测试 460/460、Provider network/progressive/live 60/60、Vela-PineTS 283/283、PineTS 离线 1,637 tests、TypeScript、构建、依赖契约、dist 独立性、主开发/生产 E2E、Settings、故障隔离、多 Cell、三浏览器 fixture、性能 strict、视觉/a11y 和 Provider smoke。PineTS 的 `test:network` 仍是显式联网覆盖，受 Binance/DNS/代理影响时只记录为外部未验证，不替代离线门禁。
 
 2026-10-02 追加验证：根测试 445/445；Vela-PineTS 283/283；Binance/Hyperliquid provider smoke 均取得 5 根历史并启用 live；Chromium/Firefox/WebKit 启动首绘约 282/503/439ms（受控 150ms 索引、80ms K 线延迟），首批 1000 根随后完成 2000 根；开发/生产 E2E、Settings、故障隔离、多 Cell、性能 strict、视觉/a11y、离线 smoke 均通过。离线 smoke 的外部 Provider 请求按测试策略被阻断，不能替代真实 Provider 长时故障验收；生产构建仍有约 2.27MB 主 chunk / 825KB Worker chunk 的非阻断 warning。
 
@@ -223,6 +227,12 @@ kill-switch 测试后重新进行普通 production build，避免遗留禁用回
 2026-10-02 Chromium 扩展样本：受控索引 `200ms`、K 线 `300ms`，10 次首绘为 `671.1/567.4/535.7/511.8/525.7/512.4/501.8/530.4/515.7/530.6ms`，median `528.1ms`、离散 p95（第 10 个排序样本的近似）`567.4ms`，全部无失败。该结果用于启动观测，不替代跨机器基线和长期真实网络样本。
 
 2026-10-02 资源预算门禁：`npm run check:bundle-size` 通过；当前 main `2,274,833/640,437`、worker `825,094/206,251`、Highcharts 合计 `376,416/134,100`（raw/gzip bytes），均低于源码中定义的预算。预算只约束构建产物，不把历史 audit 附件纳入仓库或门禁。
+
+2026-10-02 本轮 S1/S2 回归：渐进短页 genesis 探测、探测错误门控、Provider index 禁用缓存、损坏模板恢复均通过；`npm test` 460/460、Provider/storage/progressive 专项 60/60、PineTS 离线 1,637 tests、开发 E2E、三浏览器 E2E、生产离线 smoke、Provider smoke、TypeScript、构建、Bundle/依赖/dist 门禁和 `git diff --check` 均通过。真实长时故障、完整品种/模板长期回归、线上 rollback 仍开放。
+
+2026-10-02 启动扩展采样：受控索引 200ms、K 线 300ms 下 Chromium 5/5（median 514.1ms，最大 610.1ms）、Firefox 3/3（median 569ms，最大 717ms）、WebKit 3/3（median 572ms，最大 622ms）均首绘成功且无页面错误。该结果补强本机跨浏览器证据，但仍不替代跨机器、真实网络和长期 p95 门禁。
+
+2026-10-02 发布校验补测：release manifest/verify 的旧 checkout、dist 篡改拒绝和当前构建制品校验均通过；新增 candidate → previous → candidate 同槽位切换与存储对账闭环（10 个 release 相关测试 + 当前 dist manifest `ok: true`）。这关闭了本地制品完整性检查，但不等同于部署平台真实 slot rollback 或 CDN 缓存恢复。
 
 完整完成条件：所有必做阶段有实际证据，全部硬性不变量满足，受控性能预算达标且真实网络功能有效，正常/回退模式均通过，已给出可人工检查的服务。当前文档完成不代表这些实现门禁已通过。
 

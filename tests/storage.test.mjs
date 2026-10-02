@@ -166,3 +166,20 @@ test('saves, replaces, and deletes named workspace templates', async () => {
   storage.deleteWorkspaceTemplate('Alpha');
   assert.deepEqual(storage.listWorkspaceTemplates(), []);
 });
+
+test('ignores templates whose state cannot be applied as a workspace document', async () => {
+  const storage = await storageModule('invalid-template-state', {
+    [WORKSPACE_TEMPLATES_KEY]: JSON.stringify([
+      { name: 'Null state', state: null, savedAt: 1 },
+      { name: 'Array state', state: [], savedAt: 2 },
+      { name: 'Primitive state', state: 'legacy', savedAt: 3 },
+      { name: 'Valid', state: { version: 1, charts: [] }, savedAt: 4 },
+    ]),
+  });
+
+  assert.deepEqual(storage.listWorkspaceTemplates(), [
+    { name: 'Valid', state: { version: 1, charts: [] }, savedAt: 4 },
+  ]);
+  storage.saveWorkspaceTemplate('Ignored', null);
+  assert.deepEqual(storage.listWorkspaceTemplates().map((item) => item.name), ['Valid']);
+});
