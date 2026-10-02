@@ -28,8 +28,9 @@
     "build:forks:pinets": "npm --workspace packages/pinets run build:prod:all",
     "build:forks:vela-pinets": "npm --workspace packages/vela-pinets run build",
     "test:forks": "npm --workspace packages/pinets run test -- --run && npm --workspace packages/vela-pinets run test -- --run",
+    "pretest": "node scripts/ensure-fork-build.mjs",
     "prebuild": "npm run build:forks",
-    "predev": "npm run build:forks",
+    "predev": "node scripts/ensure-fork-build.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview"

@@ -8,6 +8,7 @@
 - [回测工作区文档](backtesting/README.md)
 - [架构改造计划](architecture/ARCHITECTURE_REFACTOR_PLAN.md)
 - [本地 fork 与依赖基线](forks/DEPENDENCY_BASELINE.md)
+- [构建与部署说明](architecture/BUILD_AND_DEPLOYMENT.md)
 
 ## 文档分层
 
