@@ -1,0 +1,3539 @@
+/*
+ * Backtest application shell.  The selectors are namespaced so the feature
+ * can be mounted beside Vela without depending on private Vela DOM classes.
+ */
+@font-face {
+  font-family: "Aeonik";
+  src: url("../../assets/backtest/aeonik-regular.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("../../assets/backtest/aeonik-bold.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.quant-backtest-workbench {
+  --quant-backtest-bg: var(--vela-surface, #151619);
+  --quant-backtest-surface: var(--vela-surface-elev, #1c1d20);
+  --quant-backtest-surface-soft: color-mix(in srgb, var(--quant-backtest-surface) 78%, #000);
+  --quant-backtest-fg: var(--vela-fg, #d1d4dc);
+  --quant-backtest-fg-muted: var(--vela-fg-muted, #868a96);
+  --quant-backtest-fg-bright: var(--vela-fg-bright, #f0f3fa);
+  --quant-backtest-border: var(--vela-border, #2a2b30);
+  --quant-backtest-border-strong: var(--vela-border-strong, #34353b);
+  --quant-backtest-hover: var(--vela-hover, rgba(255, 255, 255, 0.06));
+  --quant-backtest-hover-strong: var(--vela-hover-strong, rgba(255, 255, 255, 0.16));
+  --quant-backtest-accent: var(--vela-accent, #2962ff);
+  /* Keep the reference blue for graphics, while using a minimally lighter
+   * companion for small text so it remains readable on the dark surface. */
+  --quant-backtest-accent-text: var(--vela-accent-text, #4b77ff);
+  --quant-backtest-positive: var(--vela-up, #089981);
+  --quant-backtest-negative: var(--vela-down, #f23645);
+  --quant-backtest-warning: #e0b400;
+  position: absolute;
+  z-index: 80;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  pointer-events: none;
+  color: var(--quant-backtest-fg);
+  font-family: "Aeonik", "Aeonik Fallback", var(--vela-font, Inter, ui-sans-serif, system-ui, sans-serif);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* Keep structural labels available to assistive technology without changing
+ * the reference layout (the first comparison-table column is intentionally
+ * visually blank). */
+.quant-backtest-visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.quant-backtest-workbench[hidden],
+.quant-backtest-dock[hidden],
+.quant-backtest-viewer[hidden] {
+  display: none !important;
+}
+
+.quant-backtest-icon {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+}
+
+.quant-backtest-dock,
+.quant-backtest-viewer,
+.quant-backtest-settings {
+  pointer-events: auto;
+  background: var(--quant-backtest-bg);
+  color: var(--quant-backtest-fg);
+}
+
+.quant-backtest-settings {
+  position: absolute;
+  z-index: 8;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.quant-backtest-settings[hidden] {
+  display: none !important;
+}
+
+.quant-backtest-settings-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.58);
+  cursor: default;
+}
+
+.quant-backtest-settings-dialog {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(520px, calc(100% - 32px));
+  max-height: min(700px, calc(100% - 32px));
+  flex-direction: column;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--quant-backtest-border-strong);
+  border-radius: 9px;
+  background: var(--quant-backtest-bg);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+}
+
+.quant-backtest-settings-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 14px 0 18px;
+  border-bottom: 1px solid var(--quant-backtest-border);
+}
+
+.quant-backtest-settings-heading {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.quant-backtest-settings-heading h2 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quant-backtest-settings-heading span {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 10px;
+}
+
+.quant-backtest-settings-close {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  flex: none;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--quant-backtest-fg-muted);
+  font-family: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.quant-backtest-settings-close:hover:not(:disabled) {
+  background: var(--quant-backtest-hover);
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-settings-close:disabled,
+.quant-backtest-settings-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.quant-backtest-settings-tabs {
+  display: flex;
+  flex-shrink: 0;
+  align-items: stretch;
+  gap: 18px;
+  min-height: 40px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--quant-backtest-border);
+}
+
+.quant-backtest-settings-tab {
+  position: relative;
+  appearance: none;
+  min-width: 56px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--quant-backtest-fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.quant-backtest-settings-tab:hover,
+.quant-backtest-settings-tab.active {
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-settings-tab.active {
+  color: var(--quant-backtest-accent);
+  font-weight: 600;
+}
+
+.quant-backtest-settings-tab.active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--quant-backtest-accent);
+  content: '';
+}
+
+.quant-backtest-settings-form {
+  min-height: 0;
+  flex: 1;
+  padding: 16px 18px 20px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.quant-backtest-settings-group {
+  min-width: 0;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+}
+
+.quant-backtest-settings-group:last-child {
+  margin-bottom: 0;
+}
+
+.quant-backtest-settings-group legend {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 0;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.quant-backtest-settings-field {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.9fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 34px;
+  margin-bottom: 8px;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 11px;
+}
+
+.quant-backtest-settings-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quant-backtest-settings-field input:not([type='checkbox']),
+.quant-backtest-settings-field select,
+.quant-backtest-settings-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--quant-backtest-border-strong);
+  border-radius: 5px;
+  outline: none;
+  background: var(--quant-backtest-surface);
+  color: var(--quant-backtest-fg-bright);
+  font: inherit;
+}
+
+.quant-backtest-settings-field input[type='color'] {
+  height: 30px;
+  padding: 3px;
+}
+
+.quant-backtest-settings-field textarea {
+  resize: vertical;
+}
+
+.quant-backtest-settings-field input:focus,
+.quant-backtest-settings-field select:focus,
+.quant-backtest-settings-field textarea:focus {
+  border-color: var(--quant-backtest-accent);
+}
+
+.quant-backtest-settings-checkbox {
+  justify-self: start;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--quant-backtest-accent);
+}
+
+.quant-backtest-settings-empty {
+  margin: 16px 0;
+  color: var(--quant-backtest-fg-muted);
+  text-align: center;
+}
+
+.quant-backtest-settings-footer {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 14px 10px 18px;
+  border-top: 1px solid var(--quant-backtest-border);
+}
+
+.quant-backtest-settings-status {
+  flex: 1 1 180px;
+  min-width: 0;
+  margin: 0;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.quant-backtest-settings-status.error {
+  flex-basis: 100%;
+  color: var(--quant-backtest-negative);
+}
+
+.quant-backtest-settings-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.quant-backtest-dock {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  height: var(--quant-backtest-dock-height, 280px);
+  min-height: 104px;
+  border-top: 1px solid var(--quant-backtest-border-strong);
+  box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.2);
+  transition: height 120ms ease;
+}
+
+/* LuxAlgo's compact chart entry is only present below the Dock breakpoint.
+ * The Workbench still owns it at every width so responsive changes do not
+ * create a second report/viewer lifecycle. */
+.quant-backtest-mobile-trigger,
+.quant-backtest-mobile-trigger[hidden] {
+  display: none;
+}
+
+.quant-backtest-mobile-trigger {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 3;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--quant-backtest-surface) 90%, transparent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  color: var(--quant-backtest-fg-bright);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+}
+
+.quant-backtest-mobile-trigger:hover,
+.quant-backtest-mobile-trigger:focus-visible {
+  border-color: var(--quant-backtest-border-strong);
+  background: var(--quant-backtest-surface);
+}
+
+.quant-backtest-dock.is-collapsed {
+  height: var(--quant-backtest-dock-collapsed-height, 28px);
+  min-height: var(--quant-backtest-dock-collapsed-height, 28px);
+  box-shadow: none;
+}
+
+.quant-backtest-dock.is-collapsed .quant-backtest-dock-header {
+  min-height: var(--quant-backtest-dock-collapsed-height, 28px);
+  border-bottom: 0;
+}
+
+.quant-backtest-dock.is-collapsed .quant-backtest-dock-identity,
+.quant-backtest-dock.is-collapsed .quant-backtest-dock-actions > *:not(:first-child) {
+  display: none;
+}
+
+.quant-backtest-dock-separator {
+  position: absolute;
+  z-index: 2;
+  top: -4px;
+  right: 0;
+  left: 0;
+  height: 8px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.quant-backtest-dock-separator::after {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 44px;
+  height: 2px;
+  border-radius: 4px;
+  background: transparent;
+  content: '';
+  transform: translateX(-50%);
+  transition: background 100ms ease;
+}
+
+.quant-backtest-dock-separator:hover::after,
+.quant-backtest-dock-separator:focus-visible::after {
+  background: var(--quant-backtest-fg-muted);
+}
+
+.quant-backtest-dock-separator:focus-visible {
+  outline: 2px solid var(--quant-backtest-accent);
+  outline-offset: -2px;
+}
+
+.quant-backtest-dock-header,
+.quant-backtest-viewer-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--quant-backtest-border);
+  background: var(--quant-backtest-bg);
+}
+
+.quant-backtest-dock-identity,
+.quant-backtest-viewer-heading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.quant-backtest-viewer-heading {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.quant-backtest-viewer-market {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+}
+
+.quant-backtest-viewer-market-badge {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--quant-backtest-border-strong);
+  border-radius: 50%;
+  background: var(--quant-backtest-surface-soft);
+  color: var(--quant-backtest-fg-bright);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.quant-backtest-viewer-market-badge > svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.quant-backtest-viewer-market-badge:not([data-asset='₿']):not([data-asset='Ξ']) {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.quant-backtest-viewer-market-badge[data-asset='₿'] {
+  border-color: #f7931a;
+  background: #f7931a;
+  color: #fff;
+}
+
+.quant-backtest-viewer-market-badge[data-asset='Ξ'] {
+  border-color: #627eea;
+  background: #627eea;
+  color: #fff;
+}
+
+.quant-backtest-viewer-market-symbol,
+.quant-backtest-viewer-market-timeframe {
+  overflow: hidden;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 12px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quant-backtest-viewer-market-divider {
+  width: 1px;
+  height: 12px;
+  flex: 0 0 1px;
+  background: var(--quant-backtest-border-strong);
+}
+
+.quant-backtest-dock-title,
+.quant-backtest-viewer-heading h2 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quant-backtest-viewer-heading h2 {
+  flex: 0 1 auto;
+}
+
+.quant-backtest-dock-range,
+.quant-backtest-viewer-heading > span:last-child {
+  overflow: hidden;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Precision is metadata, not a new KPI. Keep the normal OHLC label quiet while
+ * making an explicit lower-timeframe fallback discoverable in the existing
+ * header line and its tooltip/ARIA description. */
+.quant-backtest-dock-range[data-execution-fallback='true'],
+.quant-backtest-viewer-heading > span:last-child[data-execution-fallback='true'] {
+  color: var(--quant-backtest-warning);
+}
+
+.quant-backtest-viewer-heading > h2 {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.quant-backtest-viewer-heading > span:not(.quant-backtest-viewer-market-badge):not(.quant-backtest-viewer-market-divider) {
+  max-width: 100%;
+}
+
+.quant-backtest-viewer-heading > span:last-child {
+  flex: 0 1 auto;
+}
+
+.quant-backtest-dock-actions,
+.quant-backtest-log-toolbar,
+.quant-backtest-viewer-header {
+  flex-shrink: 0;
+}
+
+.quant-backtest-dock-actions,
+.quant-backtest-log-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quant-backtest-button,
+.quant-backtest-icon-button,
+.quant-backtest-favorite,
+.quant-backtest-segment,
+.quant-backtest-sort,
+.quant-backtest-locate {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--quant-backtest-fg-muted);
+  font: inherit;
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease, border-color 100ms ease;
+}
+
+.quant-backtest-button:hover,
+.quant-backtest-icon-button:hover,
+.quant-backtest-favorite:hover,
+.quant-backtest-segment:hover,
+.quant-backtest-sort:hover,
+.quant-backtest-locate:hover {
+  background: var(--quant-backtest-hover);
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-button:focus-visible,
+.quant-backtest-viewer-back:focus-visible,
+.quant-backtest-icon-button:focus-visible,
+.quant-backtest-favorite:focus-visible,
+.quant-backtest-segment:focus-visible,
+.quant-backtest-sort:focus-visible,
+.quant-backtest-locate:focus-visible,
+.quant-backtest-tab:focus-visible,
+.quant-backtest-control input:focus-visible,
+.quant-backtest-control select:focus-visible,
+.quant-backtest-settings-tab:focus-visible,
+.quant-backtest-settings-close:focus-visible,
+.quant-backtest-settings-field input:focus-visible,
+.quant-backtest-settings-field select:focus-visible,
+.quant-backtest-settings-field textarea:focus-visible {
+  outline: 2px solid var(--quant-backtest-accent);
+  outline-offset: 1px;
+}
+
+.quant-backtest-button-primary {
+  border-color: var(--quant-backtest-border-strong);
+  background: var(--quant-backtest-hover);
+  color: var(--quant-backtest-fg-bright);
+  font-weight: 600;
+}
+
+.quant-backtest-button-primary:hover {
+  background: var(--quant-backtest-hover-strong);
+}
+
+.quant-backtest-icon-button {
+  min-width: 28px;
+  padding: 0 7px;
+}
+
+.quant-backtest-dock-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.quant-backtest-dock.is-collapsed .quant-backtest-dock-body {
+  display: none;
+}
+
+/* The collapsed state is header-only; the resize hit target must not sit over
+ * that row or mutate the retained expanded height through pointer events. */
+.quant-backtest-dock.is-collapsed .quant-backtest-dock-separator {
+  pointer-events: none;
+}
+
+.quant-backtest-dock-metrics {
+  display: flex;
+  align-items: stretch;
+  gap: 22px;
+  width: 100%;
+  min-width: 0;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.quant-backtest-dock-kpi {
+  display: flex;
+  min-width: 90px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+}
+
+.quant-backtest-dock-kpi > span,
+.quant-backtest-kpi-label {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.quant-backtest-dock-kpi > strong {
+  color: var(--quant-backtest-fg-bright);
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.quant-backtest-dock-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.quant-backtest-dock-value-secondary {
+  color: var(--quant-backtest-fg-bright);
+  font-size: 10px;
+}
+
+.quant-backtest-dock-sparkline {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 96px;
+  flex: 1;
+  align-items: center;
+  justify-content: stretch;
+  margin-left: 0;
+  overflow: hidden;
+  color: var(--quant-backtest-fg-muted);
+  text-align: center;
+}
+
+.quant-backtest-dock-sparkline svg {
+  width: 100%;
+  height: 100%;
+  min-height: 96px;
+}
+
+/* Size the flex child from the Dock, never from Highcharts' previous SVG
+ * width. An auto-width child otherwise uses its rendered SVG as an intrinsic
+ * width, causing several visible shrink/grow passes after every mount. */
+.quant-backtest-dock-sparkline > .quant-backtest-chart-host {
+  flex: 1 1 0;
+  width: 100%;
+  height: 164px;
+  min-height: 164px;
+}
+
+.quant-backtest-sparkline-line {
+  fill: none;
+  stroke: var(--quant-backtest-accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.quant-backtest-viewer {
+  --quant-backtest-bg: lab(7.23454% 0.112057 -2.28281);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* LuxAlgo's report shell uses the darker chart surface rather than the
+   * slightly lifted Vela panel surface. Keep the value local to the viewer
+   * so the dock and chart remain unchanged. */
+  background: var(--quant-backtest-bg);
+  font-family: "Aeonik", "Aeonik Fallback", var(--vela-font, Inter), ui-sans-serif, system-ui, sans-serif;
+  line-height: 20px;
+}
+
+.quant-backtest-viewer-back {
+  position: absolute;
+  z-index: 1;
+  top: 16px;
+  right: 16px;
+  flex-shrink: 0;
+  width: 28px;
+  min-height: 28px;
+  padding-inline: 4px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--quant-backtest-fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.quant-backtest-viewer-header {
+  position: static;
+  box-sizing: border-box;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 44px;
+  height: 44px;
+  padding: 16px 96px 0 16px;
+  border-bottom: 0;
+}
+
+/* Measured relative to the Viewer, not the browser toolbar: the desktop
+ * rail starts at +60px; the intermediate-width rail starts at +62px. */
+@media (min-width: 768px) {
+  .quant-backtest-viewer-header {
+    min-height: 44px;
+    height: 44px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .quant-backtest-viewer-header {
+    min-height: 46px;
+    height: 46px;
+  }
+
+}
+
+/* The reference switches to the wider report gutter at the 924px shell,
+ * while the 768px tablet keeps the compact 16/32px report gutters. */
+@media (min-width: 900px) and (max-width: 1023px) {
+  .quant-backtest-workbench[data-viewer='open'] {
+    /* Vela's chart host reserves a 38px bottom control strip.  The reference
+     * report takes over that strip and starts at the chart shell's 36px edge. */
+    position: fixed;
+    inset: 36px 0 0;
+  }
+
+  .quant-backtest-performance-card {
+    gap: 0;
+    padding-top: 31px;
+  }
+
+  .quant-backtest-performance-card .quant-backtest-chart-frame {
+    min-height: 302px;
+  }
+
+  .quant-backtest-performance-card .quant-backtest-chart-legend {
+    min-height: 16px;
+    margin-top: 8px;
+  }
+
+  .quant-backtest-viewer .quant-backtest-performance {
+    padding: 8px 24px 60px;
+  }
+
+  .quant-backtest-viewer .quant-backtest-analysis {
+    padding-right: 40px;
+    padding-left: 40px;
+  }
+}
+
+.quant-backtest-viewer-header > .quant-backtest-icon-button,
+.quant-backtest-viewer-header > .quant-backtest-favorite {
+  align-self: center;
+}
+
+.quant-backtest-viewer-back:hover {
+  background: var(--quant-backtest-hover);
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-favorite {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+}
+
+.quant-backtest-favorite.active {
+  color: var(--quant-backtest-warning);
+}
+
+.quant-backtest-favorite.active .quant-backtest-icon {
+  fill: currentColor;
+}
+
+.quant-backtest-tabs {
+  display: flex;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 16px;
+  min-height: 30px;
+  height: 30px;
+  margin-top: 16px;
+  /* The reference report starts its tab rail 24px from the viewport edge. */
+  padding: 0 24px;
+  border-bottom: 1px solid var(--quant-backtest-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.quant-backtest-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.quant-backtest-tab {
+  position: relative;
+  appearance: none;
+  align-self: stretch;
+  flex: none;
+  padding: 0 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--quant-backtest-fg-muted);
+  font: inherit;
+  font-family: "Aeonik", "Aeonik Fallback", var(--vela-font, Inter), ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.quant-backtest-tab:hover {
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-tab.active {
+  /* The reference keeps the selected report label and rule neutral white;
+   * chart series continue to use the blue accent token below. */
+  color: #e5e5e5;
+  font-weight: 400;
+}
+
+.quant-backtest-tab.active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: #e5e5e5;
+  content: '';
+}
+
+.quant-backtest-viewer-panel {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--vela-scroll, rgba(178, 181, 190, 0.3)) transparent;
+}
+
+.quant-backtest-page {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
+  padding: 24px 24px 60px;
+}
+
+/* Report pages use the measured inline gutters of the reference shell. */
+.quant-backtest-performance,
+.quant-backtest-trades-log {
+  padding-right: 16px;
+  padding-left: 16px;
+}
+
+.quant-backtest-log-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 8px;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.quant-backtest-log-state strong {
+  color: var(--quant-backtest-fg-bright);
+  font-weight: 600;
+}
+
+.quant-backtest-analysis {
+  padding-right: 32px;
+  padding-left: 32px;
+}
+
+.quant-backtest-page.quant-backtest-performance {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Measured reference desktop geometry: tabs begin at viewer +60px and
+ * occupy 30px of content plus their 1px rule. The scroll viewport follows
+ * the tab rule directly; the reference's 16px spacing is already supplied
+ * by the header-to-tabs shell gap. */
+@media (min-width: 1024px) {
+  .quant-backtest-tabs {
+    min-height: 31px;
+    height: 31px;
+  }
+
+  .quant-backtest-page.quant-backtest-performance {
+    padding-top: 0;
+  }
+}
+
+.quant-backtest-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.quant-backtest-section-heading h3 {
+  margin: 0;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.quant-backtest-section-heading p {
+  margin: 0;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 11px;
+}
+
+.quant-backtest-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.quant-backtest-summary-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 32px 16px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 8px;
+  background: transparent;
+}
+
+.quant-backtest-summary-chart-frame {
+  min-height: 300px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.quant-backtest-summary-chart-frame > .quant-backtest-chart-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.quant-backtest-performance-card {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px 16px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 8px;
+  background: transparent;
+}
+
+.quant-backtest-performance-kpi-bar {
+  display: flex;
+  box-sizing: border-box;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  min-height: 74px;
+  padding: 16px;
+  overflow-x: auto;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 8px;
+}
+
+.quant-backtest-performance-kpi-bar .quant-backtest-kpi {
+  /* Preserve equal desktop columns, but never squeeze a label/value below
+   * its intrinsic width: the existing bar scrolls on narrow viewports. */
+  min-width: max-content;
+  min-height: 40px;
+  flex: 1 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.quant-backtest-kpi-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.quant-backtest-kpi-secondary {
+  color: var(--quant-backtest-fg-bright);
+  font-size: 10px;
+}
+
+.quant-backtest-kpi {
+  display: flex;
+  min-height: 66px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  padding: 12px 14px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 8px;
+  background: var(--quant-backtest-surface-soft);
+}
+
+.quant-backtest-kpi-value {
+  font-size: 15px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.quant-backtest-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.quant-backtest-chart-frame {
+  min-width: 0;
+  min-height: 220px;
+  padding: 12px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 8px;
+  background: var(--quant-backtest-surface-soft);
+}
+
+.quant-backtest-summary-section .quant-backtest-summary-chart-frame {
+  min-height: 300px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.quant-backtest-chart-frame .quant-backtest-chart-host,
+.quant-backtest-chart-frame .quant-backtest-chart {
+  min-height: 180px;
+}
+
+.quant-backtest-summary-chart-frame .quant-backtest-chart-host,
+.quant-backtest-summary-chart-frame .quant-backtest-chart {
+  min-height: 300px;
+}
+
+.quant-backtest-chart-host {
+  min-height: 180px;
+}
+
+.quant-backtest-chart-host > svg.quant-backtest-chart {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.quant-backtest-performance-card .quant-backtest-chart-grid {
+  gap: 24px;
+  margin-bottom: 0;
+}
+
+.quant-backtest-performance > .quant-backtest-section-heading {
+  margin-bottom: -6px;
+}
+
+.quant-backtest-performance-card .quant-backtest-metric-table {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+}
+
+.quant-backtest-performance-card .quant-backtest-metric-table th,
+.quant-backtest-performance-card .quant-backtest-metric-table td {
+  padding: 8px 16px;
+}
+
+.quant-backtest-performance-card .quant-backtest-metric-table thead th {
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.quant-backtest-performance-card .quant-backtest-metric-table tbody tr.quant-backtest-metric-group th {
+  padding-top: 16px;
+  font-size: 14px;
+}
+
+.quant-backtest-performance-card .quant-backtest-chart-frame {
+  min-height: 286px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.quant-backtest-performance-card .quant-backtest-chart-host {
+  min-height: 250px;
+}
+
+.quant-backtest-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 24px;
+  margin-top: 2px;
+}
+
+.quant-backtest-chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 12px;
+}
+
+.quant-backtest-chart-legend-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.quant-backtest-performance
+  > .quant-backtest-chart-grid
+  > .quant-backtest-chart-frame:first-child {
+  grid-column: span 2;
+}
+
+.quant-backtest-chart-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.quant-backtest-chart-source {
+  display: block;
+  margin-top: -4px;
+  margin-bottom: 8px;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 11px;
+}
+
+.quant-backtest-simulation-warning {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--quant-backtest-warning, #d6a84f) 45%, transparent);
+  border-radius: 4px;
+  color: var(--quant-backtest-warning, #d6a84f);
+  font-size: 12px;
+}
+
+.quant-backtest-simulation-run-status {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 14px;
+  padding: 9px 12px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--quant-backtest-surface) 82%, transparent);
+  font-size: 12px;
+}
+
+.quant-backtest-simulation-run-status > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.quant-backtest-simulation-run-status strong {
+  color: var(--quant-backtest-fg-bright);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.quant-backtest-simulation-run-status span {
+  overflow: hidden;
+  color: var(--quant-backtest-fg-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quant-backtest-simulation-run-status progress {
+  width: min(240px, 34vw);
+  height: 4px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: var(--quant-backtest-border);
+  color: var(--quant-backtest-accent);
+}
+
+.quant-backtest-simulation-run-status progress::-webkit-progress-bar {
+  background: var(--quant-backtest-border);
+}
+
+.quant-backtest-simulation-run-status progress::-webkit-progress-value {
+  border-radius: inherit;
+  background: var(--quant-backtest-accent);
+}
+
+.quant-backtest-simulation-run-status progress::-moz-progress-bar {
+  border-radius: inherit;
+  background: var(--quant-backtest-accent);
+}
+
+.quant-backtest-simulation-run-status.is-error {
+  border-color: color-mix(in srgb, var(--quant-backtest-negative) 48%, transparent);
+}
+
+.quant-backtest-simulation-retry {
+  flex: none;
+}
+
+.quant-backtest-chart {
+  display: block;
+  width: 100%;
+  height: 180px;
+}
+
+.quant-backtest-chart-host {
+  min-width: 0;
+  height: 180px;
+}
+
+.quant-backtest-chart-host .highcharts-container,
+.quant-backtest-chart-host .highcharts-root {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.quant-backtest-chart-host .highcharts-background {
+  fill: transparent;
+}
+
+.quant-backtest-chart-host .highcharts-grid-line,
+.quant-backtest-chart-host .highcharts-axis-line,
+.quant-backtest-chart-host .highcharts-tick {
+  stroke: var(--quant-backtest-border);
+}
+
+.quant-backtest-chart-host .highcharts-axis-labels text,
+.quant-backtest-chart-host .highcharts-data-label text {
+  fill: var(--quant-backtest-fg-muted) !important;
+  font-family: inherit;
+}
+
+.quant-backtest-chart-host .highcharts-tooltip-box {
+  fill: var(--quant-backtest-surface);
+  fill-opacity: 0.96;
+  stroke: var(--quant-backtest-border-strong);
+}
+
+.quant-backtest-winrate-chart-host {
+  height: 210px;
+}
+
+.quant-backtest-chart-grid-lines {
+  fill: none;
+  stroke: var(--quant-backtest-border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.quant-backtest-chart-zero {
+  fill: none;
+  stroke: var(--quant-backtest-fg-muted);
+  stroke-dasharray: 3 4;
+  stroke-width: 0.8;
+  opacity: 0.65;
+  vector-effect: non-scaling-stroke;
+}
+
+.quant-backtest-chart-line {
+  fill: none;
+  stroke: var(--quant-backtest-accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.quant-backtest-chart-area-fill {
+  fill: color-mix(in srgb, var(--quant-backtest-positive) 28%, transparent);
+  stroke: none;
+}
+
+.quant-backtest-simulation-path {
+  fill: none;
+  stroke: var(--quant-backtest-accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.25;
+  opacity: 0.16;
+  vector-effect: non-scaling-stroke;
+}
+
+.quant-backtest-chart-dot {
+  fill: var(--quant-backtest-accent);
+}
+
+.quant-backtest-chart-bar {
+  opacity: 0.88;
+}
+
+.quant-backtest-chart-bar.positive {
+  fill: var(--quant-backtest-positive);
+}
+
+.quant-backtest-chart-bar.negative {
+  fill: var(--quant-backtest-negative);
+}
+
+.quant-backtest-chart-bar.neutral {
+  fill: var(--quant-backtest-fg-muted);
+}
+
+.quant-backtest-chart-axis-label,
+.quant-backtest-chart-category-label,
+.quant-backtest-chart-value-label {
+  fill: var(--quant-backtest-fg-muted);
+  font-family: inherit;
+  font-size: 10px;
+}
+
+.quant-backtest-chart-value-label {
+  fill: var(--quant-backtest-fg-bright);
+  font-weight: 600;
+}
+
+.quant-backtest-chart-category-label {
+  font-size: 11px;
+}
+
+.quant-backtest-metric-table,
+.quant-backtest-trade-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 8px;
+  background: var(--quant-backtest-surface-soft);
+  font-size: 12px;
+}
+
+.quant-backtest-metric-table caption,
+.quant-backtest-trade-table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.quant-backtest-metric-table th,
+.quant-backtest-metric-table td,
+.quant-backtest-trade-table th,
+.quant-backtest-trade-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--quant-backtest-border) 72%, transparent);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.quant-backtest-metric-table tr:last-child th,
+.quant-backtest-metric-table tr:last-child td,
+.quant-backtest-trade-table tr:last-child th,
+.quant-backtest-trade-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.quant-backtest-metric-table th:first-child,
+.quant-backtest-trade-table th:first-child,
+.quant-backtest-trade-table td:first-child {
+  text-align: left;
+}
+
+.quant-backtest-metric-table thead th,
+.quant-backtest-trade-table thead th {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.quant-backtest-trade-table thead th:nth-child(2),
+.quant-backtest-trade-table thead th:nth-child(3) {
+  text-align: left;
+}
+
+.quant-backtest-metric-table tbody th,
+.quant-backtest-trade-table tbody th {
+  color: var(--quant-backtest-fg-muted);
+  font-weight: 500;
+}
+
+.quant-backtest-metric-table tbody tr.quant-backtest-metric-group th {
+  padding-top: 16px;
+  border-bottom-color: var(--quant-backtest-border-strong);
+  color: var(--quant-backtest-fg-bright);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-align: left;
+}
+
+.quant-backtest-metric-table tbody td,
+.quant-backtest-trade-table tbody td {
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-tone-positive {
+  color: var(--quant-backtest-positive) !important;
+}
+
+.quant-backtest-tone-negative {
+  color: var(--quant-backtest-negative) !important;
+}
+
+.quant-backtest-tone-neutral {
+  color: var(--quant-backtest-fg-bright) !important;
+}
+
+.quant-backtest-state {
+  display: flex;
+  min-height: 260px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 28px;
+  color: var(--quant-backtest-fg-muted);
+  text-align: center;
+}
+
+.quant-backtest-state h3,
+.quant-backtest-state p {
+  margin: 0;
+}
+
+.quant-backtest-state h3 {
+  color: var(--quant-backtest-fg-bright);
+  font-size: 15px;
+}
+
+.quant-backtest-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--quant-backtest-border-strong);
+  border-top-color: var(--quant-backtest-accent);
+  border-radius: 50%;
+  animation: quant-backtest-spin 800ms linear infinite;
+}
+
+@keyframes quant-backtest-spin {
+  to { transform: rotate(360deg); }
+}
+
+.quant-backtest-empty {
+  padding: 26px 12px;
+  color: var(--quant-backtest-fg-muted);
+  text-align: center;
+}
+
+.quant-backtest-analysis {
+  padding-right: 32px;
+  padding-left: 32px;
+}
+
+.quant-backtest-analysis-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.quant-backtest-analysis-chart {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+}
+
+.quant-backtest-analysis-chart-title {
+  margin: 0 0 10px;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.quant-backtest-analysis-chart-host {
+  min-width: 0;
+}
+
+.quant-backtest-analysis-chart-host .highcharts-container,
+.quant-backtest-analysis-chart-host .highcharts-root,
+.quant-backtest-analysis-fallback-chart {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.quant-backtest-analysis-tooltip {
+  min-width: 180px;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 12px;
+}
+
+.quant-backtest-analysis-tooltip-trade,
+.quant-backtest-analysis-tooltip-pnl {
+  display: flex;
+  align-items: center;
+}
+
+.quant-backtest-analysis-tooltip-trade {
+  gap: 8px;
+  color: var(--quant-backtest-fg-muted);
+}
+
+.quant-backtest-analysis-tooltip-direction {
+  padding: 1px 6px;
+  border: 1px solid;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.quant-backtest-analysis-tooltip-pnl {
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.quant-backtest-analysis-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.quant-backtest-analysis-tooltip-pnl-label {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 10px;
+}
+
+.quant-backtest-analysis-tooltip-pnl strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.quant-backtest-analysis-tooltip-time {
+  margin-top: 8px;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 11px;
+}
+
+.quant-backtest-analysis-distribution-host {
+  height: 200px;
+}
+
+.quant-backtest-analysis-winrate-body {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.quant-backtest-analysis-donut {
+  position: relative;
+  width: min(240px, 72%);
+  min-width: 180px;
+  height: 180px;
+}
+
+.quant-backtest-analysis-donut-host {
+  width: 100%;
+  height: 180px;
+}
+
+.quant-backtest-analysis-donut-segment {
+  fill: none;
+  stroke-width: 20;
+  transform: rotate(-90deg);
+  transform-origin: 110px 90px;
+}
+
+.quant-backtest-analysis-donut-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.quant-backtest-analysis-donut-center strong {
+  color: var(--quant-backtest-fg-bright);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.quant-backtest-analysis-donut-center span {
+  margin-top: 8px;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+}
+
+.quant-backtest-analysis-winrate-legend {
+  display: flex;
+  min-width: 92px;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.quant-backtest-analysis-winrate-legend-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.quant-backtest-analysis-winrate-legend-item > span:last-child {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.quant-backtest-analysis-winrate-legend-item strong {
+  color: var(--quant-backtest-fg-bright);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.quant-backtest-analysis-winrate-legend-item small {
+  margin-top: 3px;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 11px;
+}
+
+.quant-backtest-analysis-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 24px;
+  min-height: 22px;
+  margin-top: 4px;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 12px;
+}
+
+.quant-backtest-analysis-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.quant-backtest-analysis-legend-line {
+  width: 23px;
+  border-top: 2px dashed;
+}
+
+.quant-backtest-analysis-legend-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.quant-backtest-analysis-reference-line,
+.quant-backtest-analysis-trend-line {
+  fill: none;
+  stroke-dasharray: 6 5;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.quant-backtest-analysis-trend-line {
+  stroke: var(--quant-backtest-fg-muted);
+}
+
+.quant-backtest-analysis-table {
+  width: 100%;
+  margin-top: 16px;
+  border: 0;
+  border-collapse: collapse;
+  background: transparent;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 14px;
+}
+
+.quant-backtest-analysis-table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.quant-backtest-analysis-table th,
+.quant-backtest-analysis-table td {
+  height: 37px;
+  padding: 8px 16px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--quant-backtest-border) 72%, transparent);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.quant-backtest-analysis-table th:first-child {
+  text-align: left;
+}
+
+.quant-backtest-analysis-table thead th {
+  color: var(--quant-backtest-fg-muted);
+  font-weight: 500;
+}
+
+.quant-backtest-analysis-table tbody th {
+  color: var(--quant-backtest-fg-muted);
+  font-weight: 400;
+}
+
+.quant-backtest-analysis-table tbody td {
+  font-weight: 400;
+}
+
+.quant-backtest-analysis-value-positive {
+  color: var(--quant-backtest-positive);
+}
+
+.quant-backtest-analysis-value-negative {
+  color: var(--quant-backtest-negative);
+}
+
+.quant-backtest-analysis-value-neutral {
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-analysis-duration-chart {
+  margin-top: 24px;
+}
+
+.quant-backtest-analysis-duration-host {
+  height: 250px;
+}
+
+.quant-backtest-analysis-chart-empty {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 13px;
+}
+
+.quant-backtest-analysis-empty {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 14px;
+}
+
+.quant-backtest-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.quant-backtest-data-card,
+.quant-backtest-comparison-card {
+  padding: 14px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 8px;
+  background: var(--quant-backtest-surface-soft);
+}
+
+.quant-backtest-data-card h4 {
+  margin: 0 0 12px;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 13px;
+}
+
+.quant-backtest-data-row,
+.quant-backtest-comparison-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--quant-backtest-border) 72%, transparent);
+}
+
+.quant-backtest-data-row:last-child,
+.quant-backtest-comparison-row:last-child {
+  border-bottom: 0;
+}
+
+.quant-backtest-data-row span,
+.quant-backtest-comparison-row span {
+  color: var(--quant-backtest-fg-muted);
+}
+
+.quant-backtest-data-row strong,
+.quant-backtest-comparison-row strong {
+  color: var(--quant-backtest-fg-bright);
+  font-weight: 550;
+}
+
+.quant-backtest-log-toolbar {
+  margin-left: auto;
+}
+
+.quant-backtest-log-card {
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 16px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 8px;
+  background: transparent;
+}
+
+.quant-backtest-log-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 8px;
+}
+
+.quant-backtest-log-view-label {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 14px;
+}
+
+.quant-backtest-segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 7px;
+  background: var(--quant-backtest-surface-soft);
+}
+
+.quant-backtest-segment {
+  min-height: 24px;
+  padding-inline: 10px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.quant-backtest-segment-icon {
+  min-width: 28px;
+  padding-inline: 6px;
+}
+
+.quant-backtest-segment.active {
+  background: var(--quant-backtest-hover-strong);
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-table-wrap {
+  max-width: 100%;
+  overflow: auto;
+  border-radius: 8px;
+}
+
+.quant-backtest-trade-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 4px 2px;
+}
+
+.quant-backtest-trade-pagination-button {
+  min-height: 28px;
+  padding-inline: 10px;
+}
+
+.quant-backtest-trade-pagination-status {
+  min-width: 190px;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.quant-backtest-trade-table {
+  min-width: 1040px;
+}
+
+.quant-backtest-sort {
+  min-height: 22px;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.quant-backtest-sort .quant-backtest-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.quant-backtest-trade-number {
+  min-width: 92px;
+}
+
+.quant-backtest-trade-number-value {
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-direction-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  margin-left: 7px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  text-transform: lowercase;
+  vertical-align: middle;
+}
+
+.quant-backtest-trade-time {
+  min-width: 196px;
+  text-align: left !important;
+}
+
+.quant-backtest-trade-time-details {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  vertical-align: middle;
+}
+
+.quant-backtest-trade-datetime {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 11px;
+}
+
+.quant-backtest-trade-price {
+  color: var(--quant-backtest-fg-bright);
+  font-variant-numeric: tabular-nums;
+}
+
+.quant-backtest-locate {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  margin-left: 8px;
+  padding: 0;
+  color: var(--quant-backtest-fg-muted);
+  opacity: 0;
+  pointer-events: none;
+  vertical-align: middle;
+}
+
+.quant-backtest-locate .quant-backtest-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.quant-backtest-trade-table tbody tr:hover .quant-backtest-locate,
+.quant-backtest-trade-table tbody tr:focus-within .quant-backtest-locate {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.quant-backtest-direction-long {
+  background: color-mix(in srgb, var(--quant-backtest-positive) 20%, transparent);
+  color: var(--quant-backtest-positive) !important;
+}
+
+.quant-backtest-direction-short {
+  background: color-mix(in srgb, var(--quant-backtest-negative) 20%, transparent);
+  color: var(--quant-backtest-negative) !important;
+}
+
+/*
+ * Trades Log follows the report site's table surface rather than the compact
+ * metric-table treatment above.  Keep these rules scoped to the log so the
+ * Performance/Analysis tables retain their denser layout: the reference uses
+ * a borderless table, 14px/20px body text, 8px × 16px cells, a sticky header,
+ * and a separator between rows.
+ */
+.quant-backtest-trade-table {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* The reference log's content card uses the standard 16px inline gutter. */
+.quant-backtest-trades-log {
+  padding-right: 16px;
+  padding-left: 16px;
+}
+
+.quant-backtest-trade-table th,
+.quant-backtest-trade-table td {
+  padding: 8px 16px;
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  line-height: 20px;
+}
+
+.quant-backtest-trade-table tbody tr {
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+}
+
+.quant-backtest-trade-table thead tr {
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+}
+
+.quant-backtest-trade-table thead th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  background: var(--quant-backtest-bg);
+  color: var(--quant-backtest-fg-muted);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: normal;
+  line-height: 20px;
+  text-transform: none;
+}
+
+.quant-backtest-trade-table tbody th {
+  min-width: 0;
+  color: var(--quant-backtest-fg-bright);
+  font-weight: 400;
+}
+
+.quant-backtest-trade-table .quant-backtest-trade-number {
+  width: 1%;
+}
+
+.quant-backtest-trade-table tbody td {
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-trade-datetime,
+.quant-backtest-trade-price {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.quant-backtest-direction-badge {
+  min-height: 0;
+  margin-left: 8px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  line-height: 16px;
+}
+
+@media (hover: none) {
+  .quant-backtest-locate {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.quant-backtest-calendar {
+  width: 100%;
+}
+
+.quant-backtest-calendar-empty {
+  margin: 0 0 16px;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.quant-backtest-calendar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  margin-bottom: 24px;
+}
+
+.quant-backtest-calendar-navigation {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.quant-backtest-calendar-nav {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  place-items: center;
+  color: var(--quant-backtest-fg-muted);
+  cursor: pointer;
+}
+
+.quant-backtest-calendar-nav:hover,
+.quant-backtest-calendar-nav:focus-visible {
+  background: #262626;
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-calendar-nav:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--quant-backtest-accent) 70%, transparent);
+  outline-offset: 1px;
+}
+
+.quant-backtest-calendar-nav-icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.quant-backtest-calendar-heading strong {
+  padding: 0 8px;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.quant-backtest-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.quant-backtest-calendar-row {
+  display: contents;
+}
+
+.quant-backtest-calendar-weekday {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(38, 38, 38, 0.5);
+  color: var(--quant-backtest-fg-muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.quant-backtest-calendar-day {
+  display: flex;
+  height: 96px;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: 8px;
+  border: 1px solid #262626;
+  border-radius: 8px;
+  background: rgba(38, 38, 38, 0.3);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.quant-backtest-calendar-day.is-profit {
+  border-color: var(--quant-backtest-positive);
+  background: color-mix(in srgb, var(--quant-backtest-positive) 10%, transparent);
+}
+
+.quant-backtest-calendar-day.is-loss {
+  border-color: var(--quant-backtest-negative);
+  background: color-mix(in srgb, var(--quant-backtest-negative) 10%, transparent);
+}
+
+.quant-backtest-calendar-day.is-flat {
+  border-color: var(--quant-backtest-border-strong);
+  background: var(--quant-backtest-surface-soft);
+}
+
+.quant-backtest-calendar-day time {
+  color: var(--quant-backtest-fg-bright);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.quant-backtest-calendar-day-details {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.quant-backtest-calendar-money {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.quant-backtest-calendar-amount {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quant-backtest-calendar-money.is-positive {
+  color: var(--quant-backtest-positive);
+}
+
+.quant-backtest-calendar-money.is-negative {
+  color: var(--quant-backtest-negative);
+}
+
+.quant-backtest-calendar-day-pnl {
+  max-width: 100%;
+  flex-wrap: wrap;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.quant-backtest-calendar-currency {
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.quant-backtest-calendar-day-meta {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 12px;
+}
+
+.quant-backtest-calendar-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+  padding: 32px 16px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 8px;
+  background: transparent;
+}
+
+.quant-backtest-calendar-summary-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quant-backtest-calendar-summary-label {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.quant-backtest-calendar-summary-value {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.quant-backtest-calendar-summary-date,
+.quant-backtest-calendar-summary-average {
+  color: var(--quant-backtest-fg-bright);
+  font-size: 14px;
+}
+
+.quant-backtest-calendar-summary-money {
+  font-size: 14px;
+}
+
+.quant-backtest-simulation-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 8px;
+  background: var(--quant-backtest-surface-soft);
+}
+
+.quant-backtest-control {
+  display: flex;
+  min-width: 112px;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 10px;
+}
+
+.quant-backtest-control select,
+.quant-backtest-control input[type='number'] {
+  min-width: 100px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--quant-backtest-border-strong);
+  border-radius: 5px;
+  background: var(--quant-backtest-surface);
+  color: var(--quant-backtest-fg-bright);
+  font: inherit;
+}
+
+.quant-backtest-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.quant-backtest-input-wrap input {
+  width: 100%;
+}
+
+.quant-backtest-input-wrap small {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.quant-backtest-control-checkbox {
+  min-height: 30px;
+  flex-direction: row;
+  align-items: center;
+  padding-bottom: 4px;
+  cursor: pointer;
+}
+
+.quant-backtest-control-checkbox input {
+  accent-color: var(--quant-backtest-accent);
+}
+
+.quant-backtest-simulation-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+/* Reference-compatible Simulation workspace. The legacy generic control
+ * selectors above remain scoped for restored snapshots; the live page uses
+ * these dedicated classes so chart/report concerns do not leak into Viewer. */
+.quant-backtest-simulation {
+  width: 100%;
+  max-width: none;
+  padding-right: 32px;
+  padding-left: 32px;
+  padding-top: 0;
+}
+
+.quant-backtest-simulation-toolbar {
+  position: sticky;
+  z-index: 6;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 24px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--quant-backtest-bg) 96%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.quant-backtest-simulation-toolbar-field {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.quant-backtest-simulation-field-label {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.quant-backtest-simulation-help {
+  position: relative;
+  display: inline-flex;
+}
+
+.quant-backtest-simulation-help-trigger {
+  appearance: none;
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--quant-backtest-fg-muted);
+  border-radius: 50%;
+  outline: 0;
+  background: transparent;
+  color: var(--quant-backtest-fg-muted);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  cursor: help;
+  opacity: 0.78;
+}
+
+.quant-backtest-simulation-help-trigger:hover,
+.quant-backtest-simulation-help-trigger:focus-visible {
+  border-color: var(--quant-backtest-fg-bright);
+  color: var(--quant-backtest-fg-bright);
+  opacity: 1;
+}
+
+.quant-backtest-simulation-help-trigger:focus-visible,
+.quant-backtest-simulation-segment:focus-visible,
+.quant-backtest-simulation-dd-custom:focus-within,
+.quant-backtest-simulation-settings-button:focus-visible,
+.quant-backtest-simulation-mobile-settings:focus-visible,
+.quant-backtest-simulation-settings-close:focus-visible,
+.quant-backtest-simulation-settings-field select:focus-visible,
+.quant-backtest-simulation-settings-field input:focus-visible {
+  outline: 2px solid var(--quant-backtest-accent);
+  outline-offset: 1px;
+}
+
+.quant-backtest-simulation-help-tooltip {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 7px);
+  left: 50%;
+  width: max-content;
+  max-width: min(288px, 70vw);
+  padding: 7px 9px;
+  border: 1px solid var(--quant-backtest-border-strong);
+  border-radius: 6px;
+  background: #333;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: normal;
+  transform: translateX(-50%);
+}
+
+.quant-backtest-simulation-help-tooltip[hidden] {
+  display: none;
+}
+
+.quant-backtest-simulation-segmented {
+  display: inline-flex;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--quant-backtest-border-strong);
+  border-radius: 6px;
+}
+
+.quant-backtest-simulation-segment {
+  appearance: none;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 0;
+  border-right: 1px solid var(--quant-backtest-border);
+  background: transparent;
+  color: var(--quant-backtest-fg-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.quant-backtest-simulation-segment:last-child {
+  border-right: 0;
+}
+
+.quant-backtest-simulation-segment:hover {
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-simulation-segment.active,
+.quant-backtest-simulation-dd-custom.active {
+  background: var(--quant-backtest-hover-strong);
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-simulation-dd-custom {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 1px;
+  padding-right: 8px;
+  border-left: 1px solid var(--quant-backtest-border);
+  color: var(--quant-backtest-fg-muted);
+}
+
+.quant-backtest-simulation-dd-custom input {
+  width: 48px;
+  height: 28px;
+  padding: 0 4px 0 8px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.quant-backtest-simulation-settings-button,
+.quant-backtest-simulation-mobile-settings {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--quant-backtest-fg-muted);
+  cursor: pointer;
+}
+
+.quant-backtest-simulation-settings-button {
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border-radius: 6px;
+}
+
+.quant-backtest-simulation-settings-button:hover {
+  background: var(--quant-backtest-hover);
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-simulation-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.quant-backtest-simulation-metrics {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 0;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 22px;
+  padding: 16px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.quant-backtest-simulation-kpi {
+  display: flex;
+  min-width: max-content;
+  flex: 1 0 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+.quant-backtest-simulation-kpi > span {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 11px;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.quant-backtest-simulation-kpi strong {
+  color: var(--quant-backtest-fg-bright);
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.quant-backtest-simulation-kpi strong small {
+  color: currentColor;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.quant-backtest-simulation-chart-panel,
+.quant-backtest-simulation-streaks {
+  min-width: 0;
+}
+
+.quant-backtest-simulation-chart-panel > header {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quant-backtest-simulation-chart-panel h4,
+.quant-backtest-simulation-streaks h4 {
+  margin: 0;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.quant-backtest-simulation-chart-actions .quant-backtest-simulation-segment {
+  min-height: 30px;
+}
+
+.quant-backtest-simulation-chart-host {
+  min-width: 0;
+  height: 240px;
+}
+
+.quant-backtest-simulation-paths-host {
+  height: 320px;
+}
+
+.quant-backtest-simulation-chart-host .highcharts-container,
+.quant-backtest-simulation-chart-host .highcharts-root {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.quant-backtest-simulation-chart-fallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.quant-backtest-simulation-band {
+  stroke: none;
+}
+
+.quant-backtest-simulation-band-outer {
+  fill: rgba(113, 113, 122, 0.15);
+}
+
+.quant-backtest-simulation-band-inner {
+  fill: rgba(113, 113, 122, 0.3);
+}
+
+.quant-backtest-simulation-median,
+.quant-backtest-simulation-actual-path,
+.quant-backtest-simulation-cumulative-line {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.quant-backtest-simulation-median {
+  stroke: var(--quant-backtest-fg-muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+
+.quant-backtest-simulation-actual-path {
+  stroke: var(--quant-backtest-positive);
+  stroke-width: 2;
+}
+
+.quant-backtest-simulation-cumulative-area {
+  fill: color-mix(in srgb, var(--quant-backtest-positive) 15%, transparent);
+}
+
+.quant-backtest-simulation-cumulative-line {
+  stroke: var(--quant-backtest-positive);
+  stroke-width: 2;
+}
+
+.quant-backtest-simulation-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 2px;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 11px;
+}
+
+.quant-backtest-simulation-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.quant-backtest-simulation-chart-legend i {
+  display: inline-block;
+  width: 16px;
+  height: 8px;
+}
+
+.quant-backtest-simulation-legend-actual {
+  width: 8px !important;
+  border-radius: 50%;
+  background: var(--quant-backtest-positive);
+}
+
+.quant-backtest-simulation-legend-median {
+  height: 0 !important;
+  border-top: 2px dashed var(--quant-backtest-fg-muted);
+}
+
+.quant-backtest-simulation-legend-bands {
+  border-radius: 2px;
+  background: var(--quant-backtest-fg-muted);
+  opacity: 0.8;
+}
+
+.quant-backtest-simulation-distributions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.quant-backtest-simulation-distributions.single {
+  grid-template-columns: 1fr;
+}
+
+.quant-backtest-simulation-streaks > div {
+  overflow-x: auto;
+}
+
+.quant-backtest-simulation-streaks table {
+  width: 100%;
+  min-width: 416px;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.quant-backtest-simulation-streaks th,
+.quant-backtest-simulation-streaks td {
+  padding: 10px 0 10px 24px;
+  border-bottom: 1px solid color-mix(in srgb, var(--quant-backtest-border) 55%, transparent);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.quant-backtest-simulation-streaks th:first-child,
+.quant-backtest-simulation-streaks td:first-child {
+  padding-left: 0;
+  color: var(--quant-backtest-fg-bright);
+  text-align: left;
+}
+
+.quant-backtest-simulation-streaks th {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.quant-backtest-simulation-streaks td:nth-child(2) {
+  color: var(--quant-backtest-fg-muted);
+}
+
+.quant-backtest-simulation-streaks tr:last-child td {
+  border-bottom: 0;
+}
+
+.quant-backtest-simulation-streaks p,
+.quant-backtest-simulation-methodology {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.quant-backtest-simulation-streaks p {
+  margin: 8px 0 0;
+}
+
+.quant-backtest-simulation-methodology {
+  margin: 0;
+}
+
+.quant-backtest-simulation-mobile-settings {
+  display: none;
+}
+
+.quant-backtest-simulation-settings {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.quant-backtest-simulation-settings-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.76);
+  cursor: default;
+  backdrop-filter: blur(2px);
+}
+
+.quant-backtest-simulation-settings-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(448px, calc(100% - 32px));
+  max-height: min(680px, calc(100% - 32px));
+  overflow: hidden;
+  border: 1px solid var(--quant-backtest-border-strong);
+  border-radius: 14px;
+  outline: 0;
+  background: var(--quant-backtest-surface);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+}
+
+.quant-backtest-simulation-empty {
+  min-height: 0;
+  padding: 40px 16px;
+  font-size: 14px;
+}
+
+.quant-backtest-simulation-settings-handle {
+  display: none;
+}
+
+.quant-backtest-simulation-settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 14px;
+}
+
+.quant-backtest-simulation-settings-header h3 {
+  margin: 0;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.quant-backtest-simulation-settings-header p {
+  margin: 6px 0 0;
+  color: var(--quant-backtest-fg-muted);
+  font-size: 12px;
+}
+
+.quant-backtest-simulation-settings-close {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--quant-backtest-fg-muted);
+  font: inherit;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.quant-backtest-simulation-settings-close:hover {
+  background: var(--quant-backtest-hover);
+  color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-simulation-settings-body {
+  max-height: min(560px, calc(100vh - 170px));
+  padding: 14px 24px 24px;
+  overflow-y: auto;
+}
+
+.quant-backtest-simulation-settings-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.quant-backtest-simulation-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quant-backtest-simulation-settings-hint {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.quant-backtest-simulation-settings-field select,
+.quant-backtest-simulation-settings-field input[type='number'] {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--quant-backtest-border-strong);
+  border-radius: 7px;
+  outline: 0;
+  background: var(--quant-backtest-bg);
+  color: var(--quant-backtest-fg-bright);
+  font: inherit;
+  font-size: 13px;
+}
+
+.quant-backtest-simulation-variation {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--quant-backtest-fg-muted);
+}
+
+.quant-backtest-simulation-variation input {
+  width: 110px;
+}
+
+.quant-backtest-simulation-preserve {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--quant-backtest-bg) 65%, transparent);
+  color: var(--quant-backtest-fg-bright);
+  cursor: pointer;
+}
+
+.quant-backtest-simulation-preserve input {
+  appearance: none;
+  width: 34px;
+  height: 19px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--quant-backtest-border-strong);
+  cursor: pointer;
+  transition: background 100ms ease;
+}
+
+.quant-backtest-simulation-preserve input::after {
+  display: block;
+  width: 15px;
+  height: 15px;
+  margin: 2px;
+  border-radius: 50%;
+  background: var(--quant-backtest-fg-muted);
+  content: '';
+  transition: transform 100ms ease, background 100ms ease;
+}
+
+.quant-backtest-simulation-preserve input:checked {
+  background: var(--quant-backtest-accent);
+}
+
+.quant-backtest-simulation-preserve input:checked::after {
+  background: #fff;
+  transform: translateX(15px);
+}
+
+.quant-backtest-simulation-preserve input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.quant-backtest-simulation-preserve > span {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.quant-backtest-simulation-preserve > span > .quant-backtest-simulation-settings-hint {
+  display: block;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.quant-backtest-simulation-mobile-controls {
+  display: none;
+}
+
+.quant-backtest-comparison-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.quant-backtest-comparison-title {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quant-backtest-workbench *,
+  .quant-backtest-workbench *::before,
+  .quant-backtest-workbench *::after {
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  .quant-backtest-performance-card .quant-backtest-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quant-backtest-analysis-overview {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1024px) {
+  .quant-backtest-calendar-day-pnl {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+    font-size: 12px;
+  }
+
+  .quant-backtest-calendar-day-pnl .quant-backtest-calendar-currency {
+    font-size: 10px;
+  }
+
+}
+
+@media (max-width: 900px) {
+  .quant-backtest-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .quant-backtest-performance
+    > .quant-backtest-chart-grid
+    > .quant-backtest-chart-frame:first-child {
+    grid-column: auto;
+  }
+
+  .quant-backtest-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quant-backtest-simulation-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .quant-backtest-calendar {
+    overflow-x: auto;
+  }
+
+  .quant-backtest-calendar-heading,
+  .quant-backtest-calendar-grid,
+  .quant-backtest-calendar-summary {
+    min-width: 760px;
+  }
+}
+
+@media (max-width: 640px) {
+  .quant-backtest-dock-header,
+  .quant-backtest-viewer-header {
+    padding-inline: 24px;
+  }
+
+  .quant-backtest-viewer-header {
+    height: auto;
+    min-height: 0;
+    padding: 8px 58px 0 24px;
+  }
+
+  .quant-backtest-dock-metrics {
+    gap: 12px;
+    padding: 10px;
+    overflow-x: auto;
+  }
+
+  .quant-backtest-dock-kpi {
+    min-width: 88px;
+  }
+
+  .quant-backtest-dock-sparkline {
+    min-width: 180px;
+  }
+
+  .quant-backtest-viewer-back {
+    top: 8px;
+    right: 16px;
+    width: 28px;
+    min-height: 28px;
+    overflow: hidden;
+    padding-inline: 0;
+    white-space: nowrap;
+  }
+
+  .quant-backtest-viewer-heading {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-right: 0;
+  }
+
+  .quant-backtest-viewer-header > .quant-backtest-icon-button,
+  .quant-backtest-viewer-header > .quant-backtest-favorite {
+    position: absolute;
+    top: 8px;
+    z-index: 1;
+  }
+
+  .quant-backtest-viewer-header > .quant-backtest-favorite {
+    right: 48px;
+  }
+
+  .quant-backtest-viewer-header > .quant-backtest-icon-button {
+    right: 78px;
+  }
+
+  .quant-backtest-viewer-heading > span:last-child {
+    display: block;
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  .quant-backtest-viewer-back .quant-backtest-icon {
+    margin: 0;
+  }
+
+  .quant-backtest-tabs {
+    gap: 16px;
+    min-height: 30px;
+    height: 30px;
+    margin-top: 8px;
+    padding-inline: 24px;
+  }
+
+  .quant-backtest-page {
+    padding: 18px 12px 44px;
+  }
+
+  .quant-backtest-performance,
+  .quant-backtest-trades-log {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .quant-backtest-analysis {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .quant-backtest-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .quant-backtest-log-toolbar {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .quant-backtest-log-toolbar .quant-backtest-segmented {
+    margin-right: auto;
+  }
+
+  .quant-backtest-summary-grid,
+  .quant-backtest-analysis-grid,
+  .quant-backtest-comparison-cards,
+  .quant-backtest-simulation-stats,
+  .quant-backtest-calendar-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .quant-backtest-simulation-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .quant-backtest-control,
+  .quant-backtest-control select,
+  .quant-backtest-control input[type='number'] {
+    width: 100%;
+  }
+}
+
+@media (max-width: 1023px) {
+  .quant-backtest-mobile-trigger:not([hidden]) {
+    display: inline-flex;
+  }
+
+  .quant-backtest-simulation {
+    padding-top: 0;
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .quant-backtest-simulation-toolbar {
+    display: none;
+  }
+
+  .quant-backtest-simulation-run-status {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .quant-backtest-simulation-run-status progress {
+    width: 100%;
+  }
+
+  .quant-backtest-simulation-content {
+    gap: 20px;
+  }
+
+  .quant-backtest-simulation-distributions {
+    grid-template-columns: 1fr;
+  }
+
+  .quant-backtest-simulation-chart-actions {
+    display: none;
+  }
+
+  .quant-backtest-simulation-mobile-settings {
+    position: sticky;
+    z-index: 8;
+    bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    display: flex;
+    width: 36px;
+    height: 36px;
+    margin: 20px 0 -44px auto;
+    border-radius: 50%;
+    background: var(--quant-backtest-accent);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    color: #fff;
+  }
+
+  .quant-backtest-simulation-settings {
+    align-items: flex-end;
+  }
+
+  .quant-backtest-simulation-settings-dialog {
+    width: 100%;
+    max-height: min(88vh, 760px);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .quant-backtest-simulation-settings-handle {
+    display: block;
+    width: 38px;
+    height: 4px;
+    margin: 8px auto 0;
+    border-radius: 999px;
+    background: var(--quant-backtest-border-strong);
+  }
+
+  .quant-backtest-simulation-settings-header {
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--quant-backtest-border);
+  }
+
+  .quant-backtest-simulation-settings-header p {
+    display: none;
+  }
+
+  .quant-backtest-simulation-settings-body {
+    max-height: calc(88vh - 62px);
+    padding: 0 16px max(16px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .quant-backtest-simulation-mobile-controls {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .quant-backtest-simulation-mobile-field {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--quant-backtest-border) 60%, transparent);
+  }
+
+  .quant-backtest-simulation-mobile-field > div:first-child {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .quant-backtest-simulation-mobile-field strong {
+    color: var(--quant-backtest-fg-bright);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .quant-backtest-simulation-mobile-field span {
+    color: var(--quant-backtest-fg-muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .quant-backtest-simulation-settings-fields {
+    gap: 16px;
+    padding: 16px 0 0;
+  }
+
+  .quant-backtest-simulation-settings-field .quant-backtest-simulation-help,
+  .quant-backtest-simulation-preserve .quant-backtest-simulation-help {
+    display: none;
+  }
+}
+
+/* At tablet-width Viewer captures the reference as a near-full-width dialog,
+ * still floating above the bottom edge with an 8px inset. The generic mobile
+ * sheet rules above intentionally remain for phones (<=640px). */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .quant-backtest-simulation-settings {
+    align-items: flex-end;
+  }
+
+  .quant-backtest-simulation-settings-dialog {
+    width: calc(100% - 16px);
+    height: calc(100% - 96px);
+    max-height: none;
+    margin: 8px;
+    border: 1px solid var(--quant-backtest-border-strong);
+    border-radius: 8px;
+  }
+
+  .quant-backtest-simulation-settings-handle {
+    display: none;
+  }
+
+  .quant-backtest-simulation-settings-header {
+    padding: 18px 24px 14px;
+  }
+
+  .quant-backtest-simulation-settings-header p {
+    display: block;
+  }
+
+  .quant-backtest-simulation-settings-body {
+    max-height: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .quant-backtest-simulation {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .quant-backtest-simulation-metrics {
+    min-height: 88px;
+    gap: 20px;
+    padding: 14px;
+  }
+
+  .quant-backtest-simulation-chart-actions {
+    max-width: 100%;
+  }
+
+  .quant-backtest-simulation-chart-panel > header {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-bottom: 6px;
+  }
+
+  .quant-backtest-simulation-dd-group {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .quant-backtest-simulation-segment {
+    padding-inline: 9px;
+  }
+}

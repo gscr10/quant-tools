@@ -18,4 +18,8 @@ export function registerAppIcons(): void {
     'quant-camera',
     svg16('<path d="M5.5 4 6.5 2.5h3L10.5 4h3a1 1 0 0 1 1 1v7.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><circle cx="8" cy="8.5" r="2.6"/>'),
   );
+  registerIcon(
+    'quant-strategy',
+    svg16('<path d="M2 12.5 6.2 8l2.5 2.6L14 4.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.5 4.5H14V8" stroke-linecap="round" stroke-linejoin="round"/>'),
+  );
 }

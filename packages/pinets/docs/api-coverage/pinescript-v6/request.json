@@ -1,0 +1,14 @@
+{
+  "Data Requests": {
+    "request.currency_rate()": false,
+    "request.dividends()": false,
+    "request.earnings()": false,
+    "request.economic()": false,
+    "request.financial()": false,
+    "request.quandl()": false,
+    "request.security()": true,
+    "request.security_lower_tf()": true,
+    "request.seed()": false,
+    "request.splits()": false
+  }
+}

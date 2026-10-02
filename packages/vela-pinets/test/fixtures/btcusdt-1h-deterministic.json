@@ -1,0 +1,52 @@
+{
+  "provider": "binance",
+  "symbol": "BTCUSDT",
+  "timeframe": "1h",
+  "timezone": "UTC",
+  "locale": "en-US",
+  "strategyId": "btcusdt-1h-deterministic",
+  "parameters": {
+    "initialCapital": 100000,
+    "defaultQtyType": "fixed",
+    "commissionType": "percent",
+    "commissionValue": 0.1,
+    "orders": [
+      {"barIndex":2,"id":"Long A","side":"long","qty":0.1},
+      {"barIndex":6,"id":"Long A","side":"close","qty":null},
+      {"barIndex":8,"id":"Short A","side":"short","qty":0.2},
+      {"barIndex":12,"id":"Short A","side":"close","qty":null},
+      {"barIndex":14,"id":"Long B","side":"long","qty":0.15},
+      {"barIndex":18,"id":"Long B","side":"close","qty":null}
+    ]
+  },
+  "source": "https://api.binance.com/api/v3/klines",
+  "sourceQuery": "symbol=BTCUSDT&interval=1h&startTime=1704067200000&endTime=1704153600000&limit=24",
+  "rangeStart": 1704067200000,
+  "rangeEndExclusive": 1704153600000,
+  "bars": [
+    {"time":1704067200000,"open":42283.58,"high":42554.57,"low":42261.02,"close":42475.23,"volume":1271.68108,"closeTime":1704070799999},
+    {"time":1704070800000,"open":42475.23,"high":42775,"low":42431.65,"close":42613.56,"volume":1196.37856,"closeTime":1704074399999},
+    {"time":1704074400000,"open":42613.57,"high":42638.41,"low":42500,"close":42581.1,"volume":685.2198,"closeTime":1704077999999},
+    {"time":1704078000000,"open":42581.09,"high":42586.64,"low":42230.08,"close":42330.49,"volume":794.80391,"closeTime":1704081599999},
+    {"time":1704081600000,"open":42330.5,"high":42399.99,"low":42209.46,"close":42399.99,"volume":715.4176,"closeTime":1704085199999},
+    {"time":1704085200000,"open":42399.98,"high":42406,"low":42180.77,"close":42234.01,"volume":736.53152,"closeTime":1704088799999},
+    {"time":1704088800000,"open":42234.01,"high":42424.82,"low":42208.68,"close":42396.69,"volume":601.3725,"closeTime":1704092399999},
+    {"time":1704092400000,"open":42396.69,"high":42500,"low":42396.68,"close":42492.46,"volume":653.67718,"closeTime":1704095999999},
+    {"time":1704096000000,"open":42492.46,"high":42556.5,"low":42452.58,"close":42549.99,"volume":427.19365,"closeTime":1704099599999},
+    {"time":1704099600000,"open":42550,"high":42699.32,"low":42537.18,"close":42649.69,"volume":879.62491,"closeTime":1704103199999},
+    {"time":1704103200000,"open":42649.69,"high":42749.36,"low":42628,"close":42691.1,"volume":856.81851,"closeTime":1704106799999},
+    {"time":1704106800000,"open":42691.1,"high":42762.39,"low":42605.21,"close":42690.2,"volume":785.16567,"closeTime":1704110399999},
+    {"time":1704110400000,"open":42690.21,"high":42780,"low":42611.45,"close":42648.38,"volume":785.52851,"closeTime":1704113999999},
+    {"time":1704114000000,"open":42648.37,"high":42748,"low":42612.76,"close":42715.54,"volume":497.2024,"closeTime":1704117599999},
+    {"time":1704117600000,"open":42715.54,"high":42715.55,"low":42580,"close":42612.24,"volume":711.01152,"closeTime":1704121199999},
+    {"time":1704121200000,"open":42612.24,"high":42847.07,"low":42586.51,"close":42783.05,"volume":942.70163,"closeTime":1704124799999},
+    {"time":1704124800000,"open":42783.05,"high":42856,"low":42664.42,"close":42725.15,"volume":918.71056,"closeTime":1704128399999},
+    {"time":1704128400000,"open":42725.15,"high":42824.9,"low":42704.42,"close":42812.7,"volume":677.33678,"closeTime":1704131999999},
+    {"time":1704132000000,"open":42812.71,"high":43208.86,"low":42812.7,"close":43111.1,"volume":2143.30897,"closeTime":1704135599999},
+    {"time":1704135600000,"open":43111.1,"high":43550,"low":43103.64,"close":43517.99,"volume":1947.61533,"closeTime":1704139199999},
+    {"time":1704139200000,"open":43517.98,"high":43829.99,"low":43510.71,"close":43687.86,"volume":2905.07295,"closeTime":1704142799999},
+    {"time":1704142800000,"open":43687.85,"high":43792.59,"low":43480.76,"close":43619.21,"volume":1541.59126,"closeTime":1704146399999},
+    {"time":1704146400000,"open":43619.22,"high":43661.1,"low":43361.6,"close":43529.93,"volume":1024.36372,"closeTime":1704149999999},
+    {"time":1704150000000,"open":43529.94,"high":44184.1,"low":43529.93,"close":44179.55,"volume":3475.97051,"closeTime":1704153599999}
+  ]
+}

@@ -1,0 +1,58 @@
+{
+    "Currency & Location": {
+        "syminfo.basecurrency": true,
+        "syminfo.country": true,
+        "syminfo.currency": true,
+        "syminfo.timezone": true
+    },
+    "Symbol Identification": {
+        "syminfo.current_contract": true,
+        "syminfo.description": true,
+        "syminfo.isin": true,
+        "syminfo.main_tickerid": true,
+        "syminfo.prefix": true,
+        "syminfo.root": true,
+        "syminfo.ticker": true,
+        "syminfo.tickerid": true,
+        "syminfo.type": true,
+        "syminfo.prefix()": false,
+        "syminfo.ticker()": false
+    },
+    "Company Data": {
+        "syminfo.employees": true,
+        "syminfo.industry": true,
+        "syminfo.sector": true,
+        "syminfo.shareholders": true,
+        "syminfo.shares_outstanding_float": true,
+        "syminfo.shares_outstanding_total": true
+    },
+    "Session & Market": {
+        "syminfo.expiration_date": true,
+        "syminfo.session": true,
+        "syminfo.volumetype": true
+    },
+    "Price & Contract Info": {
+        "syminfo.mincontract": true,
+        "syminfo.minmove": true,
+        "syminfo.mintick": true,
+        "syminfo.pointvalue": true,
+        "syminfo.pricescale": true
+    },
+    "Analyst Ratings": {
+        "syminfo.recommendations_buy": true,
+        "syminfo.recommendations_buy_strong": true,
+        "syminfo.recommendations_date": true,
+        "syminfo.recommendations_hold": true,
+        "syminfo.recommendations_sell": true,
+        "syminfo.recommendations_sell_strong": true,
+        "syminfo.recommendations_total": true
+    },
+    "Price Targets": {
+        "syminfo.target_price_average": true,
+        "syminfo.target_price_date": true,
+        "syminfo.target_price_estimates": true,
+        "syminfo.target_price_high": true,
+        "syminfo.target_price_low": true,
+        "syminfo.target_price_median": true
+    }
+}

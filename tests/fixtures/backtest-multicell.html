@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Backtest 2×2 Multi-cell Fixture</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background: #101114;
+      }
+
+      html,
+      body,
+      #fixture-shell {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      #fixture-shell {
+        position: relative;
+      }
+
+      #cell-grid {
+        display: grid;
+        width: 100%;
+        height: 100%;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+        background: #151619;
+      }
+
+      .multicell-chart-cell {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        border: 0;
+        border-right: 1px solid #2a2b30;
+        border-bottom: 1px solid #2a2b30;
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+          #151619;
+        background-size: 32px 32px;
+        color: #868a96;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .multicell-chart-cell:nth-child(2n) {
+        border-right: 0;
+      }
+
+      .multicell-chart-cell:nth-child(n + 3) {
+        border-bottom: 0;
+      }
+
+      .multicell-chart-cell[aria-pressed='true'] {
+        box-shadow: inset 0 0 0 2px #2962ff;
+        color: #f0f3fa;
+      }
+
+      .multicell-chart-cell span {
+        position: absolute;
+        top: 12px;
+        left: 14px;
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      #fixture-host {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="fixture-shell">
+      <section id="cell-grid" aria-label="2 by 2 chart workspace">
+        <button class="multicell-chart-cell" data-cell-id="cell-1" type="button">
+          <span>Cell 1</span>
+        </button>
+        <button class="multicell-chart-cell" data-cell-id="cell-2" type="button">
+          <span>Cell 2</span>
+        </button>
+        <button class="multicell-chart-cell" data-cell-id="cell-3" type="button">
+          <span>Cell 3</span>
+        </button>
+        <button class="multicell-chart-cell" data-cell-id="cell-4" type="button">
+          <span>Cell 4</span>
+        </button>
+      </section>
+      <div id="fixture-host"></div>
+    </main>
+
+    <script type="module">
+      import { BacktestController } from '/src/app/backtest-controller.ts';
+      import { BacktestWorkbench } from '/src/features/backtesting/backtest-workbench.ts';
+      import { getReportChartResourceStats } from '/src/features/backtesting/highcharts-renderer.ts';
+
+      const capabilities = Object.freeze({
+        tradeLedger: true,
+        exactEquityCurve: false,
+        exactDrawdownCurve: false,
+        riskRatios: false,
+        benchmark: false,
+        rawOrders: false,
+        rawFills: false,
+        barIndices: true,
+        individualOpenPnl: false,
+        executionPrecision: 'chart-ohlc',
+      });
+
+      function makeSnapshot({
+        cellId,
+        indicatorId,
+        revision,
+        epoch,
+        title,
+        netPnl = revision * 10,
+      }) {
+        const key = { cellId, indicatorId };
+        const start = Date.UTC(2026, 0, 1) + revision * 86_400_000;
+        const profits = [netPnl / 5, -netPnl / 10, netPnl * 0.9];
+        const trades = profits.map((pnl, index) => {
+          const side = index === 1 ? 'short' : 'long';
+          const entryPrice = 100 + revision + index * 3;
+          return {
+            id: `${cellId}-${indicatorId}-${revision}-trade-${index + 1}`,
+            side,
+            qty: 1,
+            entry: {
+              id: `${indicatorId}-${revision}-entry-${index + 1}`,
+              time: start + index * 3_600_000,
+              price: entryPrice,
+            },
+            exit: {
+              id: `${indicatorId}-${revision}-exit-${index + 1}`,
+              time: start + index * 3_600_000 + 1_800_000,
+              price: entryPrice + (side === 'long' ? pnl : -pnl),
+            },
+            entryBarIndex: index * 2,
+            exitBarIndex: index * 2 + 1,
+            open: false,
+            pnl,
+            mae: Math.max(1, Math.abs(Math.min(0, pnl))),
+            mfe: Math.max(1, Math.max(0, pnl)),
+          };
+        });
+        const grossProfit = profits
+          .filter((value) => value > 0)
+          .reduce((sum, value) => sum + value, 0);
+        const grossLoss = profits
+          .filter((value) => value < 0)
+          .reduce((sum, value) => sum + value, 0);
+        const strategy = {
+          position: 0,
+          avgPrice: 0,
+          equity: 10_000 + netPnl,
+          openPnl: 0,
+          netPnl,
+          grossProfit,
+          grossLoss,
+          wins: profits.filter((value) => value > 0).length,
+          losses: profits.filter((value) => value < 0).length,
+          even: 0,
+          maxDrawdown: Math.abs(grossLoss),
+          maxRunup: grossProfit,
+          initialCapital: 10_000,
+          accountCurrency: 'USD',
+        };
+        return {
+          key,
+          revision,
+          epoch,
+          runToken: `${cellId}:${indicatorId}:e${epoch}:r${revision}`,
+          status: 'ready',
+          finality: 'historical-final',
+          ledgerState: 'ready',
+          ledgerRevision: revision,
+          capabilities,
+          visible: true,
+          handle: {
+            id: indicatorId,
+            title,
+            visible: true,
+            source: `strategy(${JSON.stringify(title)})`,
+          },
+          run: {
+            id: indicatorId,
+            title,
+            kind: 'strategy',
+            cause: 'history',
+            first: true,
+            bar: 6,
+            time: start + 6 * 3_600_000,
+            forming: false,
+            complete: true,
+            plots: {},
+            vars: {},
+            warnings: [],
+            strategy,
+            trades: async () => trades,
+          },
+          context: {
+            language: 'pine',
+            phase: 'idle',
+            barIndex: 6,
+            meta: { title, overlay: true },
+            plots: {},
+            variables: {},
+            strategy,
+            trades,
+            warnings: [],
+          },
+          trades,
+          inputs: { schema: [], values: {} },
+          props: { schema: [], values: {} },
+          error: null,
+          source: `strategy(${JSON.stringify(title)})`,
+        };
+      }
+
+      const initialSnapshots = [
+        makeSnapshot({
+          cellId: 'cell-1', indicatorId: 'alpha', revision: 2, epoch: 2,
+          title: 'Cell 1 Alpha r2', netPnl: 20,
+        }),
+        makeSnapshot({
+          cellId: 'cell-1', indicatorId: 'beta', revision: 5, epoch: 2,
+          title: 'Cell 1 Beta r5', netPnl: 50,
+        }),
+        makeSnapshot({
+          cellId: 'cell-2', indicatorId: 'gamma', revision: 3, epoch: 1,
+          title: 'Cell 2 Gamma r3', netPnl: 30,
+        }),
+        makeSnapshot({
+          cellId: 'cell-2', indicatorId: 'theta', revision: 1, epoch: 1,
+          title: 'Cell 2 Theta r1', netPnl: 10,
+        }),
+        makeSnapshot({
+          cellId: 'cell-3', indicatorId: 'delta', revision: 4, epoch: 1,
+          title: 'Cell 3 Delta r4', netPnl: 40,
+        }),
+        makeSnapshot({
+          cellId: 'cell-4', indicatorId: 'epsilon', revision: 2, epoch: 1,
+          title: 'Cell 4 Epsilon r2', netPnl: 25,
+        }),
+      ];
+
+      function keyId(key) {
+        return `${key.cellId}\u0000${key.indicatorId}`;
+      }
+
+      class ControlledResultsSource {
+        listeners = new Set();
+        snapshots = new Map();
+        subscribeCount = 0;
+        unsubscribeCount = 0;
+        bootstrapCount = 0;
+        listSnapshotsCount = 0;
+        providerRequestCount = 0;
+        scheduledResponseCount = 0;
+        deliveredEventCount = 0;
+        deliveredWithoutListeners = 0;
+
+        constructor(snapshots) {
+          snapshots.forEach((snapshot) => this.snapshots.set(keyId(snapshot.key), snapshot));
+        }
+
+        subscribe(listener) {
+          this.subscribeCount += 1;
+          this.listeners.add(listener);
+          return () => {
+            this.unsubscribeCount += 1;
+            this.listeners.delete(listener);
+          };
+        }
+
+        async bootstrap() {
+          this.bootstrapCount += 1;
+          this.providerRequestCount += 1;
+        }
+
+        listSnapshots() {
+          this.listSnapshotsCount += 1;
+          return [...this.snapshots.values()];
+        }
+
+        emit(event) {
+          if (event.type === 'snapshot') {
+            this.snapshots.set(keyId(event.snapshot.key), event.snapshot);
+          } else if (event.type === 'removed') {
+            this.snapshots.delete(keyId(event.key));
+          }
+          this.deliveredEventCount += 1;
+          if (this.listeners.size === 0) this.deliveredWithoutListeners += 1;
+          for (const listener of [...this.listeners]) listener(event);
+        }
+
+        requestDelayed(event, delayMs = 50) {
+          this.providerRequestCount += 1;
+          this.scheduledResponseCount += 1;
+          return new Promise((resolve) => {
+            window.setTimeout(() => {
+              this.emit(event);
+              resolve();
+            }, delayMs);
+          });
+        }
+      }
+
+      const storage = {
+        key: 'quant-tools:test:backtest-multicell',
+        readCount: 0,
+        writeCount: 0,
+        load() {
+          this.readCount += 1;
+          try {
+            const value = window.localStorage.getItem(this.key);
+            return value ? JSON.parse(value) : null;
+          } catch {
+            return null;
+          }
+        },
+        save(value) {
+          this.writeCount += 1;
+          try {
+            window.localStorage.setItem(this.key, JSON.stringify(value));
+          } catch {
+            // Storage denial is deliberately isolated from the fixture UI.
+          }
+        },
+      };
+
+      const source = new ControlledResultsSource(initialSnapshots);
+      const controller = new BacktestController(source, {
+        getMarket: () => ({
+          provider: 'fixture-provider',
+          symbol: 'MULTICELL',
+          displaySymbol: 'MULTICELL',
+          timeframe: '1h',
+          timezone: 'UTC',
+          currency: 'USD',
+        }),
+        simulationWorkerRunner: null,
+      });
+      await controller.start();
+
+      let selectedCellId = 'cell-1';
+      const cellButtons = [...document.querySelectorAll('.multicell-chart-cell')];
+      function paintActiveCell() {
+        cellButtons.forEach((button) => {
+          button.setAttribute(
+            'aria-pressed',
+            String(button.dataset.cellId === selectedCellId),
+          );
+        });
+      }
+
+      function selectCell(cellId) {
+        if (!cellButtons.some((button) => button.dataset.cellId === cellId)) {
+          throw new Error(`Unknown fixture cell: ${cellId}`);
+        }
+        selectedCellId = cellId;
+        paintActiveCell();
+        controller.setActiveCell(cellId);
+      }
+
+      cellButtons.forEach((button) => {
+        button.addEventListener('click', () => selectCell(button.dataset.cellId));
+      });
+      selectCell(selectedCellId);
+
+      const workbench = new BacktestWorkbench('#fixture-host', {
+        initialReport: controller.getSnapshot(),
+        getSnapshot: () => controller.getSnapshot(),
+        subscribe: (listener) => controller.subscribe(listener),
+        dockPreferences: storage.load(),
+        onDockPreferencesChange: (preferences) => storage.save(preferences),
+        onSimulationChange: (change) => controller.updateSimulation(change),
+      });
+
+      let destroyed = false;
+      let teardownLateResponse = null;
+      let backgroundRevision = 12;
+
+      function activeSummary() {
+        const report = controller.getSnapshot();
+        return report ? {
+          cellId: report.key?.cellId ?? null,
+          indicatorId: report.key?.indicatorId ?? null,
+          revision: report.revision,
+          runId: report.runId,
+          title: report.strategyName,
+          status: report.status,
+          error: report.error ?? null,
+        } : null;
+      }
+
+      function state() {
+        const dock = document.querySelector('.quant-backtest-dock');
+        return {
+          ready: true,
+          destroyed,
+          selectedCellId,
+          activeCellId: controller.reportStore.activeCellId,
+          active: activeSummary(),
+          entries: controller.reportStore.list().map((entry) => ({
+            cellId: entry.key.cellId,
+            indicatorId: entry.key.indicatorId,
+            epoch: entry.epoch,
+            revision: entry.revision,
+            title: entry.report.strategyName,
+            status: entry.report.status,
+          })),
+          dock: {
+            present: Boolean(dock),
+            hidden: dock ? dock.hidden : true,
+            title: document.querySelector('.quant-backtest-dock-title')?.textContent ?? null,
+            workbenchState: document.querySelector('.quant-backtest-workbench')?.dataset.state ?? null,
+          },
+          dom: {
+            hostChildren: document.querySelector('#fixture-host')?.childElementCount ?? 0,
+            workbenches: document.querySelectorAll('.quant-backtest-workbench').length,
+            reportChartHosts: document.querySelectorAll('[data-quant-report-chart]').length,
+            highchartsContainers: document.querySelectorAll('.highcharts-container').length,
+          },
+          resources: getReportChartResourceStats(),
+          storage: {
+            readCount: storage.readCount,
+            writeCount: storage.writeCount,
+          },
+          source: {
+            subscribeCount: source.subscribeCount,
+            unsubscribeCount: source.unsubscribeCount,
+            listeners: source.listeners.size,
+            bootstrapCount: source.bootstrapCount,
+            listSnapshotsCount: source.listSnapshotsCount,
+            providerRequestCount: source.providerRequestCount,
+            scheduledResponseCount: source.scheduledResponseCount,
+            deliveredEventCount: source.deliveredEventCount,
+            deliveredWithoutListeners: source.deliveredWithoutListeners,
+          },
+        };
+      }
+
+      window.__backtestMulticell = {
+        ready: true,
+        selectCell,
+        state,
+        chartResources: () => getReportChartResourceStats(),
+        publishBackgroundSnapshot: () => {
+          const revision = backgroundRevision++;
+          source.emit({
+            type: 'snapshot',
+            snapshot: makeSnapshot({
+              cellId: 'cell-2',
+              indicatorId: `gamma-background-${revision}`,
+              revision,
+              epoch: 1,
+              title: `Cell 2 Background r${revision}`,
+            }),
+          });
+        },
+        publishBackgroundError: () => {
+          source.emit({
+            type: 'error',
+            key: { cellId: 'cell-3', indicatorId: 'delta' },
+            revision: backgroundRevision++,
+            epoch: 1,
+            error: new Error('injected background failure'),
+          });
+        },
+        publishLateBackground: (delayMs = 60) => {
+          const revision = backgroundRevision++;
+          return source.requestDelayed({
+            type: 'snapshot',
+            snapshot: makeSnapshot({
+              cellId: 'cell-4',
+              indicatorId: `epsilon-late-${revision}`,
+              revision,
+              epoch: 1,
+              title: `Cell 4 Late r${revision}`,
+            }),
+          }, delayMs);
+        },
+        publishFreshActive: () => {
+          source.emit({
+            type: 'snapshot',
+            snapshot: makeSnapshot({
+              cellId: 'cell-1', indicatorId: 'beta', revision: 8, epoch: 2,
+              title: 'Cell 1 Beta fresh r8', netPnl: 80,
+            }),
+          });
+        },
+        publishStaleRevision: () => {
+          source.emit({
+            type: 'snapshot',
+            snapshot: makeSnapshot({
+              cellId: 'cell-1', indicatorId: 'beta', revision: 7, epoch: 2,
+              title: 'STALE revision r7', netPnl: 700,
+            }),
+          });
+        },
+        publishStaleEpoch: () => {
+          source.emit({
+            type: 'snapshot',
+            snapshot: makeSnapshot({
+              cellId: 'cell-1', indicatorId: 'beta', revision: 100, epoch: 1,
+              title: 'STALE epoch e1 r100', netPnl: 1_000,
+            }),
+          });
+        },
+        removeKey: (cellId, indicatorId) => {
+          source.emit({ type: 'removed', key: { cellId, indicatorId } });
+        },
+        queuePostDestroyLate: (delayMs = 80) => {
+          teardownLateResponse = source.requestDelayed({
+            type: 'snapshot',
+            snapshot: makeSnapshot({
+              cellId: 'cell-1', indicatorId: 'post-destroy', revision: 1, epoch: 9,
+              title: 'Post-destroy response', netPnl: 999,
+            }),
+          }, delayMs);
+        },
+        waitForPostDestroyLate: async () => {
+          await teardownLateResponse;
+        },
+        exerciseDestroyedObjects: () => {
+          workbench.setReport(null);
+          controller.setActiveCell('cell-2');
+          source.emit({
+            type: 'error',
+            key: { cellId: 'cell-2', indicatorId: 'after-destroy-error' },
+            revision: 99,
+            epoch: 99,
+            error: new Error('post-destroy event'),
+          });
+        },
+        destroy: () => {
+          if (!destroyed) {
+            destroyed = true;
+            workbench.destroy();
+            controller.destroy();
+          }
+          // Idempotence is part of the lifecycle contract.
+          workbench.destroy();
+          controller.destroy();
+        },
+      };
+    </script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+{
+    "All": {
+        "map.clear()": true,
+        "map.contains()": true,
+        "map.copy()": true,
+        "map.get()": true,
+        "map.keys()": true,
+        "map.new<type,type>()": true,
+        "map.put()": true,
+        "map.put_all()": true,
+        "map.remove()": true,
+        "map.size()": true,
+        "map.values()": true
+    }
+}

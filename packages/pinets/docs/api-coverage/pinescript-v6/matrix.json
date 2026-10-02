@@ -1,0 +1,69 @@
+{
+    "Modification": {
+        "matrix.add_col()": true,
+        "matrix.add_row()": true,
+        "matrix.fill()": true,
+        "matrix.remove_col()": true,
+        "matrix.remove_row()": true,
+        "matrix.reverse()": true,
+        "matrix.swap_columns()": true,
+        "matrix.swap_rows()": true
+    },
+    "Statistical": {
+        "matrix.avg()": true,
+        "matrix.max()": true,
+        "matrix.median()": true,
+        "matrix.min()": true,
+        "matrix.mode()": true,
+        "matrix.sum()": true
+    },
+    "Element Access": {
+        "matrix.col()": true,
+        "matrix.get()": true,
+        "matrix.row()": true,
+        "matrix.set()": true
+    },
+    "Size & Shape": {
+        "matrix.columns()": true,
+        "matrix.elements_count()": true,
+        "matrix.reshape()": true,
+        "matrix.rows()": true,
+        "matrix.submatrix()": true
+    },
+    "Operations": {
+        "matrix.concat()": true,
+        "matrix.diff()": true,
+        "matrix.kron()": true,
+        "matrix.mult()": true,
+        "matrix.pow()": true
+    },
+    "Creation & Initialization": {
+        "matrix.copy()": true,
+        "matrix.new<type>()": true
+    },
+    "Linear Algebra": {
+        "matrix.det()": true,
+        "matrix.eigenvalues()": true,
+        "matrix.eigenvectors()": true,
+        "matrix.inv()": true,
+        "matrix.pinv()": true,
+        "matrix.rank()": true,
+        "matrix.trace()": true,
+        "matrix.transpose()": true
+    },
+    "Properties": {
+        "matrix.is_antidiagonal()": true,
+        "matrix.is_antisymmetric()": true,
+        "matrix.is_binary()": true,
+        "matrix.is_diagonal()": true,
+        "matrix.is_identity()": true,
+        "matrix.is_square()": true,
+        "matrix.is_stochastic()": true,
+        "matrix.is_symmetric()": true,
+        "matrix.is_triangular()": true,
+        "matrix.is_zero()": true
+    },
+    "Sorting": {
+        "matrix.sort()": true
+    }
+}

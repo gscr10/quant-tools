@@ -1,0 +1,42 @@
+{
+    "Constants": {
+        "math.e": true,
+        "math.phi": true,
+        "math.pi": true,
+        "math.rphi": true
+    },
+    "Basic Operations": {
+        "math.abs()": true,
+        "math.ceil()": true,
+        "math.floor()": true,
+        "math.round()": true,
+        "math.round_to_mintick()": true,
+        "math.sign()": true
+    },
+    "Trigonometric": {
+        "math.acos()": true,
+        "math.asin()": true,
+        "math.atan()": true,
+        "math.cos()": true,
+        "math.sin()": true,
+        "math.tan()": true
+    },
+    "Statistical": {
+        "math.avg()": true,
+        "math.max()": true,
+        "math.min()": true,
+        "math.sum()": true
+    },
+    "Exponential & Logarithmic": {
+        "math.exp()": true,
+        "math.log()": true,
+        "math.log10()": true,
+        "math.pow()": true,
+        "math.sqrt()": true
+    },
+    "Utilities": {
+        "math.random()": true,
+        "math.todegrees()": true,
+        "math.toradians()": true
+    }
+}

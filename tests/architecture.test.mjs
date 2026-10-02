@@ -60,15 +60,59 @@ test('workspace defaults, toolbar composition, providers, and dependency version
   const { createWorkspaceProviders } = await import(
     '../src/integrations/vela/provider-registry.ts'
   );
+  const providerRegistrySource = await readFile(
+    new URL('../src/integrations/vela/provider-registry.ts', import.meta.url),
+    'utf8',
+  );
+  assert.match(providerRegistrySource, /guardProviderIndex/);
+  assert.match(providerRegistrySource, /BTCUSDT/);
+  assert.match(providerRegistrySource, /BTC \/ USD Perpetual/);
   const providers = createWorkspaceProviders();
   assert.deepEqual(Object.keys(providers), ['binance', 'hyperliquid']);
   assert.equal(providers.binance().constructor.name, 'BinanceProvider');
   assert.equal(providers.hyperliquid().constructor.name, 'HyperliquidProvider');
+  assert.match(
+    providers.binance().resolveSymbolIcon?.({ ticker: 'BTCUSDT', provider: 'binance' }),
+    /^data:image\/svg\+xml/,
+  );
+  assert.match(
+    providers.hyperliquid().resolveSymbolIcon?.({ ticker: 'BTC', provider: 'hyperliquid' }),
+    /^data:image\/svg\+xml/,
+  );
+  assert.equal(providers.binance().resolveSymbolIcon?.({ ticker: 'ETHFIUSDT' }), undefined);
 
   const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-  assert.equal(manifest.dependencies['@luxalgo/vela'], '^0.7.7');
-  assert.equal(manifest.dependencies['@luxalgo/vela-pinets'], '^0.2.13');
-  assert.equal(manifest.dependencies.pinets, '^0.9.34');
+  assert.equal(manifest.dependencies['@luxalgo/vela'], '0.7.7');
+  assert.equal(manifest.dependencies['@luxalgo/vela-pinets'], 'file:./packages/vela-pinets');
+  assert.equal(manifest.dependencies.pinets, 'file:./packages/pinets');
+  assert.deepEqual(manifest.workspaces, ['packages/pinets', 'packages/vela-pinets']);
+});
+
+test('workspace destroy also terminates the per-cell Pine worker registry', async () => {
+  const source = await readFile(new URL('../src/integrations/vela/create-workspace.ts', import.meta.url), 'utf8');
+  assert.match(source, /createPineEngineRegistry/);
+  assert.match(source, /engines:\s*\{\s*pine:\s*pineEngines\.create\s*\}/);
+  assert.match(source, /pineEngines\.dispose\(\)/);
+  assert.match(source, /workspace\.destroy\s*=\s*\(\)\s*=>/);
+  assert.match(source, /onIndexRecovered/);
+  assert.match(source, /providerInstance\(kind\)\s*!==\s*provider/);
+  assert.match(source, /registerProvider\(kind,\s*provider\)/);
+  assert.match(source, /if \(destroyed \|\| !workspace\) return/);
+  assert.match(source, /addEventListener\(['"]online['"],\s*retryProviderIndexes\)/);
+  assert.match(source, /removeEventListener\(['"]online['"],\s*retryProviderIndexes\)/);
+});
+
+test('backtesting release kill switch is opt-out and accepts explicit false values only', async () => {
+  const { resolveBacktestFeatureEnabled } = await import(
+    '../src/config/feature-flags.ts'
+  );
+  assert.equal(resolveBacktestFeatureEnabled(undefined), true);
+  assert.equal(resolveBacktestFeatureEnabled('true'), true);
+  assert.equal(resolveBacktestFeatureEnabled('1'), true);
+  assert.equal(resolveBacktestFeatureEnabled(' false '), false);
+  assert.equal(resolveBacktestFeatureEnabled('0'), false);
+  assert.equal(resolveBacktestFeatureEnabled('OFF'), false);
+  assert.equal(resolveBacktestFeatureEnabled('disabled'), false);
 });
 
 test('legacy storage facade contains compatibility exports only', async () => {
@@ -76,6 +120,36 @@ test('legacy storage facade contains compatibility exports only', async () => {
   assert.doesNotMatch(source, /\blocalStorage\b/);
   assert.doesNotMatch(source, /\b(?:function|class)\s+[A-Za-z_$]/);
   assert.doesNotMatch(source, /\b(?:const|let|var)\s+[A-Za-z_$]/);
+});
+
+test('backtest Dock preferences use an isolated versioned storage boundary', async () => {
+  const keys = await readFile(new URL('../src/integrations/storage/keys.ts', import.meta.url), 'utf8');
+  const repository = await readFile(
+    new URL('../src/integrations/storage/backtest-preferences-repository.ts', import.meta.url),
+    'utf8',
+  );
+  const feature = await readFile(new URL('../src/app/backtest-feature.ts', import.meta.url), 'utf8');
+  const composition = await readFile(new URL('../src/app/create-app.ts', import.meta.url), 'utf8');
+  const workbenchTypes = await readFile(
+    new URL('../src/features/backtesting/backtest-types.ts', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(keys, /BACKTEST_DOCK_PREFERENCES_KEY\s*=\s*['"]quant-tools:backtest-dock:v1['"]/);
+  assert.match(repository, /value\.version !== VERSION/);
+  assert.match(repository, /value\.height/);
+  assert.match(repository, /value\.collapsed/);
+  assert.doesNotMatch(repository, /workspace:v2|SCRIPTS_KEY|WORKSPACE_TEMPLATES_KEY/);
+  assert.match(feature, /dockPreferences\?\.loadDock\(\)/);
+  assert.match(feature, /dockPreferences\?\.saveDock\(preferences\)/);
+  assert.match(composition, /browserBacktestPreferencesRepository/);
+  assert.match(composition, /backtestPreferencesRepository\?: BacktestPreferencesRepository/);
+  assert.match(
+    composition,
+    /dockPreferences:\s*options\.backtestPreferencesRepository\s*\n?\s*\?\?\s*browserBacktestPreferencesRepository/,
+  );
+  assert.match(workbenchTypes, /onDockPreferencesChange/);
+  assert.match(workbenchTypes, /dockPreferences\?: BacktestDockPreferences/);
 });
 
 test('TypeScript modules have no circular dependencies and keep Vela behind explicit boundaries', async () => {
@@ -167,6 +241,29 @@ test('TypeScript modules have no circular dependencies and keep Vela behind expl
   };
   files.forEach(visit);
   assert.deepEqual(cycles, []);
+});
+
+test('chart locate stays behind the WorkspacePort public seam', async () => {
+  const source = await readFile(
+    new URL('../src/app/create-app.ts', import.meta.url),
+    'utf8',
+  );
+  const adapter = await readFile(
+    new URL('../src/integrations/vela/workspace-adapter.ts', import.meta.url),
+    'utf8',
+  );
+  const chartAdapter = await readFile(
+    new URL('../src/integrations/vela/backtest-chart-adapter.ts', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /focusBacktestExecution\(/);
+  assert.doesNotMatch(source, /\.chart\.setVisibleRange/);
+  assert.match(adapter, /focusBacktestExecution\(/);
+  assert.match(chartAdapter, /supportsExternalCrosshair/);
+  assert.match(chartAdapter, /setExternalCrosshair\(/);
+  assert.match(chartAdapter, /supports\('highlights'\)/);
+  assert.match(chartAdapter, /set\('highlights'/);
+  assert.match(chartAdapter, /Vela 0\.7\.x does not expose a marker-id selection API/);
 });
 
 test('extracts Pine titles without coupling to the editor', async () => {

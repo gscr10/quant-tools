@@ -1,0 +1,17 @@
+//@version=5
+strategy("BTCUSDT 1h deterministic", overlay=true, initial_capital=100000, default_qty_type=strategy.fixed, commission_type=strategy.commission.percent, commission_value=0.1)
+
+// Explicit bar-index orders make this fixture independent of indicator warm-up
+// and preserve a stable long/short ledger while exercising broker fills.
+if bar_index == 2
+    strategy.entry("Long A", strategy.long, qty=0.1)
+if bar_index == 6
+    strategy.close("Long A")
+if bar_index == 8
+    strategy.entry("Short A", strategy.short, qty=0.2)
+if bar_index == 12
+    strategy.close("Short A")
+if bar_index == 14
+    strategy.entry("Long B", strategy.long, qty=0.15)
+if bar_index == 18
+    strategy.close("Long B")
