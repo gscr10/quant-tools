@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-26",
+  "mode": "workspace-baseline",
+  "description": "G4a workspace baseline after importing the PineTS and Vela-PineTS source trees. Registry tarball and upstream SHA fields remain as provenance; the application resolves the two forked packages through local workspace links.",
+  "sourceVerification": {
+    "method": "npm view gitHead + git ls-remote tag",
+    "rule": "npm gitHead must equal the commit resolved by the version tag in the upstream repository"
+  },
+  "packages": {
+    "@luxalgo/vela": {
+      "version": "0.7.7",
+      "registryTarball": "https://registry.npmjs.org/@luxalgo/vela/-/vela-0.7.7.tgz",
+      "integrity": "sha512-9V8cCJUP3i+nkrzxU43rrnZFxPGDfOxX/XDlcAdBFMbUrNartDrVVPsk1kTZyQyqBR4115n3n6XACLImTaM4hw==",
+      "gitHead": "07c1d829c66bd5fb72b4ab7d2ca780d506d8a00b",
+      "repository": "https://github.com/luxalgo/vela.git",
+      "tag": "v0.7.7",
+      "sourceCommit": "07c1d829c66bd5fb72b4ab7d2ca780d506d8a00b",
+      "license": "Apache-2.0",
+      "exports": [
+        ".",
+        "./providers/binance",
+        "./providers/hyperliquid",
+        "./providers/coinbase",
+        "./plugin",
+        "./ui",
+        "./widget",
+        "./workspace"
+      ],
+      "dependencyMode": "registry"
+    },
+    "@luxalgo/vela-pinets": {
+      "version": "0.2.13",
+      "registryTarball": "https://registry.npmjs.org/@luxalgo/vela-pinets/-/vela-pinets-0.2.13.tgz",
+      "integrity": "sha512-KKw/lfAByoZwxM8IcCyGiQXD6lzl3XXGslM8r7kXHMMGRNguDHiUil0vGRwtg4IaoJLRWgFdm5XSn/Bz3iAvjw==",
+      "gitHead": "a2a2097be8f30b4b596b13212ed4608c36c2ea26",
+      "repository": "https://github.com/LuxAlgo/Vela-pinets.git",
+      "tag": "v0.2.13",
+      "sourceCommit": "a2a2097be8f30b4b596b13212ed4608c36c2ea26",
+      "license": "AGPL-3.0-only",
+      "exports": ["."],
+      "peerDependencies": {
+        "@luxalgo/vela": "^0.7.7",
+        "pinets": ">=0.9.31"
+      },
+      "dependencyMode": "workspace",
+      "workspaceDirectory": "vela-pinets"
+    },
+    "pinets": {
+      "version": "0.9.34",
+      "registryTarball": "https://registry.npmjs.org/pinets/-/pinets-0.9.34.tgz",
+      "integrity": "sha512-5dnrrR+g40XMjrMBJEHGL2Hk7lqCz/fPkaPklFvD6G/qdh3xwRYX3W7UADaNieX6ZV/+/xah78ufOwEkNKVFyg==",
+      "gitHead": "beacd587e83aa7ee061023f8cea66b2e887d5676",
+      "repository": "https://github.com/LuxAlgo/PineTS.git",
+      "tag": "v0.9.34",
+      "sourceCommit": "beacd587e83aa7ee061023f8cea66b2e887d5676",
+      "license": "AGPL-3.0-only",
+      "exports": ["."],
+      "dependencyMode": "workspace",
+      "workspaceDirectory": "pinets"
+    }
+  }
+}

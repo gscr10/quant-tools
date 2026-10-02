@@ -1,0 +1,7 @@
+{
+    "Other": {
+        "log.error()": true,
+        "log.info()": true,
+        "log.warning()": true
+    }
+}

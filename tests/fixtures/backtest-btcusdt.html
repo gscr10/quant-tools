@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>BTCUSDT 1h Backtest Fixture</title>
+    <style>
+      html, body, #fixture-host { width: 100%; height: 100%; margin: 0; }
+      #fixture-host { position: relative; }
+    </style>
+  </head>
+  <body>
+    <div id="fixture-host"></div>
+    <script type="module">
+      import { BacktestController } from '/src/app/backtest-controller.ts';
+      import { BacktestWorkbench } from '/src/features/backtesting/backtest-workbench.ts';
+      import { getReportChartResourceStats } from '/src/features/backtesting/highcharts-renderer.ts';
+      import { PineEngine, pineContextSelect } from '/packages/vela-pinets/dist/index.js';
+      import market from '/packages/vela-pinets/test/fixtures/btcusdt-1h-deterministic.json';
+      import baseline from '/packages/vela-pinets/test/fixtures/btcusdt-1h-registry-baseline.json';
+      import strategySource from '/packages/vela-pinets/test/fixtures/btcusdt-1h-deterministic.pine?raw';
+
+      const key = { cellId: 'btcusdt-fixture-cell', indicatorId: market.strategyId };
+
+      async function waitFor(predicate, timeoutMs = 20_000) {
+        const deadline = Date.now() + timeoutMs;
+        while (!predicate()) {
+          if (Date.now() >= deadline) throw new Error('timed out waiting for BTCUSDT fixture run');
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+      }
+
+      async function executeFixture() {
+        const engine = new PineEngine();
+        const prepared = await engine.prepare(strategySource, key.indicatorId);
+        const models = [];
+        const errors = [];
+        const session = engine.execute({
+          prepared,
+          market: { symbol: market.symbol, timeframe: '60' },
+          bars: market.bars.map((bar) => ({ ...bar })),
+          inputs: {},
+          props: {},
+          mode: 'static',
+        }, {
+          onModel: (model) => models.push(model),
+          onError: (error) => errors.push(error),
+        });
+        await waitFor(() => models.length > 0 || errors.length > 0);
+        if (errors.length > 0) throw errors[0];
+        const context = await session.getContext?.(
+          pineContextSelect('strategy', 'trades', 'reportSeries'),
+        );
+        session.stop();
+        if (!context?.strategy || !context.reportSeries) {
+          throw new Error('BTCUSDT fixture did not publish strategy/reportSeries');
+        }
+        const reportSeries = context.reportSeries;
+        const strategy = context.strategy;
+        const runId = reportSeries.runId;
+        const run = {
+          id: key.indicatorId,
+          title: 'BTCUSDT 1h deterministic',
+          kind: 'strategy',
+          cause: 'history',
+          first: true,
+          bar: context.barIndex ?? market.bars.length - 1,
+          time: market.bars.at(-1)?.time ?? null,
+          forming: false,
+          complete: true,
+          plots: context.plots ?? {},
+          vars: context.variables ?? {},
+          warnings: context.warnings ?? [],
+          strategy,
+          trades: context.trades ?? [],
+        };
+        const snapshot = {
+          key,
+          revision: reportSeries.snapshotRevision,
+          epoch: 1,
+          runToken: runId,
+          status: 'ready',
+          finality: 'historical-final',
+          ledgerState: 'ready',
+          ledgerRevision: reportSeries.snapshotRevision,
+          seriesState: 'ready',
+          reportSeries,
+          capabilities: {
+            tradeLedger: true,
+            exactEquityCurve: true,
+            exactDrawdownCurve: true,
+            riskRatios: true,
+            benchmark: true,
+            rawOrders: false,
+            rawFills: false,
+            barIndices: true,
+            individualOpenPnl: true,
+            executionPrecision: 'chart-ohlc',
+          },
+          visible: true,
+          handle: {
+            id: key.indicatorId,
+            title: run.title,
+            visible: true,
+            source: strategySource,
+          },
+          run,
+          context: {
+            language: context.language ?? 'pine',
+            phase: context.phase ?? 'idle',
+            barIndex: context.barIndex ?? market.bars.length - 1,
+            meta: { title: run.title, overlay: true },
+            plots: context.plots ?? {},
+            variables: context.variables ?? {},
+            strategy,
+            trades: context.trades ?? [],
+            warnings: context.warnings ?? [],
+            reportSeries,
+          },
+          trades: context.trades ?? [],
+          inputs: { schema: [], values: {} },
+          props: { schema: [], values: {} },
+          execution: {
+            barIndex: context.barIndex ?? market.bars.length - 1,
+            time: market.bars.at(-1)?.time ?? null,
+            phase: context.phase ?? 'idle',
+            seriesKeys: [],
+          },
+          error: null,
+          source: strategySource,
+        };
+        return { snapshot, strategy, trades: context.trades ?? [], reportSeries };
+      }
+
+      class FixtureSource {
+        listeners = new Set();
+        subscribeCount = 0;
+        unsubscribeCount = 0;
+        bootstrapCount = 0;
+        listSnapshotsCount = 0;
+        constructor(snapshot) { this.snapshot = snapshot; }
+        subscribe(listener) {
+          this.subscribeCount += 1;
+          this.listeners.add(listener);
+          return () => { this.unsubscribeCount += 1; this.listeners.delete(listener); };
+        }
+        async bootstrap() { this.bootstrapCount += 1; }
+        listSnapshots() { this.listSnapshotsCount += 1; return [this.snapshot]; }
+      }
+
+      const fixture = await executeFixture();
+      const source = new FixtureSource(fixture.snapshot);
+      const controller = new BacktestController(source, {
+        getMarket: () => ({
+          provider: market.provider,
+          symbol: market.symbol,
+          displaySymbol: market.symbol,
+          timeframe: market.timeframe,
+          timezone: market.timezone,
+          currency: 'USD',
+        }),
+      });
+      await controller.start();
+      controller.setActive(key);
+      const workbench = new BacktestWorkbench('#fixture-host', {
+        initialReport: controller.getSnapshot(),
+        getSnapshot: () => controller.getSnapshot(),
+        subscribe: (listener) => controller.subscribe(listener),
+        onSimulationChange: (change) => controller.updateSimulation(change),
+      });
+
+      window.__btcFixture = {
+        ready: true,
+        metadata: {
+          provider: market.provider,
+          symbol: market.symbol,
+          timeframe: market.timeframe,
+          timezone: market.timezone,
+          bars: market.bars.length,
+          fixtureSha256: baseline.fixtureCanonicalSha256,
+          strategySha256: baseline.strategySha256,
+          reportSeriesPoints: fixture.reportSeries.points.length,
+        },
+        state: () => {
+          const report = controller.getSnapshot();
+          return structuredClone({
+            metadata: window.__btcFixture.metadata,
+            source: {
+              subscribeCount: source.subscribeCount,
+              unsubscribeCount: source.unsubscribeCount,
+              bootstrapCount: source.bootstrapCount,
+              listSnapshotsCount: source.listSnapshotsCount,
+            },
+            report: report ? {
+              runId: report.runId,
+              revision: report.revision,
+              status: report.status,
+              strategyName: report.strategyName,
+              provider: report.provider,
+              symbol: report.symbol,
+              timeframe: report.context?.timeframe,
+              summary: report.summary,
+              performance: report.performance,
+              analysis: report.analysis,
+              trades: report.trades,
+              simulation: report.simulation ? {
+                method: report.simulation.method,
+                runs: report.simulation.runs,
+                variationPercent: report.simulation.variationPercent,
+              } : null,
+            } : null,
+          });
+        },
+        chartResources: () => getReportChartResourceStats(),
+        destroy: () => { workbench.destroy(); controller.destroy(); },
+      };
+    </script>
+  </body>
+</html>

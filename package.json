@@ -5,9 +5,31 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
+    "test:regression:existing": "node --test tests/architecture.test.mjs tests/storage.test.mjs",
     "test:e2e": "python3 tests/e2e_app.py",
+    "test:e2e:settings": "python3 tests/e2e_strategy_settings.py",
+    "test:e2e:fault-isolation": "python3 tests/backtest_app_lifecycle_fault.py",
+    "test:e2e:multicell": "python3 tests/e2e_backtest_multicell.py",
+    "test:e2e:cross-browser": "python3 tests/e2e_cross_browser.py",
+    "test:e2e:offline": "npm run build && python3 tests/release_offline_smoke.py",
+    "test:e2e:kill-switch": "VITE_ENABLE_BACKTESTING=false npm run build && VITE_ENABLE_BACKTESTING=false QUANT_EXPECT_BACKTEST_DISABLED=1 python3 tests/e2e_app.py --preview",
+    "test:e2e:performance": "python3 tests/backtest_performance.py --strict",
     "test:e2e:prod": "npm run build && python3 tests/e2e_app.py --preview",
+    "test:visual:a11y": "python3 tests/visual_a11y_gate.py",
     "test:providers": "python3 tests/provider_smoke.py",
+    "test:fixture:btcusdt": "npm --workspace packages/vela-pinets run test -- --run test/btcusdt-fixture-determinism.test.ts",
+    "benchmark:backtest": "node scripts/benchmark-backtest.mjs",
+    "release:manifest": "node scripts/release-manifest.mjs",
+    "release:verify": "node scripts/verify-release-manifest.mjs",
+    "release:storage-check": "node scripts/storage-reconciliation.mjs",
+    "check:dist:independence": "node scripts/check-dist-independence.mjs",
+    "check:dependencies": "node scripts/check-dependency-contract.mjs",
+    "build:forks": "npm run build:forks:pinets && npm run build:forks:vela-pinets",
+    "build:forks:pinets": "npm --workspace packages/pinets run build:prod:all",
+    "build:forks:vela-pinets": "npm --workspace packages/vela-pinets run build",
+    "test:forks": "npm --workspace packages/pinets run test -- --run && npm --workspace packages/vela-pinets run test -- --run",
+    "prebuild": "npm run build:forks",
+    "predev": "npm run build:forks",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview"
@@ -16,15 +38,21 @@
   "author": "",
   "license": "ISC",
   "type": "module",
+  "workspaces": [
+    "packages/pinets",
+    "packages/vela-pinets"
+  ],
   "dependencies": {
     "@codemirror/lang-javascript": "^6.2.5",
-    "@luxalgo/vela": "^0.7.7",
-    "@luxalgo/vela-pinets": "^0.2.13",
+    "@luxalgo/vela": "0.7.7",
+    "@luxalgo/vela-pinets": "file:./packages/vela-pinets",
     "codemirror": "^6.0.2",
-    "pinets": "^0.9.34"
+    "highcharts": "13.0.0",
+    "pinets": "file:./packages/pinets"
   },
   "devDependencies": {
-    "typescript": "^7.0.2",
+    "axe-core": "4.10.3",
+    "typescript": "5.9.3",
     "vite": "^8.3.1"
   }
 }

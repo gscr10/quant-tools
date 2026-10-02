@@ -1,0 +1,12 @@
+{
+    "Plots": {
+        "plot()": true,
+        "plotarrow()": true,
+        "plotbar()": true,
+        "plotcandle()": true,
+        "plotchar()": true,
+        "plotshape()": true,
+        "barcolor()": true,
+        "bgcolor()": true
+    }
+}

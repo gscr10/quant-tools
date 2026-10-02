@@ -3,3 +3,5 @@ export const EDITOR_KEY = 'vela-pine:editor:v1';
 export const LEGACY_LAYOUT_KEY = 'vela-pine:layout:v1';
 export const INDICATOR_FAVORITES_KEY = 'vela-pine:indicator-favorites:v1';
 export const WORKSPACE_TEMPLATES_KEY = 'vela-pine:workspace-templates:v1';
+/** UI-only Backtest Dock preference; never contains reports or Workspace state. */
+export const BACKTEST_DOCK_PREFERENCES_KEY = 'quant-tools:backtest-dock:v1';

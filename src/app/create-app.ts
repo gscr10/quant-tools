@@ -1,4 +1,6 @@
-import type { IndicatorFavorite } from '../domain/indicators.ts';
+import { scriptFavorite, type IndicatorFavorite } from '../domain/indicators.ts';
+import { normalizeExitTime } from '../domain/backtesting.ts';
+import type { BacktestPreferencesRepository } from '../domain/ports/backtest-preferences.ts';
 import type { WorkspacePort } from '../domain/ports/workspace-port.ts';
 import { FavoriteIndicatorsPopover } from '../features/favorites/favorite-indicators-popover.ts';
 import { FavoriteService } from '../features/favorites/favorite-service.ts';
@@ -12,10 +14,12 @@ import { registerPineEditorContribution } from '../features/pine-editor/pine-edi
 import { ScriptService } from '../features/pine-editor/script-service.ts';
 import { registerTemplateContribution } from '../features/workspace-templates/template-contribution.vela.ts';
 import { WorkspaceTemplatesFeature } from '../features/workspace-templates/workspace-templates.ts';
+import { registerBacktestLegendContribution } from '../features/backtesting/backtest-legend-contribution.vela.ts';
 import { browserEditorRepository } from '../integrations/storage/editor-repository.ts';
 import { browserFavoriteRepository } from '../integrations/storage/favorite-repository.ts';
 import { browserScriptRepository } from '../integrations/storage/script-repository.ts';
 import { browserTemplateRepository } from '../integrations/storage/template-repository.ts';
+import { browserBacktestPreferencesRepository } from '../integrations/storage/backtest-preferences-repository.ts';
 import {
   createWorkspace,
   type QuantWorkspace,
@@ -25,15 +29,50 @@ import { registerWorkspaceContributions } from '../integrations/vela/workspace-c
 import { bindWorkspaceEvents } from '../integrations/vela/workspace-events.ts';
 import { VelaWorkspaceAdapter } from '../integrations/vela/workspace-adapter.ts';
 import { OverlayManager } from '../shared/overlays.ts';
+import {
+  ensureBacktestHost,
+  mountBacktestFeature,
+  type BacktestFeature,
+  type BacktestFeatureOptions,
+} from './backtest-feature.ts';
 import { DisposerStack } from './lifecycle.ts';
 import { registerAppIcons } from './register-icons.vela.ts';
+import { BACKTEST_FEATURE_ENABLED } from '../config/feature-flags.ts';
 
 export interface QuantApp {
   readonly workspace: WorkspacePort;
   destroy(): void;
 }
 
-export function createApp(container: HTMLElement | string): QuantApp {
+export interface QuantAppOptions {
+  /**
+   * Release/integration override for the optional Backtesting feature. The
+   * default is controlled by `VITE_ENABLE_BACKTESTING` and remains enabled
+   * unless that build flag is explicitly false.
+   */
+  readonly enableBacktesting?: boolean;
+  /**
+   * Optional persistence seam for the Backtest Dock. The browser repository
+   * remains the production default; tests/embedders can provide an isolated
+   * store without changing Workspace or report persistence.
+   */
+  readonly backtestPreferencesRepository?: BacktestPreferencesRepository;
+  /**
+   * Test/integration override for the optional Backtesting Feature. The
+   * production composition root uses the default public mount function; an
+   * override lets lifecycle tests inject a synchronous construction failure
+   * and verify that the existing Workspace still boots.
+   */
+  readonly mountBacktestFeature?: (
+    workspace: QuantWorkspace,
+    options: BacktestFeatureOptions,
+  ) => BacktestFeature;
+}
+
+export function createApp(
+  container: HTMLElement | string,
+  options: QuantAppOptions = {},
+): QuantApp {
   const lifetime = new DisposerStack();
   const overlays = new OverlayManager();
   lifetime.add(() => overlays.destroy());
@@ -46,6 +85,7 @@ export function createApp(container: HTMLElement | string): QuantApp {
   let workspaceAdapter: WorkspacePort | null = null;
   let editor: PineEditorController | null = null;
   let indicatorManager: IndicatorManagerDialog | null = null;
+  let backtestFeature: BacktestFeature | null = null;
 
   const getWorkspacePort = (): WorkspacePort => {
     if (!workspaceAdapter) throw new Error('Workspace adapter is not ready');
@@ -148,6 +188,89 @@ export function createApp(container: HTMLElement | string): QuantApp {
         editor = null;
       }
     });
+
+    // Backtesting is mounted at the application shell boundary.  It consumes
+    // only public Vela seams and has its own disposer, so a report/worker error
+    // cannot prevent the chart Workspace from booting or tearing down. The
+    // release kill switch deliberately creates no host or subscription and
+    // therefore leaves persisted Workspace state untouched.
+    if (options.enableBacktesting ?? BACKTEST_FEATURE_ENABLED) {
+      let backtestHost: HTMLElement | null = null;
+      try {
+        backtestHost = ensureBacktestHost(workspace.root.ownerDocument, workspace.root);
+        backtestFeature = (options.mountBacktestFeature ?? mountBacktestFeature)(workspace, {
+          host: backtestHost,
+          dockPreferences: options.backtestPreferencesRepository
+            ?? browserBacktestPreferencesRepository,
+          isFavorite: (key) => {
+            const handle = workspace.cell(key.cellId)?.chart.indicators()
+              .find((candidate) => candidate.id === key.indicatorId);
+            if (!handle?.source) return false;
+            return favorites.has(scriptFavorite(handle.title, handle.source));
+          },
+          onToggleFavorite: (report) => {
+            if (!report.source) {
+              workspacePort.toast('This strategy cannot be favorited', 'error');
+              return false;
+            }
+            const enabled = favorites.toggle(scriptFavorite(report.strategyName, report.source));
+            workspacePort.toast(enabled ? 'Added to favorites' : 'Removed from favorites', 'success');
+            indicatorManager?.sync();
+            return enabled;
+          },
+          onTradeLocate: (report, trade, side) => {
+            const key = report.key;
+            if (!key) return;
+            const cell = workspace.cell(key.cellId);
+            if (!cell) return;
+            const rawTime = side === 'entry' ? trade.entryTime : trade.exitTime;
+            // Reports normally contain epoch milliseconds already, but use the
+            // domain normalizer here as a defensive boundary for host/fixture
+            // reports that provide ISO or numeric-string timestamps. It also
+            // preserves the canonical null handling for open exits.
+            const time = normalizeExitTime(rawTime);
+            if (time === null) {
+              workspacePort.toast(`Unable to locate ${side} on chart`, 'error');
+              return;
+            }
+            try {
+              const price = side === 'entry' ? trade.entryPrice : trade.exitPrice;
+              const focused = workspacePort.focusBacktestExecution({
+                cellId: key.cellId,
+                indicatorId: key.indicatorId,
+                barIndex: side === 'entry' ? trade.entryBar : trade.exitBar,
+                time,
+                price,
+                side,
+              });
+              if (!focused) {
+                workspacePort.toast(`Unable to locate ${side} on chart`, 'error');
+              }
+            } catch (error) {
+              workspacePort.toast(`Unable to locate ${side} on chart`, 'error');
+              console.warn('[quant-tools] backtest chart locate failed', error);
+            }
+          },
+          onDiagnostic: (message, error) => {
+            if (error) console.warn(`[quant-tools] ${message}`, error);
+            else console.warn(`[quant-tools] ${message}`);
+          },
+        });
+        lifetime.add(registerBacktestLegendContribution(workspace, () => backtestFeature));
+        lifetime.add(() => {
+          backtestFeature?.destroy();
+          backtestFeature = null;
+          if (backtestHost?.dataset.backtestHost === 'true') backtestHost.remove();
+        });
+      } catch (error) {
+        // Backtesting is an optional application layer. A construction or DOM
+        // integration failure must leave the Vela chart and existing tools alive.
+        console.warn('[quant-tools] backtest feature disabled', error);
+        backtestFeature?.destroy();
+        backtestFeature = null;
+        if (backtestHost?.dataset.backtestHost === 'true') backtestHost.remove();
+      }
+    }
 
     indicatorManager = new IndicatorManagerDialog(
       workspacePort,
