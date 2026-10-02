@@ -110,6 +110,18 @@ test('malformed runtime timeframe does not throw during point-range recovery', a
   assert.deepEqual(await provider.getBars('BTCUSDT', undefined, { from: 1_000, to: 1_000, limit: 1 }), []);
 });
 
+test('point-range recovery preserves Pine month versus minute casing', async () => {
+  const requests = [];
+  const provider = guardProviderHistory({ getBars: async (_symbol, timeframe, range) => {
+    requests.push({ timeframe, range });
+    return [];
+  } });
+  await provider.getBars('BTCUSDT', '15M', { from: 1_000, to: 1_000, limit: 1 });
+  await provider.getBars('BTCUSDT', '15m', { from: 1_000, to: 1_000, limit: 1 });
+  assert.equal(requests[1].range.to - requests[1].range.from, 15 * 30 * 24 * 60 * 60 * 1_000 - 1);
+  assert.equal(requests[3].range.to - requests[3].range.from, 15 * 60 * 1_000 - 1);
+});
+
 test('R11 shared-provider failure does not invalidate independent full-depth completion', async () => {
   const provider = guardProviderHistory({ getBars: async () => { throw Error('other cell range unavailable'); } });
   const first = observed(provider), second = observed(provider);

@@ -56,7 +56,13 @@ function timeframeDurationMs(timeframe: unknown): number | undefined {
   const upper = value.toUpperCase();
   // `m` = minute but `M` = month in Pine/Vela, so month detection must remain
   // case-sensitive.  Day/week spellings are unambiguous and can be folded.
-  if (value === 'M' || value === '1M' || value.toLowerCase() === '1mo') {
+  if (/^\d+(?:\.\d+)?M$/.test(value) || /^\d+(?:\.\d+)?mo$/i.test(value)) {
+    const amount = Number(value.endsWith('M') ? value.slice(0, -1) : value.slice(0, -2));
+    if (!Number.isFinite(amount) || amount <= 0) return undefined;
+    const duration = amount * 30 * 24 * 60 * 60 * 1_000;
+    return Number.isSafeInteger(duration) ? duration : undefined;
+  }
+  if (value === 'M') {
     return 30 * 24 * 60 * 60 * 1_000;
   }
   if (upper === 'D' || upper === '1D') return 24 * 60 * 60 * 1_000;
@@ -65,11 +71,15 @@ function timeframeDurationMs(timeframe: unknown): number | undefined {
   // Keep the original suffix case: Pine/Vela use lower-case `m` for minutes
   // while `M` denotes a month.  The canonical provider form (`"15"`) has no
   // suffix and is handled as minutes below.
-  const match = /^(\d+(?:\.\d+)?)(m(?:in(?:ute)?s?)?|h(?:r|ours?)?|d(?:ays?)?|w(?:eeks?)?)?$/i.exec(value);
-  if (!match) return undefined;
-  const amount = Number(match[1]);
+  // Do not make this expression case-insensitive: `M` is a month while `m`
+  // is a minute in Pine/Vela.  The long English spellings remain accepted in
+  // either case through the explicit alternatives below.
+  const match = /^(\d+(?:\.\d+)?)(m(?:in(?:ute)?s?)?|h(?:r|ours?)?|d(?:ays?)?|w(?:eeks?)?)?$/.exec(value);
+  const foldedMatch = match ?? /^(\d+(?:\.\d+)?)(MIN(?:UTE)?S?|H(?:R|OURS?)|D(?:AYS?)|W(?:EEKS?))$/i.exec(value);
+  if (!foldedMatch) return undefined;
+  const amount = Number(foldedMatch[1]);
   if (!Number.isFinite(amount) || amount <= 0) return undefined;
-  const unit = (match[2] ?? 'm').toLowerCase();
+  const unit = (foldedMatch[2] ?? 'm').toLowerCase();
   const multiplier = unit.startsWith('h')
     ? 60 * 60 * 1_000
     : unit.startsWith('d')

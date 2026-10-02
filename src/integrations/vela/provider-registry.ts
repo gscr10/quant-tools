@@ -82,6 +82,38 @@ export function guardProviderIndex<T extends DataProvider>(
   const fallback = (): SymbolDescriptor[] => PROVIDER_INDEX_FALLBACKS[kind]
     .map((symbol) => ({ ...symbol }));
 
+  // A metadata outage can happen more than once during a long-lived
+  // workspace. Reset recovery guards only when entering a new fallback
+  // episode; repeated picker calls during the same outage must remain
+  // coalesced.
+  const exposeFallback = (): SymbolDescriptor[] => {
+    if (!fallbackExposed) {
+      fallbackExposed = true;
+      recoveryNotified = false;
+      recoveryRetryStarted = false;
+    }
+    return fallback();
+  };
+
+  const normalizeSymbols = (symbols: unknown): SymbolDescriptor[] | null => {
+    if (!Array.isArray(symbols) || symbols.length === 0) return [];
+    try {
+      const normalized = symbols.map((symbol) => {
+        if (symbol === null || typeof symbol !== 'object' || Array.isArray(symbol)) {
+          throw new Error('malformed symbol descriptor');
+        }
+        const ticker = (symbol as { ticker?: unknown }).ticker;
+        if (typeof ticker !== 'string' || ticker.trim().length === 0) {
+          throw new Error('malformed symbol descriptor ticker');
+        }
+        return { ...(symbol as Record<string, unknown>) } as unknown as SymbolDescriptor;
+      });
+      return normalized;
+    } catch {
+      return null;
+    }
+  };
+
   const load = (): IndexAttempt => {
     if (inFlight) return inFlight;
 
@@ -112,16 +144,8 @@ export function guardProviderIndex<T extends DataProvider>(
         return upstream;
       })
       .then((symbols) => {
-        if (!Array.isArray(symbols) || symbols.length === 0) {
-          resetProviderIndexCaches(provider, attempt.upstreamPromise);
-          return [];
-        }
-        let normalized: SymbolDescriptor[];
-        try {
-          normalized = symbols.map((symbol) => ({ ...symbol }));
-        } catch {
-          // Treat a malformed descriptor as an unavailable index.  This keeps
-          // the background attempt rejection-safe just like a network error.
+        const normalized = normalizeSymbols(symbols);
+        if (normalized === null || normalized.length === 0) {
           resetProviderIndexCaches(provider, attempt.upstreamPromise);
           return [];
         }
@@ -129,7 +153,8 @@ export function guardProviderIndex<T extends DataProvider>(
           cachedSymbols = normalized;
           cachedUntil = Date.now() + cacheTtlMs;
           cachedUpstreamPromise = attempt.upstreamPromise;
-          if (fallbackExposed && !recoveryNotified && options.onIndexRecovered) {
+          const recoveredFallback = fallbackExposed;
+          if (recoveredFallback && !recoveryNotified && options.onIndexRecovered) {
             recoveryNotified = true;
             // Keep the provider promise independent from host lifecycle code.
             // The workspace callback re-checks both destruction and provider
@@ -143,6 +168,12 @@ export function guardProviderIndex<T extends DataProvider>(
               }
             });
           }
+          // Close the episode even when no recovery callback was supplied. A
+          // later cache expiry must be able to start a fresh retry cycle, and
+          // must not inherit the previous outage's one-shot guard state.
+          fallbackExposed = false;
+          recoveryRetryStarted = false;
+          recoveryNotified = false;
         }
         return normalized;
       }, () => {
@@ -215,18 +246,17 @@ export function guardProviderIndex<T extends DataProvider>(
         // attempt.  If its healthy response is merely late, `load()` caches it
         // and asks the workspace to rebuild Vela's one-shot registry snapshot.
         attempt.timedOut = true;
-        fallbackExposed = true;
         void attempt.promise.then((symbols) => {
           if (symbols.length === 0) retryRecoveryOnce();
         });
-        return fallback();
+        return exposeFallback();
       }
       if (result.symbols.length > 0) {
         return result.symbols.map((symbol) => ({ ...symbol }));
       }
-      fallbackExposed = true;
+      const fallbackSymbols = exposeFallback();
       retryRecoveryOnce();
-      return fallback();
+      return fallbackSymbols;
     } finally {
       if (timer !== undefined) clearTimeout(timer);
     }
