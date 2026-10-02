@@ -98,6 +98,24 @@ test('Binance metadata responses use a bounded TTL cache and expire cleanly', as
   }
 });
 
+test('metadata cache can be disabled without changing request semantics', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  try {
+    globalThis.fetch = async (input) => {
+      calls.push(String(input));
+      return jsonResponse({ symbols: [{ symbol: `BTCUSDT${calls.length}` }] });
+    };
+    const provider = createWorkspaceProviders({ metadataCacheTtlMs: 0 }).binance();
+    const url = 'https://api.binance.com/api/v3/exchangeInfo?symbol=BTCUSDT';
+    await provider.json(url);
+    await provider.json(url);
+    assert.equal(calls.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Binance request dedupe is scoped by URL and failed requests can retry', async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
