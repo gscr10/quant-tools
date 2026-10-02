@@ -19,6 +19,7 @@
 - [x] 渐进历史分页无进度保护：重复页、忽略 `to` 边界或非空但不可归一化响应不再误判 genesis；保留已绘制前缀并发布错误，补充回归。
 - [x] lower-timeframe cache 只缓存完整有限 OHLCV；混合 malformed 结果不污染 TTL，后续 retry 可恢复。
 - [x] 历史观察器保留本代 completion 边界，迟到 Provider/progressive 错误会撤销假 genesis/no-data；新增两条回归。
+- [x] release manifest 增加显式 `--help`，避免帮助请求误生成 JSON；release-artifacts 回归 9/9。
 - [x] 本轮回归：根测试 472/472、Vela-PineTS 290/290、Provider network/history 专项通过、TypeScript、build、startup、依赖契约、dist 独立性、bundle budget 和 `git diff --check` 通过。
 
 ## 2026-10-01 R-08～R-11 修复后独立复查（当前状态）

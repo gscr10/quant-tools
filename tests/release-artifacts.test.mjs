@@ -122,6 +122,13 @@ async function runNode(script, args, cwd) {
   return execFileAsync(process.execPath, [script, ...args], { cwd });
 }
 
+test('release manifest help is explicit and does not emit a JSON artifact', async () => {
+  const script = new URL('../scripts/release-manifest.mjs', import.meta.url);
+  const { stdout } = await runNode(script.pathname, ['--help'], process.cwd());
+  assert.match(stdout, /Usage: npm run release:manifest/);
+  assert.doesNotMatch(stdout, /"schemaVersion"/);
+});
+
 function httpGet(port, pathname) {
   return new Promise((resolve, reject) => {
     const request = import('node:http').then(({ get }) => get(
