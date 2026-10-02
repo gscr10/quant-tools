@@ -8,6 +8,7 @@
 
 - 为渐进历史分页增加无进度保护：Provider 返回非空但全部越过请求边界、重复页或探测结果不可用时，不再把它误判为 genesis；保留已绘制前缀并发布明确错误，避免启动加载无限重试或开放不完整 Simulation。新增回归覆盖，根测试 469/469、Vela-PineTS 289/289。
 - lower-timeframe session cache 现在只保留完整、有限数值的 OHLCV 数组；混合 malformed 行不会污染 TTL，后续 retry 可重新获取有效精度数据。
+- 历史观察器保留本代 `history:complete` 边界；Provider/progressive Promise 晚于 Vela 完成事件结算时会重新核对，迟到错误会撤销假 genesis/no-data。
 
 - 渐进历史遇到短页时增加可取消的单根历史探测：只有探测确认无更早数据才宣布 genesis；若探测到更早数据则继续分页，探测失败保留已绘制前缀但发布错误事实，避免短页造成静默缺历史。
 - 统一 `metadataCacheTtlMs <= 0` 对 REST 元数据和 symbol index 的禁用语义；模板仓储拒绝无法作为 Workspace document 应用的 null/数组/原语状态，并增加对应回归测试。
@@ -21,6 +22,10 @@
 - 修复 Bar Magnifier lower-feed 对超大/非安全周期值的范围与 limit 计算：不再构造不安全请求，统一降级为未知周期；补充运行时回归。
 - 为 `request.security` secondary feed 增加 resolved malformed OHLC 防护，同时保留 rejected Provider error metadata 向 Session error 传播；补充回归，并隔离坏 getter/非法 volume 行、重复和乱序时间戳。
 - 本轮新增 Provider/Storage/Bar Magnifier 回归后根测试为 470/470，Vela-PineTS 为 289/289；TypeScript、构建、启动探针、依赖契约、dist 独立性和 bundle budget 均通过。
+
+### 本轮晚到历史错误复核
+
+普通 Provider 与 progressive Provider 的 late-failure 回归已通过；根测试当前为 472/472，Vela-PineTS 为 290/290。
 
 ## 1. 目标与边界
 
