@@ -27,6 +27,8 @@
 
 普通 Provider 与 progressive Provider 的 late-failure 回归已通过；根测试当前为 472/472，Vela-PineTS 为 290/290。
 
+零延迟边界补测：`startup_loading.py --index-delay 0 --bar-delay 0 --samples 5` 全部通过，首绘样本均完成且无页面错误；该结果补充了此前极短延迟时序不稳定的证据，但不替代真实网络长时 p95。
+
 ## 1. 目标与边界
 
 在保留默认 2000 根历史、既有 Workspace 行为和回测真实性的前提下，缩短首次图表可见时间、降低无关网络等待与首屏资源成本。
