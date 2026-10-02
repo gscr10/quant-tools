@@ -57,7 +57,7 @@ test('Binance shares one in-flight JSON request but does not cache the settled r
     };
 
     const provider = createWorkspaceProviders({ requestTimeoutMs: 100 }).binance();
-    const url = 'https://fapi.binance.com/fapi/v1/exchangeInfo?symbol=BTCUSDT';
+    const url = 'https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=15m&limit=1';
     const first = provider.json(url);
     const second = provider.json(url);
     assert.equal(calls.length, 1, 'concurrent identical requests should share transport');
@@ -69,6 +69,31 @@ test('Binance shares one in-flight JSON request but does not cache the settled r
     await third;
     assert.equal(calls.length, 2, 'settled responses must not become a long-lived cache');
   } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Binance metadata responses use a bounded TTL cache and expire cleanly', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalNow = Date.now;
+  const calls = [];
+  let now = 10_000;
+  Date.now = () => now;
+  try {
+    globalThis.fetch = async (input) => {
+      calls.push(String(input));
+      return jsonResponse({ symbols: [{ symbol: `BTCUSDT${calls.length}` }] });
+    };
+    const provider = createWorkspaceProviders({ metadataCacheTtlMs: 1_000 }).binance();
+    const url = 'https://api.binance.com/api/v3/exchangeInfo?symbol=BTCUSDT';
+    assert.deepEqual(await provider.json(url), { symbols: [{ symbol: 'BTCUSDT1' }] });
+    assert.deepEqual(await provider.json(url), { symbols: [{ symbol: 'BTCUSDT1' }] });
+    assert.equal(calls.length, 1);
+    now += 1_001;
+    assert.deepEqual(await provider.json(url), { symbols: [{ symbol: 'BTCUSDT2' }] });
+    assert.equal(calls.length, 2);
+  } finally {
+    Date.now = originalNow;
     globalThis.fetch = originalFetch;
   }
 });
@@ -442,6 +467,45 @@ test('provider index fallback keeps a bare default symbol resolvable after enume
     listSymbols: async () => [{ ticker: 'ETHUSDT', type: 'crypto' }],
   }, 'binance');
   assert.deepEqual(await healthy.listSymbols(), [{ ticker: 'ETHUSDT', type: 'crypto' }]);
+});
+
+test('provider metadata index is reused within its TTL and refreshed after expiry', async () => {
+  const originalNow = Date.now;
+  let now = 10_000;
+  Date.now = () => now;
+  let calls = 0;
+  const provider = guardProviderIndex({
+    getBars: async () => [],
+    listSymbols: async () => [{ ticker: `ETH${++calls}`, type: 'crypto' }],
+  }, 'binance', { metadataCacheTtlMs: 1_000 });
+  try {
+    assert.deepEqual(await provider.listSymbols(), [{ ticker: 'ETH1', type: 'crypto' }]);
+    assert.deepEqual(await provider.listSymbols(), [{ ticker: 'ETH1', type: 'crypto' }]);
+    assert.equal(calls, 1);
+    now += 1_001;
+    assert.deepEqual(await provider.listSymbols(), [{ ticker: 'ETH2', type: 'crypto' }]);
+    assert.equal(calls, 2);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test('provider metadata cache is instance-local and failed indexes are never cached', async () => {
+  let calls = 0;
+  const create = () => ({
+    getBars: async () => [],
+    listSymbols: async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('metadata unavailable');
+      return [{ ticker: 'ETHUSDT', type: 'crypto' }];
+    },
+  });
+  const first = guardProviderIndex(create(), 'binance');
+  assert.deepEqual(await first.listSymbols(), [{ ticker: 'BTCUSDT', description: 'BTC / USDT', type: 'crypto' }]);
+  assert.deepEqual(await first.listSymbols(), [{ ticker: 'ETHUSDT', type: 'crypto' }]);
+  const second = guardProviderIndex(create(), 'binance');
+  assert.deepEqual(await second.listSymbols(), [{ ticker: 'ETHUSDT', type: 'crypto' }]);
+  assert.equal(calls, 3);
 });
 
 test('provider index returns the default symbol before a stalled exchange index settles', async () => {

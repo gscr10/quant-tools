@@ -15,6 +15,8 @@ type ProviderKind = 'binance' | 'hyperliquid';
 
 interface ProviderNetworkGuardOptions {
   requestTimeoutMs?: number;
+  /** Successful exchange metadata cache lifetime; disabled when non-positive. */
+  metadataCacheTtlMs?: number;
 }
 
 type ProviderRuntime = DataProvider & {
@@ -50,6 +52,26 @@ function requestKey(provider: ProviderKind, url: string, body?: unknown): string
   return `${provider}|${url}|${body === undefined ? '' : canonicalJson(body)}`;
 }
 
+function metadataCacheTtlMs(value: number | undefined): number {
+  if (value === undefined) return 5 * 60_000;
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.max(1_000, Math.floor(value));
+}
+
+function isBinanceMetadataUrl(url: string): boolean {
+  try {
+    return new URL(url).pathname.endsWith('/exchangeInfo');
+  } catch {
+    return false;
+  }
+}
+
+function isHyperliquidMetadataBody(body: unknown): boolean {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return false;
+  const type = (body as Record<string, unknown>).type;
+  return type === 'meta' || type === 'spotMeta';
+}
+
 /**
  * Share only concurrent work for one provider instance.  The map is scoped to
  * the guarded instance, so a Binance request can never satisfy a Hyperliquid
@@ -58,9 +80,19 @@ function requestKey(provider: ProviderKind, url: string, body?: unknown): string
  */
 function inFlightRequest<T>(
   requests: Map<string, Promise<T>>,
+  completed: Map<string, { value: T; expiresAt: number }>,
   key: string,
+  cacheTtlMs: number,
+  cacheable: boolean,
   operation: () => Promise<T>,
 ): Promise<T> {
+  if (cacheable && cacheTtlMs > 0) {
+    const cached = completed.get(key);
+    if (cached) {
+      if (cached.expiresAt > Date.now()) return Promise.resolve(cached.value);
+      completed.delete(key);
+    }
+  }
   const existing = requests.get(key);
   if (existing) return existing;
 
@@ -69,6 +101,13 @@ function inFlightRequest<T>(
   const clear = (): void => {
     if (requests.get(key) === request) requests.delete(key);
   };
+  if (cacheable && cacheTtlMs > 0) {
+    request.then((value) => {
+      completed.set(key, { value, expiresAt: Date.now() + cacheTtlMs });
+    }, () => {
+      completed.delete(key);
+    });
+  }
   // Do not replace the returned promise with `finally()`: that would create a
   // second rejection path which callers could accidentally leave unhandled.
   request.then(clear, clear);
@@ -287,6 +326,8 @@ export function guardProviderNetwork<T extends DataProvider>(
   if (guarded.__quantToolsNetworkGuard) return provider;
   const timeoutMs = requestTimeoutMs(options.requestTimeoutMs);
   const inFlight = new Map<string, Promise<unknown>>();
+  const completed = new Map<string, { value: unknown; expiresAt: number }>();
+  const metadataTtlMs = metadataCacheTtlMs(options.metadataCacheTtlMs);
 
   if (kind === 'binance') {
     guardBinanceSpotBase(guarded);
@@ -295,7 +336,10 @@ export function guardProviderNetwork<T extends DataProvider>(
       enumerable: false,
       value: (url: string) => inFlightRequest(
         inFlight,
+        completed,
         requestKey('binance', url),
+        metadataTtlMs,
+        isBinanceMetadataUrl(url),
         () => fetchBinanceJson(
           url,
           timeoutMs,
@@ -310,7 +354,10 @@ export function guardProviderNetwork<T extends DataProvider>(
       enumerable: false,
       value: (body: unknown) => inFlightRequest(
         inFlight,
+        completed,
         requestKey('hyperliquid', HYPERLIQUID_INFO_URL, body),
+        metadataTtlMs,
+        isHyperliquidMetadataBody(body),
         () => postHyperliquid(body, timeoutMs),
       ),
       writable: true,
