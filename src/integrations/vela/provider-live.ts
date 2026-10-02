@@ -5,7 +5,16 @@ type ProviderKind = 'binance' | 'hyperliquid';
 type ProviderRuntime = DataProvider & {
   __quantToolsLiveGuard?: true;
   subscribe?: DataProvider['subscribe'];
+  spotWsBase?: (...args: unknown[]) => Promise<string>;
 };
+
+// Subscriptions may be opened re-entrantly (for example two workspace cells
+// changing markets together). Keep nested temporary constructors composable:
+// a later lease can restore past an already-released outer wrapper, and a
+// released outer wrapper becomes a transparent pass-through for the lease
+// still alive inside it.
+const releasedWebSocketWrappers = new WeakSet<object>();
+const webSocketWrapperParents = new WeakMap<object, unknown>();
 
 /**
  * Keep provider callbacks inside the lifetime of the chart subscription.
@@ -24,6 +33,40 @@ export function guardProviderSubscription<T extends DataProvider>(
   if (guarded.__quantToolsLiveGuard || typeof guarded.subscribe !== 'function') return provider;
 
   const upstreamSubscribe = guarded.subscribe.bind(guarded);
+  // Binance resolves the spot WebSocket host asynchronously. Keep a small
+  // provider-local pending counter so a subscription that is torn down during
+  // that await cannot release the constructor guard before `new WebSocket()`
+  // runs. The wrapper is installed once on this provider instance and has no
+  // effect on the public provider contract.
+  let pendingSpotWs = 0;
+  const pendingSpotWsReleases = new Set<() => void>();
+  if (kind === 'binance' && typeof guarded.spotWsBase === 'function') {
+    const upstreamSpotWsBase = guarded.spotWsBase;
+    Object.defineProperty(guarded, 'spotWsBase', {
+      configurable: true,
+      enumerable: false,
+      value: async function (this: unknown, ...args: unknown[]): Promise<string> {
+        pendingSpotWs += 1;
+        try {
+          return await upstreamSpotWsBase.apply(this, args);
+        } finally {
+          pendingSpotWs = Math.max(0, pendingSpotWs - 1);
+          if (pendingSpotWs === 0) {
+            // The caller's `await spotWsBase()` continuation runs after this
+            // promise settles. Defer release by one task so that continuation
+            // (which creates the socket) is still covered by the constructor
+            // guard, including deliberately adversarial provider doubles.
+            setTimeout(() => {
+              if (pendingSpotWs !== 0) return;
+              for (const release of [...pendingSpotWsReleases]) release();
+              pendingSpotWsReleases.clear();
+            }, 0);
+          }
+        }
+      },
+      writable: true,
+    });
+  }
   Object.defineProperty(guarded, 'subscribe', {
     configurable: true,
     enumerable: false,
@@ -42,6 +85,7 @@ export function guardProviderSubscription<T extends DataProvider>(
       };
 
       let upstreamUnsubscribe: (() => void) | undefined;
+      let releaseWebSocketGuard: (() => void) | undefined;
       try {
         // Hyperliquid creates its WebSocket synchronously.  A short-lived
         // constructor seam lets us wrap `onopen` before the upstream method
@@ -55,11 +99,29 @@ export function guardProviderSubscription<T extends DataProvider>(
           guardedCallback,
           options,
         );
-        upstreamUnsubscribe = kind === 'hyperliquid' || kind === 'binance'
-          ? withWebSocketOpenGuard(invoke, () => active)
-          : invoke();
+        if (kind === 'hyperliquid' || kind === 'binance') {
+          const guardedSubscription = withWebSocketOpenGuard(invoke, () => active);
+          upstreamUnsubscribe = guardedSubscription.value;
+          let releaseRequested = false;
+          let released = false;
+          const releaseNow = (): void => {
+            if (released) return;
+            released = true;
+            pendingSpotWsReleases.delete(releaseNow);
+            guardedSubscription.release();
+          };
+          releaseWebSocketGuard = () => {
+            if (releaseRequested) return;
+            releaseRequested = true;
+            if (pendingSpotWs === 0) releaseNow();
+            else pendingSpotWsReleases.add(releaseNow);
+          };
+        } else {
+          upstreamUnsubscribe = invoke();
+        }
       } catch (error) {
         active = false;
+        releaseWebSocketGuard?.();
         throw error;
       }
 
@@ -76,6 +138,13 @@ export function guardProviderSubscription<T extends DataProvider>(
           // Unsubscribe is a best-effort lifecycle operation.  Do not let a
           // provider teardown error escape and break the workspace destroy
           // stack; the callback guard remains effective either way.
+        } finally {
+          // Keep the constructor guard installed until the provider's own
+          // unsubscribe has cancelled asynchronous first-connect/reconnect
+          // work.  Releasing it at the end of subscribe() misses Binance's
+          // awaited spot endpoint and every later Vela reconnect socket.
+          releaseWebSocketGuard?.();
+          releaseWebSocketGuard = undefined;
         }
       };
     },
@@ -98,15 +167,16 @@ export function guardProviderSubscription<T extends DataProvider>(
 function withWebSocketOpenGuard<T>(
   invoke: () => T,
   isActive: () => boolean,
-): T {
+): { value: T; release: () => void } {
   const native = (globalThis as { WebSocket?: unknown }).WebSocket;
-  if (typeof native !== 'function') return invoke();
+  if (typeof native !== 'function') return { value: invoke(), release: () => {} };
 
   const Wrapped = function(this: unknown, ...args: unknown[]): unknown {
     const socket = Reflect.construct(native as abstract new (...xs: unknown[]) => object, args);
-    wrapOpenHandler(socket, isActive);
+    if (!releasedWebSocketWrappers.has(Wrapped)) wrapOpenHandler(socket, isActive);
     return socket;
   } as unknown as typeof WebSocket;
+  webSocketWrapperParents.set(Wrapped, native);
   // Preserve `instanceof WebSocket` and any constructor statics that the
   // upstream provider might inspect while the temporary seam is installed.
   Wrapped.prototype = (native as { prototype: unknown }).prototype as WebSocket;
@@ -120,11 +190,28 @@ function withWebSocketOpenGuard<T>(
   const scope = globalThis as { WebSocket?: unknown };
   scope.WebSocket = Wrapped;
   try {
-    return invoke();
-  } finally {
-    // Avoid clobbering another caller's short-lived seam if subscriptions are
-    // started re-entrantly.
+    const value = invoke();
+    let released = false;
+    return {
+      value,
+      release: () => {
+        if (released) return;
+        released = true;
+        releasedWebSocketWrappers.add(Wrapped);
+        if (scope.WebSocket !== Wrapped) return;
+        // Skip wrappers whose lease was released before this nested lease.
+        // Their constructor is now transparent, so restoring to the first
+        // non-released parent preserves the currently active outer seam.
+        let target: unknown = native;
+        while (target && typeof target === 'function' && releasedWebSocketWrappers.has(target)) {
+          target = webSocketWrapperParents.get(target);
+        }
+        if (target) scope.WebSocket = target;
+      },
+    };
+  } catch (error) {
     if (scope.WebSocket === Wrapped) scope.WebSocket = native;
+    throw error;
   }
 }
 

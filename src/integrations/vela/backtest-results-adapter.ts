@@ -1398,13 +1398,17 @@ export class VelaBacktestResultsAdapter {
       entry.trades = cloneTrades(context?.trades ?? []);
       entry.ledgerRevision = revision;
       entry.ledgerState = 'ready';
-    } else if (!entry.run && context?.strategy && (context.phase === 'idle' || context.phase === undefined)) {
+    } else if (!entry.run && context?.strategy && (context.phase === 'idle' || context.phase === undefined)
+      && Array.isArray(context.trades)) {
       // Showing a previously suspended strategy can yield a settled context
       // without another script:run event (some engines restore the cached
-      // session synchronously). Treat the explicitly idle strategy context as
-      // the complete zero-or-more trade ledger instead of leaving the Dock in
-      // `computing` forever. A computing/streaming context remains pending and
-      // is still resolved by the normal run/ledger path.
+      // session synchronously). Only an explicit trades array proves that the
+      // idle context owns a settled zero-or-more trade ledger. The local bridge
+      // intentionally omits `trades` while a newly-added strategy is still
+      // being evaluated; treating that omission as `[]` publishes the exact
+      // D-01 failure mode (ready + empty ledger before the first run).
+      // Computing/streaming contexts, and idle contexts without an explicit
+      // ledger, remain pending and are resolved by the normal run/report path.
       entry.trades = cloneTrades(context.trades ?? []);
       entry.ledgerRevision = revision;
       entry.ledgerState = 'ready';
