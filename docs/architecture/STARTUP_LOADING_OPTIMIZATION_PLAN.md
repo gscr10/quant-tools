@@ -201,8 +201,8 @@ kill-switch 测试后重新进行普通 production build，避免遗留禁用回
 | S1 路由和索引 | 部分完成 | 默认 Binance 显式路由，受控首绘提前约 1.07s；仍需完整品种搜索、模板及所有 Provider 回归 |
 | S2 渐进加载 | 部分完成 | Binance 原生 2000 根 progressive 模块、错误/取消/分页单测及真实 App 2×1000 请求；仍需真实首批策略门控、双引擎逐笔等价与长链路故障证据 |
 | S3 去重 | 已实现，性能验收部分完成 | `provider-network.ts` 对 Binance JSON 和 Hyperliquid POST 做 provider-instance 级并发去重；失败自动释放并可重试，26 项网络测试通过。真实启动仍观察到 Vela 顺序触发的重复 `exchangeInfo` 请求；本实现不做长期响应缓存，需后续以 waterfall 决定是否引入短 TTL 元数据缓存 |
-| S4 资源延迟加载 | 部分完成 | Pine Worker 独立懒加载 chunk；主 JS 约 3.71MB 降至 2.27MB，Worker 约 825KB；仍需稳定 waterfall、多浏览器和重复挂载资源门禁 |
-| S5 组合回归/回滚/人工入口 | 待执行 | 新一轮实际运行结果和可访问服务 |
+| S4 资源延迟加载 | 基线门禁通过，仍需长期观测 | Pine Worker 独立懒加载 chunk；主 JS 约 3.71MB 降至 2.27MB，Worker 约 825KB；跨浏览器、性能门禁和视觉/a11y 门禁通过，仍保留大 chunk 告警和长时资源观测项 |
+| S5 组合回归/回滚/人工入口 | 部分完成 | 根测试 445/445、Vela-PineTS 283/283、开发/生产 E2E、Settings、故障隔离、多 Cell、跨浏览器、性能和视觉/a11y 均通过；仍需人工线上入口、长时 Provider/断网恢复、真实制品 rollback 验收 |
 
 发现问题自主处理，不因一个失败路径停下；仍保留待办直到证据关闭。不可用“413/414 等历史测试数量”推断完成。性能无收益则自动调整方案或撤回该项代码，保留测量结论；业务回归必须修复后再前进。
 
