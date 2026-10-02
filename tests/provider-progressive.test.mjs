@@ -122,6 +122,18 @@ test('genesis probe errors are reported instead of publishing successful complet
   fixture.stop();
 });
 
+test('repeated page is stopped as a non-progressing history error', async () => {
+  const first = rows(1000);
+  const fixture = setup(async () => first);
+  const actual = await fixture.provider.getBarsProgressive('BTCUSDT', '15', { limit: 2000 }, () => {});
+  assert.deepEqual(actual, first);
+  const outcome = await fixture.requests[0].result;
+  assert.equal(outcome.aborted, false);
+  assert.match(String(outcome.error?.message), /no usable progress/);
+  assert.equal(outcome.bars, 1000);
+  fixture.stop();
+});
+
 test('late page failure retains first page and settles error fact before final result', async () => {
   const failure = Error('HTTP 503');
   let calls = 0;

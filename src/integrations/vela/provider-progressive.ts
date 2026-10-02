@@ -99,7 +99,28 @@ export function enableProviderProgressiveHistory<T extends DataProvider>(provide
         const received = await abortable(getBars(ticker, timeframe, pageRange), signal);
         if (received === undefined || signal?.aborted) break;
         const page = normalizeProviderBars(received, pageRange);
-        if (page.length === 0) break;
+        if (page.length === 0) {
+          // An empty *valid* response proves genesis. A non-empty response
+          // that normalizes to empty means the provider ignored the requested
+          // boundary or returned unusable rows; treating that as genesis
+          // would silently publish an incomplete history.
+          if (Array.isArray(received) && received.length > 0) {
+            error = new Error('progressive history response made no usable progress');
+          }
+          break;
+        }
+        // A faulty gateway can ignore `to` and return the same page forever.
+        // The cursor would still decrement from that repeated oldest candle,
+        // so checking only cursor movement is insufficient and can leave the
+        // startup request spinning until the browser aborts it.  Every page
+        // after the first must be strictly older than the confirmed prefix;
+        // otherwise publish the confirmed prefix with an explicit error and
+        // never claim complete history or enable Simulation.
+        const previousOldest = confirmed[0]?.time;
+        if (previousOldest !== undefined && page[page.length - 1]!.time >= previousOldest) {
+          error = new Error('progressive history made no chronological progress');
+          break;
+        }
         // Existing recent candles win by construction; each earlier request
         // is strictly older, preventing overlap from replacing a forming bar.
         confirmed = [...page, ...confirmed];
@@ -122,7 +143,12 @@ export function enableProviderProgressiveHistory<T extends DataProvider>(provide
           const probeReceived = await abortable(getBars(ticker, timeframe, probeRange), signal);
           if (probeReceived === undefined || signal?.aborted) break;
           const probe = normalizeProviderBars(probeReceived, probeRange);
-          if (probe.length === 0) break;
+          if (probe.length === 0) {
+            if (Array.isArray(probeReceived) && probeReceived.length > 0) {
+              error = new Error('progressive history probe made no usable progress');
+            }
+            break;
+          }
           // Older data exists. Continue with a normal-sized page at the same
           // cursor; do not append the probe because doing so would leave a
           // hole between it and the already-confirmed prefix.

@@ -6,6 +6,8 @@
 
 ### 2026-10-02 本轮实现进展
 
+- 为渐进历史分页增加无进度保护：Provider 返回非空但全部越过请求边界、重复页或探测结果不可用时，不再把它误判为 genesis；保留已绘制前缀并发布明确错误，避免启动加载无限重试或开放不完整 Simulation。新增回归覆盖，根测试 469/469、Vela-PineTS 289/289。
+
 - 渐进历史遇到短页时增加可取消的单根历史探测：只有探测确认无更早数据才宣布 genesis；若探测到更早数据则继续分页，探测失败保留已绘制前缀但发布错误事实，避免短页造成静默缺历史。
 - 统一 `metadataCacheTtlMs <= 0` 对 REST 元数据和 symbol index 的禁用语义；模板仓储拒绝无法作为 Workspace document 应用的 null/数组/原语状态，并增加对应回归测试。
 - 为 `packages/pinets` 增加显式 `test:offline` / `test:network`（根目录分别为 `npm run test:pinets:offline` / `npm run test:pinets:network`）入口；离线套件 1,637 tests 通过。原有 `test` 保留上游完整联网语义，不用空响应掩盖网络故障。
@@ -17,7 +19,7 @@
 - 修复点位历史恢复的周期解析：严格区分 Pine/Vela 的月份 `M` 与分钟 `m`，并覆盖长英文周期拼写；同时将 Workspace 历史深度迁移的非法预算和非字符串存储值挡在持久化边界外。
 - 修复 Bar Magnifier lower-feed 对超大/非安全周期值的范围与 limit 计算：不再构造不安全请求，统一降级为未知周期；补充运行时回归。
 - 为 `request.security` secondary feed 增加 resolved malformed OHLC 防护，同时保留 rejected Provider error metadata 向 Session error 传播；补充回归，并隔离坏 getter/非法 volume 行、重复和乱序时间戳。
-- 本轮新增 Provider/Storage/Bar Magnifier 回归后根测试为 468/468，Vela-PineTS 为 289/289；TypeScript、构建、启动探针、依赖契约、dist 独立性和 bundle budget 均通过。
+- 本轮新增 Provider/Storage/Bar Magnifier 回归后根测试为 469/469，Vela-PineTS 为 289/289；TypeScript、构建、启动探针、依赖契约、dist 独立性和 bundle budget 均通过。
 
 ## 1. 目标与边界
 
