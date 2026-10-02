@@ -106,7 +106,10 @@ export function guardProviderIndex<T extends DataProvider>(
         if (typeof ticker !== 'string' || ticker.trim().length === 0) {
           throw new Error('malformed symbol descriptor ticker');
         }
-        return { ...(symbol as Record<string, unknown>) } as unknown as SymbolDescriptor;
+        return {
+          ...(symbol as Record<string, unknown>),
+          ticker: ticker.trim(),
+        } as unknown as SymbolDescriptor;
       });
       return normalized;
     } catch {
