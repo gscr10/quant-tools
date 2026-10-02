@@ -360,6 +360,25 @@ describe('Bar Magnifier runtime request resolution', () => {
         expect(result.status?.fallbackReason).toBe('lower-data-empty');
     });
 
+    it('treats an unsafe lower timeframe as unknown instead of building an unsafe range', async () => {
+        let requestedRange: { from?: number; to?: number; limit?: number } | undefined;
+        const result = await resolveBarMagnifier(
+            indicatorFor({}, strategySource, {}),
+            bars(2),
+            { symbol: 'BTCUSDT', timeframe: '1D' },
+            undefined,
+            async (_symbol, timeframe, range) => {
+                expect(timeframe).toBe('999999999999999999999999999999999999M');
+                requestedRange = range;
+                return [];
+            },
+            { requested: true, lowerTimeframe: '999999999999999999999999999999999999M' },
+        );
+        expect(requestedRange?.from).toBe(bars(2)[0]!.time);
+        expect(Number.isSafeInteger(requestedRange?.limit)).toBe(true);
+        expect(result.status?.fallbackReason).toBe('lower-data-empty');
+    });
+
     it('fetches through the final parent close and scales 1D limits by the child ratio', async () => {
         const sourceBars = bars(6);
         const prepared = preparePine(strategySource, 'magnifier-runtime');

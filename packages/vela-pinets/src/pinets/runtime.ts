@@ -528,32 +528,34 @@ function childInputBars(bars: OHLCV[] | undefined): NonNullable<BarMagnifierInpu
 function timeframeDurationMs(timeframe: string | undefined): number | null {
     const raw = String(timeframe ?? '').trim();
     if (!raw) return null;
+    const safeDuration = (value: number): number | null =>
+        Number.isSafeInteger(value) && value > 0 ? value : null;
     // Lowercase `m` is the provider's minute suffix; Pine's upper-case M is
     // the calendar-month spelling.  Keep this distinction before upper-case
     // normalization.
-    if (/^\d+(?:\.\d+)?m$/.test(raw)) return Number(raw.slice(0, -1)) * 60_000;
+    if (/^\d+(?:\.\d+)?m$/.test(raw)) return safeDuration(Number(raw.slice(0, -1)) * 60_000);
     // A few provider gateways use the bare lower-case `m` for one minute.
     // Treat it exactly like `1m`; upper-case `M` remains a calendar month.
     if (raw === 'm') return 60_000;
-    if (/^\d+(?:\.\d+)?$/.test(raw)) return Number(raw) * 60_000;
+    if (/^\d+(?:\.\d+)?$/.test(raw)) return safeDuration(Number(raw) * 60_000);
     if (raw === 'D' || raw === '1D' || raw === 'd' || raw === '1d') return 86_400_000;
     if (raw === 'W' || raw === '1W' || raw === 'w' || raw === '1w') return 7 * 86_400_000;
     if (raw === 'M' || raw === '1M') return 30 * 86_400_000;
     // Pine uses an upper-case `M` for calendar months.  Keep this explicit
     // before the case-insensitive unit parser so a supplied `2M` child is not
     // mistaken for two minutes (provider minute aliases use lower-case `m`).
-    if (/^\d+(?:\.\d+)?M$/.test(raw)) return Number(raw.slice(0, -1)) * 30 * 86_400_000;
+    if (/^\d+(?:\.\d+)?M$/.test(raw)) return safeDuration(Number(raw.slice(0, -1)) * 30 * 86_400_000);
     const match = /^(\d+(?:\.\d+)?)(S|SEC|SECS|SECOND|SECONDS|MIN|MINS|MINUTE|MINUTES|H|HR|HRS|HOUR|HOURS|D|DAY|DAYS|W|WK|WKS|WEEK|WEEKS|MO|MOS|MONTH|MONTHS)$/i.exec(raw);
     if (!match) return null;
     const value = Number(match[1]);
     if (!Number.isFinite(value) || value <= 0) return null;
     switch (match[2]!.toUpperCase()) {
-        case 'S': case 'SEC': case 'SECS': case 'SECOND': case 'SECONDS': return value * 1_000;
-        case 'MIN': case 'MINS': case 'MINUTE': case 'MINUTES': return value * 60_000;
-        case 'H': case 'HR': case 'HRS': case 'HOUR': case 'HOURS': return value * 3_600_000;
-        case 'D': case 'DAY': case 'DAYS': return value * 86_400_000;
-        case 'W': case 'WK': case 'WKS': case 'WEEK': case 'WEEKS': return value * 7 * 86_400_000;
-        default: return value * 30 * 86_400_000;
+        case 'S': case 'SEC': case 'SECS': case 'SECOND': case 'SECONDS': return safeDuration(value * 1_000);
+        case 'MIN': case 'MINS': case 'MINUTE': case 'MINUTES': return safeDuration(value * 60_000);
+        case 'H': case 'HR': case 'HRS': case 'HOUR': case 'HOURS': return safeDuration(value * 3_600_000);
+        case 'D': case 'DAY': case 'DAYS': return safeDuration(value * 86_400_000);
+        case 'W': case 'WK': case 'WKS': case 'WEEK': case 'WEEKS': return safeDuration(value * 7 * 86_400_000);
+        default: return safeDuration(value * 30 * 86_400_000);
     }
 }
 
