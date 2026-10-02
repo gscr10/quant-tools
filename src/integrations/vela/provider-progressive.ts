@@ -104,7 +104,7 @@ export function enableProviderProgressiveHistory<T extends DataProvider>(provide
           // that normalizes to empty means the provider ignored the requested
           // boundary or returned unusable rows; treating that as genesis
           // would silently publish an incomplete history.
-          if (Array.isArray(received) && received.length > 0) {
+          if (!Array.isArray(received) || received.length > 0) {
             error = new Error('progressive history response made no usable progress');
           }
           break;
@@ -144,7 +144,7 @@ export function enableProviderProgressiveHistory<T extends DataProvider>(provide
           if (probeReceived === undefined || signal?.aborted) break;
           const probe = normalizeProviderBars(probeReceived, probeRange);
           if (probe.length === 0) {
-            if (Array.isArray(probeReceived) && probeReceived.length > 0) {
+            if (!Array.isArray(probeReceived) || probeReceived.length > 0) {
               error = new Error('progressive history probe made no usable progress');
             }
             break;

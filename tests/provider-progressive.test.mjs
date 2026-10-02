@@ -134,6 +134,16 @@ test('repeated page is stopped as a non-progressing history error', async () => 
   fixture.stop();
 });
 
+test('malformed non-array page is not treated as genesis', async () => {
+  const fixture = setup(async () => ({ malformed: true }));
+  const actual = await fixture.provider.getBarsProgressive('BTCUSDT', '15', { limit: 2000 }, () => {});
+  assert.deepEqual(actual, []);
+  const outcome = await fixture.requests[0].result;
+  assert.match(String(outcome.error?.message), /no usable progress/);
+  assert.equal(outcome.bars, 0);
+  fixture.stop();
+});
+
 test('late page failure retains first page and settles error fact before final result', async () => {
   const failure = Error('HTTP 503');
   let calls = 0;
