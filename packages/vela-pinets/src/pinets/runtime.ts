@@ -137,9 +137,15 @@ export class LowerTimeframeFetchCache {
         optionsOrMaxEntries: LowerTimeframeFetchCacheOptions | number = {},
         positionalTtlMs?: number,
     ) {
-        const options: LowerTimeframeFetchCacheOptions = typeof optionsOrMaxEntries === 'number'
-            ? { maxEntries: optionsOrMaxEntries, ...(positionalTtlMs === undefined ? {} : { ttlMs: positionalTtlMs }) }
-            : optionsOrMaxEntries;
+        // The constructor is exported across the app/Worker boundary.  Keep
+        // malformed JavaScript payloads from throwing while reading fields
+        // (notably `null` and arrays); invalid options use the safe defaults.
+        const candidate = optionsOrMaxEntries as unknown;
+        const options: LowerTimeframeFetchCacheOptions = typeof candidate === 'number'
+            ? { maxEntries: candidate, ...(positionalTtlMs === undefined ? {} : { ttlMs: positionalTtlMs }) }
+            : candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate)
+                ? candidate as LowerTimeframeFetchCacheOptions
+                : {};
         // A bad host option must not turn the cache into an unbounded map.  A
         // zero budget is a useful explicit opt-out for tests/diagnostics.
         this.maxEntries = normalizeNonNegativeInteger(options.maxEntries, LowerTimeframeFetchCache.DEFAULT_MAX_ENTRIES);
@@ -510,18 +516,49 @@ function boolProp(ind: InstanceType<typeof Indicator>, props: Record<string, Inp
     }
 }
 
+/**
+ * Convert a provider/host child payload without trusting the runtime boundary.
+ *
+ * The type says OHLCV[], but both the provider gateway and structured-clone
+ * callers are outside this package.  Keeping malformed rows as NaN-valued
+ * broker rows is intentional: PineTS can then publish its precise
+ * `invalid-lower-bars` status instead of this mapper throwing (or silently
+ * dropping the row and accidentally claiming complete precision).
+ */
 function childInputBars(bars: OHLCV[] | undefined): NonNullable<BarMagnifierInput['bars']> {
-    return (bars ?? []).map((bar) => ({
-        openTime: bar.time,
-        ...(Number.isFinite((bar as OHLCV & { closeTime?: number }).closeTime)
-            ? { closeTime: Number((bar as OHLCV & { closeTime?: number }).closeTime) }
-            : {}),
-        open: bar.open,
-        high: bar.high,
-        low: bar.low,
-        close: bar.close,
-        ...(bar.volume == null ? {} : { volume: bar.volume }),
-    }));
+    const rows: unknown[] = Array.isArray(bars) ? bars : [];
+    return rows.map((raw) => {
+        const bar = raw !== null && typeof raw === 'object' ? raw as Partial<OHLCV> & { closeTime?: unknown } : undefined;
+        const numberOrNaN = (value: unknown): number => typeof value === 'number' ? value : Number.NaN;
+        const closeTime = bar?.closeTime;
+        return {
+            openTime: numberOrNaN(bar?.time),
+            ...(typeof closeTime === 'number' && Number.isFinite(closeTime) ? { closeTime } : {}),
+            open: numberOrNaN(bar?.open),
+            high: numberOrNaN(bar?.high),
+            low: numberOrNaN(bar?.low),
+            close: numberOrNaN(bar?.close),
+            ...(bar?.volume == null ? {} : { volume: numberOrNaN(bar.volume) }),
+        };
+    });
+}
+
+/** Convert the host-shaped `{openTime, ...}` child payload into OHLCV rows. */
+function suppliedChildBars(bars: unknown): OHLCV[] {
+    const rows: unknown[] = Array.isArray(bars) ? bars : [];
+    return rows.map((raw) => {
+        const bar = raw !== null && typeof raw === 'object' ? raw as Partial<NonNullable<BarMagnifierInput['bars']>[number]> : undefined;
+        const numberOrNaN = (value: unknown): number => typeof value === 'number' ? value : Number.NaN;
+        return {
+            time: numberOrNaN(bar?.openTime),
+            ...(typeof bar?.closeTime === 'number' && Number.isFinite(bar.closeTime) ? { closeTime: bar.closeTime } : {}),
+            open: numberOrNaN(bar?.open),
+            high: numberOrNaN(bar?.high),
+            low: numberOrNaN(bar?.low),
+            close: numberOrNaN(bar?.close),
+            ...(bar?.volume == null ? {} : { volume: numberOrNaN(bar.volume) }),
+        } as OHLCV;
+    });
 }
 
 /** Parse Vela/Pine timeframe spellings into a fixed duration in milliseconds. */
@@ -660,16 +697,8 @@ export async function resolveBarMagnifier(
 
     let lowerBars: OHLCV[] = [];
     let fallback: BarMagnifierFallbackReason | undefined;
-    if (supplied?.bars) {
-        lowerBars = supplied.bars.map((bar) => ({
-            time: bar.openTime,
-            ...(bar.closeTime == null ? {} : { closeTime: bar.closeTime }),
-            open: bar.open,
-            high: bar.high,
-            low: bar.low,
-            close: bar.close,
-            ...(bar.volume == null ? {} : { volume: bar.volume }),
-        }));
+    if (Array.isArray(supplied?.bars)) {
+        lowerBars = suppliedChildBars(supplied.bars);
         // An explicitly supplied empty array is different from an omitted
         // child feed: the host did resolve a lower timeframe, but it returned
         // no candles for this window. Preserve that distinction in the
@@ -945,15 +974,34 @@ export async function secondaryKlines(
     // throw from `toKlines()`; a rejected Promise is deliberately preserved so
     // provider error metadata can reach the Pine session error channel.
     if (!Array.isArray(fetched)) return [];
-    const bars = fetched.filter((bar): bar is OHLCV => (
-        bar !== null
-        && typeof bar === 'object'
-        && Number.isFinite(bar.time)
-        && Number.isFinite(bar.open)
-        && Number.isFinite(bar.high)
-        && Number.isFinite(bar.low)
-        && Number.isFinite(bar.close)
-    ));
+    const bars = fetched.flatMap((bar): OHLCV[] => {
+        try {
+            if (bar === null || typeof bar !== 'object') return [];
+            const candidate = bar as Partial<OHLCV>;
+            const time = candidate.time;
+            const open = candidate.open;
+            const high = candidate.high;
+            const low = candidate.low;
+            const close = candidate.close;
+            if (typeof time !== 'number' || !Number.isFinite(time)
+                || typeof open !== 'number' || !Number.isFinite(open)
+                || typeof high !== 'number' || !Number.isFinite(high)
+                || typeof low !== 'number' || !Number.isFinite(low)
+                || typeof close !== 'number' || !Number.isFinite(close)) return [];
+            return [{
+                time,
+                open,
+                high,
+                low,
+                close,
+                ...(Number.isFinite(candidate.volume) ? { volume: candidate.volume } : {}),
+            }];
+        } catch {
+            // A hostile getter on one provider row must not abort a secondary
+            // series; discard only that row and preserve the rest.
+            return [];
+        }
+    });
     return toKlines(bars, tf, syminfo);
 }
 

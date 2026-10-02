@@ -69,6 +69,20 @@ describe('Bar Magnifier runtime request resolution', () => {
         expect(calls).toBe(1);
     });
 
+    it('uses safe defaults for malformed cache options from a runtime boundary', async () => {
+        expect(() => new LowerTimeframeFetchCache(null as never)).not.toThrow();
+        expect(() => new LowerTimeframeFetchCache([] as never)).not.toThrow();
+        const cache = new LowerTimeframeFetchCache(null as never);
+        let calls = 0;
+        const fetcher = async (): Promise<OHLCV[]> => {
+            calls += 1;
+            return [{ time: calls, open: 1, high: 1, low: 1, close: 1 }];
+        };
+        await cache.fetch(fetcher, 'BTCUSDT', '10', { from: 1, to: 2, limit: 1 });
+        await cache.fetch(fetcher, 'BTCUSDT', '10', { from: 1, to: 2, limit: 1 });
+        expect(calls).toBe(1);
+    });
+
     it('expires fulfilled windows by TTL without breaking in-flight dedupe', async () => {
         let now = 1_000;
         const cache = new LowerTimeframeFetchCache({ ttlMs: 100, now: () => now });
@@ -535,6 +549,63 @@ describe('Bar Magnifier runtime request resolution', () => {
         });
     });
 
+    it('does not throw when a lower-feed array contains malformed rows', async () => {
+        const result = await runPineStatic({
+            ind: indicatorFor({}, strategySource, {}),
+            bars: bars(2),
+            market: { symbol: 'BTCUSDT', timeframe: '60' },
+            visibleRange: undefined,
+            prepared: preparePine(strategySource, 'malformed-lower-row'),
+            instanceId: 'malformed-lower-row',
+            inputs: {},
+            props: {},
+            fetchSeries: async () => [null, {
+                time: bars(2)[0]!.time,
+                open: 100,
+                high: 101,
+                low: 99,
+                close: 100,
+                volume: 1,
+            }] as never,
+        });
+        expect((result.ctx as { executionPrecision?: unknown }).executionPrecision).toMatchObject({
+            requested: true,
+            applied: false,
+            fallbackReason: 'invalid-lower-bars',
+        });
+    });
+
+    it('does not throw when supplied child bars contain malformed rows', async () => {
+        const result = await runPineStatic({
+            ind: indicatorFor({}, strategySource, {}),
+            bars: bars(2),
+            market: { symbol: 'BTCUSDT', timeframe: '60' },
+            visibleRange: undefined,
+            prepared: preparePine(strategySource, 'malformed-supplied-lower-row'),
+            instanceId: 'malformed-supplied-lower-row',
+            inputs: {},
+            props: {},
+            fetchSeries: undefined,
+            barMagnifier: {
+                requested: true,
+                lowerTimeframe: '10',
+                bars: [null, {
+                    openTime: bars(2)[0]!.time,
+                    open: 100,
+                    high: 101,
+                    low: 99,
+                    close: 100,
+                    volume: 1,
+                }] as never,
+            },
+        });
+        expect((result.ctx as { executionPrecision?: unknown }).executionPrecision).toMatchObject({
+            requested: true,
+            applied: false,
+            fallbackReason: 'invalid-lower-bars',
+        });
+    });
+
     it('turns malformed secondary request.security data into an empty series', async () => {
         await expect(secondaryKlines(
             async () => ({ malformed: true } as never),
@@ -561,6 +632,20 @@ describe('Bar Magnifier runtime request resolution', () => {
             low: 0,
             close: 1,
             volume: 1,
+        }]);
+        const hostile = {} as { time: number };
+        Object.defineProperty(hostile, 'time', { get() { throw new Error('bad row getter'); } });
+        await expect(secondaryKlines(
+            async () => [hostile as never, { time: 2, open: 2, high: 3, low: 1, close: 2, volume: 'bad' as never }],
+            'ETHUSDT',
+            '60',
+        )).resolves.toEqual([{
+            openTime: 2,
+            open: 2,
+            high: 3,
+            low: 1,
+            close: 2,
+            volume: 0,
         }]);
     });
 });
