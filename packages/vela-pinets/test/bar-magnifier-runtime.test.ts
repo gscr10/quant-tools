@@ -534,6 +534,35 @@ describe('Bar Magnifier runtime request resolution', () => {
             fallbackReason: 'lower-data-unavailable',
         });
     });
+
+    it('turns malformed secondary request.security data into an empty series', async () => {
+        await expect(secondaryKlines(
+            async () => ({ malformed: true } as never),
+            'ETHUSDT',
+            '60',
+            10,
+            1,
+            2,
+        )).resolves.toEqual([]);
+        await expect(secondaryKlines(
+            async () => [
+                { time: 1, open: 1, high: 2, low: 0, close: 1, volume: 1 },
+                { time: Number.NaN, open: 1, high: 2, low: 0, close: 1, volume: 1 },
+            ],
+            'ETHUSDT',
+            '60',
+            10,
+            1,
+            2,
+        )).resolves.toEqual([{
+            openTime: 1,
+            open: 1,
+            high: 2,
+            low: 0,
+            close: 1,
+            volume: 1,
+        }]);
+    });
 });
 
 function parentBarsOne(): OHLCV[] {
