@@ -239,6 +239,8 @@ kill-switch 测试后重新进行普通 production build，避免遗留禁用回
 
 2026-10-02 最新组合复核：开发/生产 E2E、Settings、故障隔离、多 Cell、Chromium/Firefox/WebKit、性能 strict、视觉/a11y、Provider smoke 及零延迟启动 5/5 均通过。历史观察器 late-failure、lower-feed malformed cache 和 progressive non-progress 防护均已提交；S0/S1/S2/S5 的长期真实网络、跨机器 p95、线上 rollback 仍保持开放。
 
+2026-10-02 当前正常 production 构建启动采样：Chromium 5 次首绘 `637/644/665/743/994ms`（median `665ms`），Firefox 3 次 `687/738/1790ms`（median `738ms`），WebKit 3 次 `705/801/958ms`（median `801ms`），全部无失败。样本仅证明当前机器/受控延迟下的可重复性，不关闭跨机器长期 p95。
+
 2026-10-02 追加验证：根测试 445/445；Vela-PineTS 283/283；Binance/Hyperliquid provider smoke 均取得 5 根历史并启用 live；Chromium/Firefox/WebKit 启动首绘约 282/503/439ms（受控 150ms 索引、80ms K 线延迟），首批 1000 根随后完成 2000 根；开发/生产 E2E、Settings、故障隔离、多 Cell、性能 strict、视觉/a11y、离线 smoke 均通过。离线 smoke 的外部 Provider 请求按测试策略被阻断，不能替代真实 Provider 长时故障验收；生产构建仍有约 2.27MB 主 chunk / 825KB Worker chunk 的非阻断 warning。
 
 2026-10-02 本轮代码复核：D-01 历史完成后立即挂载、晚挂载、延迟适配器及两种真实引擎均通过；Provider live 7/7（含异步 Binance endpoint、Hyperliquid reconnect、嵌套订阅）；根测试 454/454、Provider 专项 52/52、Vela-PineTS 283/283、开发/生产 E2E、三浏览器、性能 strict、视觉/a11y、Provider smoke 均通过。`startup_loading.py` 在默认延迟和 2 秒索引延迟场景通过；人为设置极短 `bar-delay=80ms` 的零延迟边界偶发超时，未作为正常性能门禁通过证据，需后续把该探针的零延迟时序稳定性单独收口。
