@@ -4,6 +4,12 @@
 
 状态：执行中。默认历史、渐进加载、Worker 懒加载、存储降级、Provider 去重/短 TTL 和主要回归门禁已落地；长时 Provider、D-01 动态边界、真实制品 rollback 及完整线上验收仍未关闭。本文件同时记录执行状态，不替代独立性能报告。
 
+### 2026-10-02 本轮实现进展
+
+- 修复 Binance spot 异步解析 WebSocket 地址时的 unsubscribe 竞态：`spotWsBase()` 尚未完成时不提前恢复构造器 guard，Promise settle 后再让出一个 task 覆盖 `await` 后的迟到 `new WebSocket()`。
+- 覆盖 Hyperliquid 重连、迟到 `onopen`、多订阅嵌套释放顺序及重复 unsubscribe；Provider 生命周期专项 7/7，通过 TypeScript、根测试 454/454。
+- 本修复只位于集成层和测试层，未修改 `node_modules` 或 Vela 产物；长时真实网络故障、断网恢复和部署平台 rollback 仍保持开放，不能因专项通过而关闭 S5。
+
 ## 1. 目标与边界
 
 在保留默认 2000 根历史、既有 Workspace 行为和回测真实性的前提下，缩短首次图表可见时间、降低无关网络等待与首屏资源成本。
@@ -200,15 +206,17 @@ kill-switch 测试后重新进行普通 production build，避免遗留禁用回
 | S0 基线、观测和可靠性 | 部分完成 | `tests/startup_loading.py`；显式/裸路由、2s 索引延迟、存储 getter 故障实际浏览器证据；仍需完整多轮冷/热样本 |
 | S1 路由和索引 | 部分完成 | 默认 Binance 显式路由，受控首绘提前约 1.07s；仍需完整品种搜索、模板及所有 Provider 回归 |
 | S2 渐进加载 | 部分完成 | Binance 原生 2000 根 progressive 模块、错误/取消/分页单测及真实 App 2×1000 请求；仍需真实首批策略门控、双引擎逐笔等价与长链路故障证据 |
-| S3 去重 | 已完成（有界缓存） | `provider-network.ts` 对 Binance JSON 和 Hyperliquid POST 做 provider-instance 级并发去重，并对 exchange metadata 使用可配置短 TTL；`provider-registry.ts` 对 symbol index 使用同一实例隔离 TTL。失败自动释放并可重试，30 项网络测试通过；受控启动中 Binance `exchangeInfo` 从 4 次降至 2 次，历史 K 线请求仍保持 2 次 |
+| S3 去重 | 已完成（有界缓存 + live 生命周期） | `provider-network.ts` 对 Binance JSON 和 Hyperliquid POST 做 provider-instance 级并发去重，并对 exchange metadata 使用可配置短 TTL；`provider-registry.ts` 对 symbol index 使用同一实例隔离 TTL；`provider-live.ts` 覆盖 async spot endpoint、重连和嵌套订阅释放。失败自动释放并可重试，网络专项 30 项、live 专项 7 项通过；受控启动中 Binance `exchangeInfo` 从 4 次降至 2 次，历史 K 线请求仍保持 2 次 |
 | S4 资源延迟加载 | 基线门禁通过，仍需长期观测 | Pine Worker 独立懒加载 chunk；主 JS 约 3.71MB 降至 2.27MB，Worker 约 825KB；跨浏览器、性能门禁和视觉/a11y 门禁通过，仍保留大 chunk 告警和长时资源观测项 |
-| S5 组合回归/回滚/人工入口 | 部分完成 | 根测试 445/445、Vela-PineTS 283/283、开发/生产 E2E、Settings、故障隔离、多 Cell、跨浏览器、性能和视觉/a11y 均通过；仍需人工线上入口、长时 Provider/断网恢复、真实制品 rollback 验收 |
+| S5 组合回归/回滚/人工入口 | 部分完成 | 根测试 454/454、Provider live 7/7、Vela-PineTS 283/283、开发/生产 E2E、Settings、故障隔离、多 Cell、跨浏览器、性能和视觉/a11y 均通过；仍需人工线上入口、长时 Provider/断网恢复、真实制品 rollback 验收 |
 
 发现问题自主处理，不因一个失败路径停下；仍保留待办直到证据关闭。不可用“413/414 等历史测试数量”推断完成。性能无收益则自动调整方案或撤回该项代码，保留测量结论；业务回归必须修复后再前进。
 
-当前已通过：根测试 441/441、Vela-PineTS 283/283、TypeScript、构建、依赖契约、dist 独立性、主开发/生产 E2E、Settings、故障隔离、多 Cell、三浏览器 fixture 和性能 smoke。`packages/pinets` 全套测试仍受本机 Binance 网络依赖影响（曾出现 26 文件/150 用例超时），不能作为本轮业务回归通过证据；必须在可用网络或完全离线 fixture 下补跑。
+当前已通过：根测试 454/454、Provider network/progressive/live 52/52、Vela-PineTS 283/283、TypeScript、构建、依赖契约、dist 独立性、主开发/生产 E2E、Settings、故障隔离、多 Cell、三浏览器 fixture、性能 strict、视觉/a11y 和 Provider smoke。`packages/pinets` 全套测试仍受本机 Binance 网络依赖影响（曾出现 26 文件/150 用例超时），不能作为本轮业务回归通过证据；必须在可用网络或完全离线 fixture 下补跑。
 
 2026-10-02 追加验证：根测试 445/445；Vela-PineTS 283/283；Binance/Hyperliquid provider smoke 均取得 5 根历史并启用 live；Chromium/Firefox/WebKit 启动首绘约 282/503/439ms（受控 150ms 索引、80ms K 线延迟），首批 1000 根随后完成 2000 根；开发/生产 E2E、Settings、故障隔离、多 Cell、性能 strict、视觉/a11y、离线 smoke 均通过。离线 smoke 的外部 Provider 请求按测试策略被阻断，不能替代真实 Provider 长时故障验收；生产构建仍有约 2.27MB 主 chunk / 825KB Worker chunk 的非阻断 warning。
+
+2026-10-02 本轮代码复核：D-01 历史完成后立即挂载、晚挂载、延迟适配器及两种真实引擎均通过；Provider live 7/7（含异步 Binance endpoint、Hyperliquid reconnect、嵌套订阅）；根测试 454/454、Provider 专项 52/52、Vela-PineTS 283/283、开发/生产 E2E、三浏览器、性能 strict、视觉/a11y、Provider smoke 均通过。`startup_loading.py` 在默认延迟和 2 秒索引延迟场景通过；人为设置极短 `bar-delay=80ms` 的零延迟边界偶发超时，未作为正常性能门禁通过证据，需后续把该探针的零延迟时序稳定性单独收口。
 
 完整完成条件：所有必做阶段有实际证据，全部硬性不变量满足，受控性能预算达标且真实网络功能有效，正常/回退模式均通过，已给出可人工检查的服务。当前文档完成不代表这些实现门禁已通过。
 

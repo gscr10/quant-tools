@@ -1310,6 +1310,48 @@ test('does not classify a computing context with omitted trades as no-trades', a
   adapter.destroy();
 });
 
+test('does not publish ready with an empty ledger before a newly-added strategy runs', async () => {
+  const history = new Deferred();
+  const initial = {
+    ...strategyContext('Late strategy'),
+    phase: 'idle',
+    // The bridge omits trades while the first evaluation is still queued. An
+    // idle phase alone is not proof that this newly-added strategy settled.
+    trades: undefined,
+  };
+  const handle = new SequenceHandle('strategy-late-run', 'Late strategy', [initial, initial]);
+  const chart = new FakeChart(handle, history);
+  const workspace = new FakeWorkspace({ id: 'cell-1', chart });
+  const adapter = new VelaBacktestResultsAdapter(workspace);
+  const snapshots = [];
+  adapter.subscribe((event) => {
+    if (event.type === 'snapshot') snapshots.push(event.snapshot);
+  });
+
+  const boot = adapter.bootstrap();
+  await flush();
+  let snapshot = adapter.getSnapshot({ cellId: 'cell-1', indicatorId: handle.id });
+  assert.ok(snapshot);
+  assert.notEqual(snapshot.status, 'ready');
+  assert.notEqual(snapshot.status, 'no-trades');
+  assert.equal(snapshot.trades, null);
+  assert.equal(snapshot.capabilities.tradeLedger, false);
+
+  history.resolve();
+  await boot;
+  await flush();
+  chart.emit('history:complete', { reason: 'depth', barsLoaded: 36 });
+  await flush();
+  snapshot = adapter.getSnapshot({ cellId: 'cell-1', indicatorId: handle.id });
+  assert.ok(snapshot);
+  assert.notEqual(snapshot.status, 'ready');
+  assert.notEqual(snapshot.status, 'no-trades');
+  assert.equal(snapshot.trades, null);
+  assert.equal(snapshot.capabilities.tradeLedger, false);
+  assert.equal(snapshots.some((item) => item.status === 'ready' && item.trades?.length === 0), false);
+  adapter.destroy();
+});
+
 test('keeps a settled head ledger partial until the chart history load completes', async () => {
   const history = new Deferred();
   const context = new Deferred();

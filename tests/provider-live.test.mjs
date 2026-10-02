@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createWorkspaceProviders } from '../src/integrations/vela/provider-registry.ts';
+import { guardProviderSubscription } from '../src/integrations/vela/provider-live.ts';
 
 const POINT = 1_700_000_000_000;
 
@@ -165,5 +166,191 @@ test('Hyperliquid active onopen still subscribes and is cleaned up once', () => 
     globalThis.WebSocket = originalWebSocket;
     globalThis.setInterval = originalSetInterval;
     globalThis.clearInterval = originalClearInterval;
+  }
+});
+
+test('Binance async first socket remains guarded until unsubscribe', async () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const timers = new Set();
+  let socket;
+  class FakeWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.closed = false;
+      socket = this;
+    }
+    close() { this.closed = true; }
+  }
+
+  try {
+    globalThis.WebSocket = FakeWebSocket;
+    globalThis.setTimeout = (callback, timeout, ...args) => {
+      const handle = originalSetTimeout(() => {
+        timers.delete(handle);
+        callback(...args);
+      }, timeout);
+      timers.add(handle);
+      return handle;
+    };
+    globalThis.clearTimeout = (handle) => {
+      timers.delete(handle);
+      return originalClearTimeout(handle);
+    };
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 1_000 }).binance();
+    const unsubscribe = provider.subscribe('BTCUSDT', '15', () => {});
+    // Binance resolves the spot endpoint asynchronously before constructing
+    // its first socket. The constructor seam must remain installed across
+    // that await, otherwise a late first socket escapes lifecycle guarding.
+    assert.notEqual(globalThis.WebSocket, originalWebSocket);
+    for (let attempt = 0; attempt < 20 && !socket; attempt += 1) {
+      await new Promise((resolve) => originalSetTimeout(resolve, 0));
+    }
+    assert.ok(socket);
+    unsubscribe();
+    assert.equal(globalThis.WebSocket, FakeWebSocket);
+    assert.equal(socket.closed, true);
+  } finally {
+    for (const handle of timers) originalClearTimeout(handle);
+    globalThis.WebSocket = originalWebSocket;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test('Hyperliquid reconnect socket is guarded when unsubscribe races reconnect', async () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const originalSetInterval = globalThis.setInterval;
+  const sockets = [];
+  let intervalCount = 0;
+
+  class FakeWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.sent = [];
+      this.closed = false;
+      sockets.push(this);
+    }
+    send(message) { this.sent.push(message); }
+    close() { this.closed = true; }
+  }
+
+  try {
+    globalThis.WebSocket = FakeWebSocket;
+    globalThis.setTimeout = (callback, timeout, ...args) => {
+      // Keep the reconnect deterministic, while preventing the provider's
+      // 15s silent-stream watchdog from keeping this unit test alive.
+      if (timeout === 15_000) return { cancelled: false };
+      return originalSetTimeout(callback, timeout === 2_000 ? 0 : timeout, ...args);
+    };
+    globalThis.clearTimeout = (handle) => {
+      if (handle && typeof handle === 'object' && 'cancelled' in handle) {
+        handle.cancelled = true;
+        return;
+      }
+      return originalClearTimeout(handle);
+    };
+    globalThis.setInterval = () => {
+      intervalCount += 1;
+      return { intervalCount };
+    };
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 1_000 }).hyperliquid();
+    const unsubscribe = provider.subscribe('BTC', '15', () => {});
+    assert.equal(sockets.length, 1);
+    sockets[0].onclose?.();
+    await new Promise((resolve) => originalSetTimeout(resolve, 5));
+    assert.equal(sockets.length, 2);
+
+    unsubscribe();
+    sockets[1].onopen?.({ type: 'open' });
+    assert.deepEqual(sockets[1].sent, []);
+    assert.equal(intervalCount, 0);
+    assert.equal(sockets[1].closed, true);
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+    globalThis.setInterval = originalSetInterval;
+  }
+});
+
+test('Binance delayed spot endpoint keeps a late socket guarded after unsubscribe', async () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const originalSetTimeout = globalThis.setTimeout;
+  let resolveEndpoint;
+  let socket;
+  class FakeWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.closed = false;
+      socket = this;
+    }
+    close() { this.closed = true; }
+  }
+  const provider = {
+    spotWsBase: () => new Promise((resolve) => { resolveEndpoint = resolve; }),
+    subscribe(_ticker, _timeframe, _onBar) {
+      void (async () => {
+        await this.spotWsBase();
+        // Deliberately omit the upstream closed check: this models the
+        // adversarial await/constructor ordering the guard must contain.
+        const ws = new WebSocket('wss://late.example');
+        ws.onopen = () => { throw new Error('late onopen escaped guard'); };
+      })();
+      return () => {};
+    },
+  };
+
+  try {
+    globalThis.WebSocket = FakeWebSocket;
+    const guarded = guardProviderSubscription(provider, 'binance');
+    const unsubscribe = guarded.subscribe('BTCUSDT', '15', () => {});
+    await Promise.resolve();
+    unsubscribe();
+    assert.notEqual(globalThis.WebSocket, FakeWebSocket);
+    resolveEndpoint('wss://stream.example');
+    await new Promise((resolve) => originalSetTimeout(resolve, 0));
+    await new Promise((resolve) => originalSetTimeout(resolve, 0));
+    assert.ok(socket);
+    socket.onopen?.({ type: 'open' });
+    assert.equal(socket.closed, true);
+    assert.equal(globalThis.WebSocket, FakeWebSocket);
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+  }
+});
+
+test('nested live subscriptions restore the native WebSocket in release order', () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const sockets = [];
+  class FakeWebSocket {
+    constructor(url) { this.url = url; sockets.push(this); }
+    close() { this.closed = true; }
+  }
+  const provider = {
+    subscribe(_ticker, _timeframe, _onBar) {
+      const ws = new WebSocket('wss://nested.example');
+      ws.onopen = () => {};
+      return () => ws.close();
+    },
+  };
+  try {
+    globalThis.WebSocket = FakeWebSocket;
+    const guarded = guardProviderSubscription(provider, 'hyperliquid');
+    const first = guarded.subscribe('A', '15', () => {});
+    const second = guarded.subscribe('B', '15', () => {});
+    assert.equal(sockets.length, 2);
+    first();
+    // The second lease remains installed while the first lease is gone.
+    assert.notEqual(globalThis.WebSocket, FakeWebSocket);
+    second();
+    assert.equal(globalThis.WebSocket, FakeWebSocket);
+    first(); second();
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
   }
 });

@@ -1,5 +1,14 @@
 # TODO
 
+## 2026-10-02 首次加载优化分支复核（当前状态）
+
+本轮基于 `feature/startup-loading-optimization` 的当前源码重新执行，不沿用旧 fixture 作为唯一证据。启动优化计划见 [STARTUP_LOADING_OPTIMIZATION_PLAN.md](docs/architecture/STARTUP_LOADING_OPTIMIZATION_PLAN.md)。
+
+- [x] D-01 新策略首轮上下文缺少 `trades` 时不再误判为已结算空账本；历史完成后立即挂载、晚挂载、两种引擎及 hide/show/市场切换复核通过。
+- [x] Provider live 生命周期：Binance 异步 `spotWsBase()`、Hyperliquid 重连、迟到 `onopen`、嵌套订阅和重复 unsubscribe 均有回归测试；专项 7/7 通过。
+- [x] 根回归：`npm test` 454/454；TypeScript 与 `git diff --check` 通过。
+- [ ] 启动优化 Final Gate：完整冷/热多轮样本、长时 Provider/断网恢复、实际线上入口、部署制品 rollback、完整 Provider/品种/模板回归仍未关闭。
+
 ## 2026-10-01 R-08～R-11 修复后独立复查（当前状态）
 
 详见 [BACKTEST_R09_RECHECK_3_2026-10-01.md](docs/backtesting/reports/BACKTEST_R09_RECHECK_3_2026-10-01.md)、[R-09 新证据](audit-evidence/2026-10-01-r09-recheck-3/README.md) 与 [BACKTEST_R08_R11_RECHECK_2026-10-01.md](docs/backtesting/reports/BACKTEST_R08_R11_RECHECK_2026-10-01.md)。本轮不继承修复记录 PASS；本轮重新执行真实页面、三浏览器 pointer/keyboard 探针和完整项目门禁。
@@ -8,7 +17,7 @@
 - [x] R-10：市场/副周期竞态与旧 run fence；双引擎等待期不再 ready/Simulation。
 - [x] R-11：503/429/超时/非法 JSON、Retry 12,500 根、旧请求 supersede、共享 Provider 多 Cell；独立矩阵 18/18，双 Cell 复核通过。
 - [x] R-09 完整焦点生命周期：Tab/Shift+Tab/Escape/busy 及真实 Workbench pointer-open 三浏览器均回到 Settings 触发按钮；主 E2E 通过。
-- [ ] D-01 动态历史绑定：已增加 partial/pending 门控，但独立动态 probe 仍能观测首个 ready/空账本快照，需继续修复和复测。
+- [x] D-01 动态历史绑定：本轮修复“idle 且缺少 trades 字段被误判为空账本”的边界；独立历史完成后立即挂载、晚挂载和延迟适配器流程均未再观察到 ready + 空账本。完整参考站逐笔 golden 仍另行开放。
 - [ ] 完整参考站逐笔 golden（仍缺 227 closed）、复杂撮合/Bar Magnifier、真实 WS/长时故障、全量像素对账、VoiceOver/跨设备、bundle threshold、rollback。
 
 本次文档刷新后再次执行 `npm test`、Vela-PineTS、TypeScript、build、依赖契约、dist 独立性、主 `npm run test:e2e` 和 `git diff --check`，结果通过；新证据目录包含三浏览器 pointer/keyboard、Settings traversal 及结构化门禁 status JSON。R-09 当前契约关闭，但整体 **PARTIAL**；Replay 仍不在当前阶段范围。
