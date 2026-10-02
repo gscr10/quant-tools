@@ -407,8 +407,8 @@
     "mobile": {
       "activeTab": "quant-backtest-tab-performance",
       "contentPage": {
-        "bottom": 2026,
-        "height": 1934,
+        "bottom": 2006,
+        "height": 1914,
         "left": 0,
         "right": 390,
         "style": {
