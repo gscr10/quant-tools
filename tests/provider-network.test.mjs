@@ -763,6 +763,21 @@ test('provider index rejects malformed descriptors instead of indexing an empty 
   }]);
 });
 
+test('provider index trims descriptor ticker boundaries without changing spaced symbols', async () => {
+  const provider = guardProviderIndex({
+    listSymbols: async () => [
+      { ticker: '  BTCUSDT  ', type: 'crypto' },
+      { ticker: 'Nasdaq 100', type: 'index' },
+    ],
+    getBars: async () => [],
+  }, 'binance', { metadataCacheTtlMs: 0 });
+
+  assert.deepEqual(await provider.listSymbols(), [
+    { ticker: 'BTCUSDT', type: 'crypto' },
+    { ticker: 'Nasdaq 100', type: 'index' },
+  ]);
+});
+
 test('provider index without a recovery callback can recover after a later outage', async () => {
   let calls = 0;
   const provider = guardProviderIndex({
