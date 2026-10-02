@@ -6,7 +6,7 @@
 
 - [x] D-01 新策略首轮上下文缺少 `trades` 时不再误判为已结算空账本；历史完成后立即挂载、晚挂载、两种引擎及 hide/show/市场切换复核通过。
 - [x] Provider live 生命周期：Binance 异步 `spotWsBase()`、Hyperliquid 重连、迟到 `onopen`、嵌套订阅和重复 unsubscribe 均有回归测试；专项 7/7 通过。
-- [x] 根回归：`npm test` 460/460；Provider/storage/progressive 专项、TypeScript 与 `git diff --check` 通过。
+- [x] 根回归：`npm test` 467/467；Provider/storage/progressive 专项、TypeScript 与 `git diff --check` 通过。
 - [x] S1/S2 本轮补强：symbol index 的 `metadataCacheTtlMs <= 0` 语义与 REST 元数据一致；模板状态校验；渐进短页 genesis 探测及失败门控均有回归测试。
 - [x] PineTS 测试分流：`npm --workspace packages/pinets run test:offline` 提供 1,637 个离线测试；`test:network` 显式保留联网覆盖，网络故障不再混入启动优化本地门禁。
 - [x] S4 bundle threshold：新增 `npm run check:bundle-size`，对 main/worker/highcharts raw 与 gzip 产物建立可执行预算门禁。
