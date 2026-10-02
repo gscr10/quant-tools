@@ -606,6 +606,28 @@ describe('Bar Magnifier runtime request resolution', () => {
         });
     });
 
+    it('isolates throwing getters in provider and supplied child rows', async () => {
+        const providerRow = {} as { time: number };
+        Object.defineProperty(providerRow, 'time', { get() { throw new Error('provider getter'); } });
+        const suppliedRow = {} as { openTime: number };
+        Object.defineProperty(suppliedRow, 'openTime', { get() { throw new Error('supplied getter'); } });
+        for (const [fetchSeries, barMagnifier] of [
+            [async () => [providerRow as never], undefined],
+            [undefined, { requested: true, lowerTimeframe: '10', bars: [suppliedRow as never] }],
+        ] as const) {
+            const result = await runPineStatic({
+                ind: indicatorFor({}, strategySource, {}), bars: bars(2),
+                market: { symbol: 'BTCUSDT', timeframe: '60' }, visibleRange: undefined,
+                prepared: preparePine(strategySource, 'throwing-child-row'),
+                instanceId: `throwing-child-row-${String(Boolean(fetchSeries))}`,
+                inputs: {}, props: {}, fetchSeries, barMagnifier,
+            });
+            expect((result.ctx as { executionPrecision?: unknown }).executionPrecision).toMatchObject({
+                requested: true, applied: false, fallbackReason: 'invalid-lower-bars',
+            });
+        }
+    });
+
     it('turns malformed secondary request.security data into an empty series', async () => {
         await expect(secondaryKlines(
             async () => ({ malformed: true } as never),

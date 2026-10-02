@@ -528,18 +528,22 @@ function boolProp(ind: InstanceType<typeof Indicator>, props: Record<string, Inp
 function childInputBars(bars: OHLCV[] | undefined): NonNullable<BarMagnifierInput['bars']> {
     const rows: unknown[] = Array.isArray(bars) ? bars : [];
     return rows.map((raw) => {
-        const bar = raw !== null && typeof raw === 'object' ? raw as Partial<OHLCV> & { closeTime?: unknown } : undefined;
         const numberOrNaN = (value: unknown): number => typeof value === 'number' ? value : Number.NaN;
-        const closeTime = bar?.closeTime;
-        return {
-            openTime: numberOrNaN(bar?.time),
-            ...(typeof closeTime === 'number' && Number.isFinite(closeTime) ? { closeTime } : {}),
-            open: numberOrNaN(bar?.open),
-            high: numberOrNaN(bar?.high),
-            low: numberOrNaN(bar?.low),
-            close: numberOrNaN(bar?.close),
-            ...(bar?.volume == null ? {} : { volume: numberOrNaN(bar.volume) }),
-        };
+        try {
+            const bar = raw !== null && typeof raw === 'object' ? raw as Partial<OHLCV> & { closeTime?: unknown } : undefined;
+            const closeTime = bar?.closeTime;
+            return {
+                openTime: numberOrNaN(bar?.time),
+                ...(typeof closeTime === 'number' && Number.isFinite(closeTime) ? { closeTime } : {}),
+                open: numberOrNaN(bar?.open),
+                high: numberOrNaN(bar?.high),
+                low: numberOrNaN(bar?.low),
+                close: numberOrNaN(bar?.close),
+                ...(bar?.volume == null ? {} : { volume: numberOrNaN(bar.volume) }),
+            };
+        } catch {
+            return { openTime: Number.NaN, open: Number.NaN, high: Number.NaN, low: Number.NaN, close: Number.NaN };
+        }
     });
 }
 
@@ -547,17 +551,21 @@ function childInputBars(bars: OHLCV[] | undefined): NonNullable<BarMagnifierInpu
 function suppliedChildBars(bars: unknown): OHLCV[] {
     const rows: unknown[] = Array.isArray(bars) ? bars : [];
     return rows.map((raw) => {
-        const bar = raw !== null && typeof raw === 'object' ? raw as Partial<NonNullable<BarMagnifierInput['bars']>[number]> : undefined;
         const numberOrNaN = (value: unknown): number => typeof value === 'number' ? value : Number.NaN;
-        return {
-            time: numberOrNaN(bar?.openTime),
-            ...(typeof bar?.closeTime === 'number' && Number.isFinite(bar.closeTime) ? { closeTime: bar.closeTime } : {}),
-            open: numberOrNaN(bar?.open),
-            high: numberOrNaN(bar?.high),
-            low: numberOrNaN(bar?.low),
-            close: numberOrNaN(bar?.close),
-            ...(bar?.volume == null ? {} : { volume: numberOrNaN(bar.volume) }),
-        } as OHLCV;
+        try {
+            const bar = raw !== null && typeof raw === 'object' ? raw as Partial<NonNullable<BarMagnifierInput['bars']>[number]> : undefined;
+            return {
+                time: numberOrNaN(bar?.openTime),
+                ...(typeof bar?.closeTime === 'number' && Number.isFinite(bar.closeTime) ? { closeTime: bar.closeTime } : {}),
+                open: numberOrNaN(bar?.open),
+                high: numberOrNaN(bar?.high),
+                low: numberOrNaN(bar?.low),
+                close: numberOrNaN(bar?.close),
+                ...(bar?.volume == null ? {} : { volume: numberOrNaN(bar.volume) }),
+            } as OHLCV;
+        } catch {
+            return { time: Number.NaN, open: Number.NaN, high: Number.NaN, low: Number.NaN, close: Number.NaN } as OHLCV;
+        }
     });
 }
 
