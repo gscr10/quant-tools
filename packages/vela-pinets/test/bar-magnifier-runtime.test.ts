@@ -647,6 +647,18 @@ describe('Bar Magnifier runtime request resolution', () => {
             close: 2,
             volume: 0,
         }]);
+        await expect(secondaryKlines(
+            async () => [
+                { time: 3, open: 3, high: 4, low: 2, close: 3, volume: 1 },
+                { time: 1, open: 1, high: 2, low: 0, close: 1, volume: 1 },
+                { time: 3, open: 30, high: 31, low: 29, close: 30, volume: 2 },
+            ],
+            'ETHUSDT',
+            '60',
+        )).resolves.toEqual([
+            { openTime: 1, open: 1, high: 2, low: 0, close: 1, volume: 1 },
+            { openTime: 3, open: 30, high: 31, low: 29, close: 30, volume: 2 },
+        ]);
     });
 });
 
