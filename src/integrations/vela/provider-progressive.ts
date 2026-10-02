@@ -107,7 +107,26 @@ export function enableProviderProgressiveHistory<T extends DataProvider>(provide
         // Give callbacks copies: a renderer must not mutate the pagination
         // cursor, next callback, or final returned data through a shared array.
         onBatch(confirmed.map(bar => ({ ...bar })));
-        if (page.length < size) break;
+        if (page.length < size) {
+          // A short page is not, by itself, proof that the provider reached
+          // genesis.  Binance/Hyperliquid normally use a short page for
+          // genesis, but a proxy, rate limiter, or a provider-side page cap
+          // can also return a partial answer while older candles exist.  A
+          // one-row probe keeps that distinction explicit without exposing a
+          // probe candle (or a second callback) to the chart.  If the probe
+          // succeeds, the regular page request below fills the whole gap;
+          // if it fails, the request is an error rather than false history
+          // completion.  The probe is still abortable and never starts after
+          // this consumer has been cancelled.
+          const probeRange: BarRange = { ...range, limit: 1, to: cursor };
+          const probeReceived = await abortable(getBars(ticker, timeframe, probeRange), signal);
+          if (probeReceived === undefined || signal?.aborted) break;
+          const probe = normalizeProviderBars(probeReceived, probeRange);
+          if (probe.length === 0) break;
+          // Older data exists. Continue with a normal-sized page at the same
+          // cursor; do not append the probe because doing so would leave a
+          // hole between it and the already-confirmed prefix.
+        }
       }
     } catch (caught) {
       error = caught;

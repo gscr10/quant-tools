@@ -8,7 +8,11 @@ export type { WorkspaceTemplate } from '../../domain/templates.ts';
 function asWorkspaceTemplate(value: unknown): WorkspaceTemplate | null {
   if (!isRecord(value)) return null;
   const name = typeof value.name === 'string' ? value.name.trim() : '';
-  if (!name || !('state' in value)) return null;
+  // Vela's applyState contract accepts a workspace document (a plain object).
+  // Reject null/arrays/primitives here so a corrupt or legacy template cannot
+  // break the picker when it is applied.  Keep the payload opaque otherwise:
+  // extension state is versioned by Vela and must round-trip untouched.
+  if (!name || !('state' in value) || !isRecord(value.state)) return null;
   return {
     name,
     state: value.state,
@@ -32,7 +36,7 @@ export function listWorkspaceTemplates(): WorkspaceTemplate[] {
 
 export function saveWorkspaceTemplate(name: string, state: unknown): WorkspaceTemplate[] {
   const normalized = name.trim();
-  if (!normalized) return listWorkspaceTemplates();
+  if (!normalized || !isRecord(state)) return listWorkspaceTemplates();
   const rest = listWorkspaceTemplates().filter((item) => item.name !== normalized);
   const next = [{ name: normalized, state, savedAt: Date.now() }, ...rest];
   writeJson(WORKSPACE_TEMPLATES_KEY, next);

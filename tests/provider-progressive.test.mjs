@@ -70,11 +70,57 @@ for (const length of [0, 523, 1000, 1523, 2000, 2300]) {
     });
     const actual = await fixture.provider.getBarsProgressive('BTCUSDT.P', '60', { limit: 2300, session: 'regular' }, () => {});
     assert.deepEqual(actual, all);
-    assert.equal(calls, length === 2300 ? 3 : Math.floor(length / 1000) + 1);
+    // Short final pages perform one bounded genesis probe before being
+    // accepted as complete. Exact page boundaries still need only the empty
+    // terminating request.
+    const expectedCalls = length === 0 ? 1
+      : length === 2300 ? 3
+        : length % 1000 === 0 ? length / 1000 + 1
+          : Math.floor(length / 1000) + 2;
+    assert.equal(calls, expectedCalls);
     assert.equal((await fixture.requests[0].result).error, null);
     fixture.stop();
   });
 }
+
+test('short page is not treated as genesis when an older candle probe succeeds', async () => {
+  const all = rows(1800);
+  const calls = [];
+  const fixture = setup(async (_, __, range) => {
+    calls.push({ ...range });
+    // Simulate a provider that returns a short page even though older data
+    // exists. The one-row probe must establish that history continues, then
+    // the next ordinary page must fill the gap.
+    if (calls.length === 1) return all.slice(1300);
+    if (range.limit === 1) return all.filter(bar => bar.time <= range.to).slice(-1);
+    return all.filter(bar => bar.time <= range.to).slice(-range.limit);
+  });
+  const batches = [];
+  const actual = await fixture.provider.getBarsProgressive('BTCUSDT', '15', { limit: 1500 }, bars => batches.push(bars));
+  assert.deepEqual(actual, all.slice(300));
+  assert.equal(batches.length, 2);
+  assert.equal(calls[1].limit, 1);
+  assert.equal(calls[2].limit, 1000);
+  assert.equal((await fixture.requests[0].result).bars, 1500);
+  fixture.stop();
+});
+
+test('genesis probe errors are reported instead of publishing successful completion', async () => {
+  const failure = Error('history probe unavailable');
+  let calls = 0;
+  const fixture = setup(async (_, __, range) => {
+    calls++;
+    if (calls === 1) return rows(523);
+    throw failure;
+  });
+  const actual = await fixture.provider.getBarsProgressive('BTCUSDT', '15', { limit: 2000 }, () => {});
+  assert.deepEqual(actual, rows(523));
+  const outcome = await fixture.requests[0].result;
+  assert.equal(outcome.error, failure);
+  assert.equal(outcome.aborted, false);
+  assert.equal(outcome.bars, 523);
+  fixture.stop();
+});
 
 test('late page failure retains first page and settles error fact before final result', async () => {
   const failure = Error('HTTP 503');

@@ -50,6 +50,8 @@
     "type": "module",
     "scripts": {
         "test": "cross-env TEST_ENV=true vitest --reporter verbose",
+        "test:offline": "cross-env TEST_ENV=true vitest run --config vitest.offline.config.ts --reporter verbose",
+        "test:network": "cross-env TEST_ENV=true PINETS_NETWORK_TESTS=true vitest run --config vitest.network.config.ts --reporter verbose",
         "test:coverage": "cross-env TEST_ENV=true vitest run --coverage",
         "test:coverage:badge": "cross-env TEST_ENV=true vitest run --coverage --exclude tests/_local/**",
         "generate:badges": "npm run test:coverage:badge && node scripts/generate-badges.js",

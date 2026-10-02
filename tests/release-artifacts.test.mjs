@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { execFile, execFileSync } from 'node:child_process';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -121,6 +122,21 @@ async function runNode(script, args, cwd) {
   return execFileAsync(process.execPath, [script, ...args], { cwd });
 }
 
+function httpGet(port, pathname) {
+  return new Promise((resolve, reject) => {
+    const request = import('node:http').then(({ get }) => get(
+      { host: '127.0.0.1', port, path: pathname, headers: { 'cache-control': 'no-cache' } },
+      (response) => {
+        let body = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => { body += chunk; });
+        response.on('end', () => resolve({ status: response.statusCode, body }));
+      },
+    ));
+    request.catch(reject);
+  });
+}
+
 test('release manifest can target an older checkout and verifier rejects tampered dist', async () => {
   const root = await mkdtemp(join(tmpdir(), 'quant-release-manifest-'));
   await mkdir(join(root, 'dist', 'assets'), { recursive: true });
@@ -151,4 +167,102 @@ test('release manifest can target an older checkout and verifier rejects tampere
   );
   const tampered = await readFile(join(root, 'dist', 'assets', 'app.js'), 'utf8');
   assert.equal(tampered, 'tampered\n');
+});
+
+test('candidate and previous manifests support a same-slot rollback with storage recovery', async () => {
+  const manifestScript = new URL('../scripts/release-manifest.mjs', import.meta.url);
+  const verifierScript = new URL('../scripts/verify-release-manifest.mjs', import.meta.url);
+
+  async function createReleaseRoot(label, marker) {
+    const root = await mkdtemp(join(tmpdir(), `quant-release-${label}-`));
+    await mkdir(join(root, 'dist', 'assets'), { recursive: true });
+    await writeFile(join(root, 'package-lock.json'), `{"name":"fixture-${label}","lockfileVersion":3}\n`);
+    await writeFile(join(root, 'dist', 'index.html'), `<!doctype html><meta name="build" content="${marker}">\n`);
+    await writeFile(join(root, 'dist', 'assets', 'app.js'), `globalThis.__build=${JSON.stringify(marker)};\n`);
+    execFileSync('git', ['init', '-q'], { cwd: root });
+    execFileSync('git', ['add', '.'], { cwd: root });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', marker], { cwd: root });
+
+    const { stdout: manifestText } = await runNode(
+      manifestScript.pathname,
+      ['--root', root, '--require-clean', '--require-dist'],
+      root,
+    );
+    const manifestPath = `${root}.manifest.json`;
+    await writeFile(manifestPath, manifestText);
+    const { stdout: verifyText } = await runNode(
+      verifierScript.pathname,
+      ['--root', root, '--manifest', manifestPath, '--require-clean', '--json'],
+      root,
+    );
+    const verification = JSON.parse(verifyText);
+    assert.equal(verification.ok, true, `${label} manifest should verify`);
+    return { root, marker };
+  }
+
+  const candidate = await createReleaseRoot('candidate', 'candidate-build');
+  const previous = await createReleaseRoot('previous', 'previous-build');
+  let active = candidate;
+  const server = createServer(async (request, response) => {
+    if (request.url !== '/assets/app.js') {
+      response.writeHead(404);
+      response.end('not found');
+      return;
+    }
+    const body = await readFile(join(active.root, 'dist', 'assets', 'app.js'));
+    response.writeHead(200, { 'content-type': 'text/javascript', 'cache-control': 'no-store' });
+    response.end(body);
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const port = server.address().port;
+  try {
+    assert.deepEqual(await httpGet(port, '/assets/app.js'), {
+      status: 200,
+      body: 'globalThis.__build="candidate-build";\n',
+    });
+    active = previous;
+    assert.deepEqual(await httpGet(port, '/assets/app.js'), {
+      status: 200,
+      body: 'globalThis.__build="previous-build";\n',
+    });
+    active = candidate;
+    assert.deepEqual(await httpGet(port, '/assets/app.js'), {
+      status: 200,
+      body: 'globalThis.__build="candidate-build";\n',
+    });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+
+  const before = {
+    local: {
+      'quant-tools:workspace:v2': JSON.stringify({
+        version: 1,
+        revision: 4,
+        charts: [{ id: 'main', symbol: 'binance:BTCUSDT', bars: 2000 }],
+        panels: { backtest: true },
+      }),
+      'vela-pine:scripts:v1': JSON.stringify([{ name: 'SMA', script: 'plot(close)', savedAt: 1 }]),
+    },
+    session: {},
+  };
+  const after = {
+    local: {
+      'quant-tools:workspace:v2': JSON.stringify({
+        version: 1,
+        revision: 99,
+        charts: [{ id: 'main', symbol: 'binance:BTCUSDT', bars: 2000 }],
+        panels: { backtest: true },
+      }),
+      'vela-pine:scripts:v1': JSON.stringify([{ name: 'SMA', script: 'plot(close)', savedAt: 100 }]),
+    },
+    session: {},
+  };
+  const storage = reconcileStorageSnapshots(before, after);
+  assert.equal(storage.equal, true);
+  assert.deepEqual(storage.changed, []);
+  assert.deepEqual(storage.issues, []);
 });
