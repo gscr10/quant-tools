@@ -14,7 +14,8 @@
 - [x] 本地 release manifest/verify：旧 checkout、dist 篡改拒绝及当前 dist 完整性均通过；部署平台 slot rollback/CDN 缓存恢复仍需线上验收。
 - [x] Provider index 恢复周期：缓存过期后的重复故障可再次 fallback/retry/re-register；malformed symbol descriptor 不再污染交易品索引，ticker 外层空白会被归一化。
 - [x] 历史点位恢复周期解析严格区分 `M` 月与 `m` 分钟；Workspace 历史预算和 runtime storage 输入边界已补回归。
-- [x] 本轮回归：根测试 468/468、Provider network/history 专项通过、TypeScript、build、startup、依赖契约、dist 独立性、bundle budget 和 `git diff --check` 通过。
+- [x] Bar Magnifier lower-feed 对超大/非安全周期值安全降级，不构造不安全范围或 limit；补充 Vela-PineTS 回归。
+- [x] 本轮回归：根测试 468/468、Vela-PineTS 284/284、Provider network/history 专项通过、TypeScript、build、startup、依赖契约、dist 独立性、bundle budget 和 `git diff --check` 通过。
 
 ## 2026-10-01 R-08～R-11 修复后独立复查（当前状态）
 
