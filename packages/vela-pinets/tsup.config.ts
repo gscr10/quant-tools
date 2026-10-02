@@ -53,11 +53,14 @@ export default defineConfig([
     // Library build — ESM + CJS + types; Vela and pinets stay external (the peers).
     {
         name: 'lib',
-        entry: { index: 'src/index.ts' },
+        entry: { index: 'src/index.ts', audit: 'src/audit.ts', 'worker-engine': 'src/worker-engine.ts' },
         format: ['esm', 'cjs'],
         dts: true,
         sourcemap: false,
         clean: true,
+        // Keep the optional worker entry in a separate module graph. Shared
+        // chunks make Vite pull the Worker implementation into the host graph.
+        splitting: false,
         treeshake: true,
         external: ['pinets', '@luxalgo/vela', /^@luxalgo\/vela\//],
         esbuildPlugins: [inlineWorker()],

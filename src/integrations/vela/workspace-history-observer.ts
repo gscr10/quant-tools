@@ -1,6 +1,7 @@
 import type { BarRange, Vela } from '@luxalgo/vela';
 import type { ChartCell, VelaWorkspace } from '@luxalgo/vela/workspace';
 import { subscribeProviderHistoryRequests } from './provider-history.ts';
+import { subscribeProgressiveHistoryRequests } from './provider-progressive.ts';
 
 /** Reason-bearing facts observed during the workspace lifetime, not inferred
  * from historyComplete(): that void promise also resolves after abort. */
@@ -23,7 +24,7 @@ interface RecordState {
   committed: boolean;
   facts: ObservedWorkspaceHistory;
   requests: Set<() => void>;
-  responses: Array<{ range: Readonly<BarRange>; error: string | null; bars: number; oldestTime: number | null }>;
+  responses: Array<{ range: Readonly<BarRange>; error: string | null; bars: number; oldestTime: number | null; progressive?: boolean }>;
   dispose: () => void;
 }
 const observers = new WeakMap<VelaWorkspace, Map<string, RecordState>>();
@@ -126,6 +127,21 @@ export function observeWorkspaceHistory(workspace: VelaWorkspace): () => void {
             error: error === null ? null : error instanceof Error ? error.message : String(error), bars, oldestTime });
         });
       }));
+      listeners.push(subscribeProgressiveHistoryRequests(provider, request => {
+        if (!current()) return;
+        const resolved = chart.data.resolve(chart.market.symbol ?? '');
+        if (!resolved || resolved.provider !== info.name || resolved.ticker !== request.ticker
+          || (chart.market.timeframe ?? '60') !== request.timeframe) return;
+        reconcile();
+        const generation = state.facts.generation;
+        const market = state.market;
+        void request.result.then(({ error, aborted, bars, oldestTime }) => {
+          if (!current() || generation !== state.facts.generation || market !== identity(chart)) return;
+          state.responses.push({ range: request.range, progressive: true,
+            error: aborted ? 'history load aborted' : error === null ? null : error instanceof Error ? error.message : String(error),
+            bars, oldestTime });
+        });
+      }));
     }
     listeners.push(chart.on('load:start', (event) => {
       if (current() && matches(event)) reset();
@@ -148,7 +164,9 @@ export function observeWorkspaceHistory(workspace: VelaWorkspace): () => void {
       const boundary = event.oldestTime;
       const relevant = state.responses.filter(response => {
         if ((bars ?? 0) === 0) return response.range.from === undefined && response.range.to === undefined;
-        return (response.range.to === boundary || response.range.to === boundary - 1)
+        return (response.progressive && response.range.to === undefined
+          ? response.oldestTime === boundary
+          : (response.range.to === boundary || response.range.to === boundary - 1))
           && (response.range.from === undefined || response.range.from < boundary);
       });
       // Successful exhaustion at THIS exact oldest boundary is independent

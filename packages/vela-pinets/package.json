@@ -14,6 +14,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./audit": {
+      "types": "./dist/audit.d.ts",
+      "import": "./dist/audit.js",
+      "require": "./dist/audit.cjs"
+    },
+    "./worker-engine": {
+      "types": "./dist/worker-engine.d.ts",
+      "import": "./dist/worker-engine.js",
+      "require": "./dist/worker-engine.cjs"
     }
   },
   "files": [

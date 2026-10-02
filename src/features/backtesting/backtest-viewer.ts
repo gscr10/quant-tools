@@ -898,6 +898,12 @@ function renderKpi(
 
 function performanceSummaryKpis(doc: Document, report: BacktestReport): HTMLElement {
   const bar = createElement(doc, 'div', 'quant-backtest-performance-kpi-bar');
+  // The KPI strip intentionally scrolls horizontally on narrow screens. Give
+  // that scroll container a keyboard target and an accessible name so keyboard
+  // and assistive-technology users can reach the clipped metrics.
+  bar.tabIndex = 0;
+  bar.setAttribute('role', 'region');
+  bar.setAttribute('aria-label', 'Performance summary metrics');
   const currency = reportCurrency(report);
   const net = metricValue(report, 'netProfit');
   const trades = metricValue(report, 'trades');

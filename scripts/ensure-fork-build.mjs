@@ -12,6 +12,12 @@ const requiredOutputs = [
   'packages/vela-pinets/dist/index.js',
   'packages/vela-pinets/dist/index.cjs',
   'packages/vela-pinets/dist/index.d.ts',
+  'packages/vela-pinets/dist/audit.js',
+  'packages/vela-pinets/dist/audit.cjs',
+  'packages/vela-pinets/dist/audit.d.ts',
+  'packages/vela-pinets/dist/worker-engine.js',
+  'packages/vela-pinets/dist/worker-engine.cjs',
+  'packages/vela-pinets/dist/worker-engine.d.ts',
 ];
 
 const inputRoots = [

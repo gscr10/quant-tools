@@ -13,7 +13,7 @@ import type {
   VelaWorkspace,
   WorkspaceScriptRun,
 } from '@luxalgo/vela/workspace';
-import { validateAuditLedgerSnapshot } from '@luxalgo/vela-pinets';
+import { validateAuditLedgerSnapshot } from '@luxalgo/vela-pinets/audit';
 import { observedWorkspaceHistory, requestedHistoryMarketKey, subscribeWorkspaceHistoryRequests } from './workspace-history-observer.ts';
 import {
   BACKTEST_CONTEXT_SELECT,
