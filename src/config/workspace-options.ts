@@ -1,10 +1,14 @@
+export const WORKSPACE_HISTORY_BARS = 2000;
+
 export const WORKSPACE_DEFAULTS = {
   layout: '1',
-  symbol: 'BTCUSDT',
+  // The default market is pinned to Binance so a cold symbol index cannot
+  // delay the first chart. Persisted user selections remain unchanged.
+  symbol: 'binance:BTCUSDT',
   timeframe: '15',
   // Keep enough history for indicator warm-up and a useful backtest window.
   // Binance/Hyperliquid integrations paginate or window this request as needed.
-  bars: 2000,
+  bars: WORKSPACE_HISTORY_BARS,
   live: true,
   theme: 'dark',
   timezone: 'Etc/UTC',

@@ -36,7 +36,7 @@ test('workspace defaults, toolbar composition, providers, and dependency version
   );
   assert.deepEqual(WORKSPACE_DEFAULTS, {
     layout: '1',
-    symbol: 'BTCUSDT',
+    symbol: 'binance:BTCUSDT',
     timeframe: '15',
     bars: 2000,
     live: true,

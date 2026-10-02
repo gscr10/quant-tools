@@ -5,6 +5,7 @@ import { guardProviderHistory } from './provider-history.ts';
 import { guardProviderSubscription } from './provider-live.ts';
 import { guardProviderNetwork } from './provider-network.ts';
 import { resolveLocalSymbolIcon } from '../../shared/asset-logos.ts';
+import { enableProviderProgressiveHistory } from './provider-progressive.ts';
 
 export interface WorkspaceProviderOptions {
   /**
@@ -306,6 +307,7 @@ function prepareProvider<T extends DataProvider>(
     kind,
     options,
   );
+  if (kind === 'binance') enableProviderProgressiveHistory(guarded);
   if (options.remoteSymbolIcons === true) return guarded;
   // Do not mutate Vela's prototype.  The instance is freshly created for one
   // workspace registration, so an own non-enumerable override is sufficient

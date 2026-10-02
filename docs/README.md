@@ -9,6 +9,7 @@
 - [架构改造计划](architecture/ARCHITECTURE_REFACTOR_PLAN.md)
 - [本地 fork 与依赖基线](forks/DEPENDENCY_BASELINE.md)
 - [构建与部署说明](architecture/BUILD_AND_DEPLOYMENT.md)
+- [首次加载与行情初始化优化计划](architecture/STARTUP_LOADING_OPTIMIZATION_PLAN.md)
 
 ## 文档分层
 

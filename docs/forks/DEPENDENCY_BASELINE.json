@@ -38,7 +38,11 @@
       "tag": "v0.2.13",
       "sourceCommit": "a2a2097be8f30b4b596b13212ed4608c36c2ea26",
       "license": "AGPL-3.0-only",
-      "exports": ["."],
+      "exports": [
+        ".",
+        "./audit",
+        "./worker-engine"
+      ],
       "peerDependencies": {
         "@luxalgo/vela": "^0.7.7",
         "pinets": ">=0.9.31"
@@ -55,7 +59,9 @@
       "tag": "v0.9.34",
       "sourceCommit": "beacd587e83aa7ee061023f8cea66b2e887d5676",
       "license": "AGPL-3.0-only",
-      "exports": ["."],
+      "exports": [
+        "."
+      ],
       "dependencyMode": "workspace",
       "workspaceDirectory": "pinets"
     }

@@ -1,0 +1,62 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createMigratingWorkspaceStorage, migrateWorkspaceState, WORKSPACE_HISTORY_BARS } from '../src/integrations/storage/workspace-storage.ts';
+import { WORKSPACE_DEFAULTS } from '../src/config/workspace-options.ts';
+
+test('history migration shares its default with new workspace and preserves user fields', () => {
+  assert.equal(WORKSPACE_HISTORY_BARS, WORKSPACE_DEFAULTS.bars);
+  const state = { version: 1, charts: [undefined, 500, 2000, 7000].map(bars => ({
+    bars, symbol: 'hyperliquid:BTC', timeframe: '45',
+    rendererConfig: { bars: { upColor: 'red' } }, ext: { script: 'plot(close)' },
+  })) };
+  const raw = JSON.stringify(state);
+  const result = JSON.parse(migrateWorkspaceState(raw));
+  assert.deepEqual(result.charts.map(c => c.bars), [2000, 2000, 2000, 7000]);
+  result.charts.forEach((c, i) => {
+    const original = JSON.parse(raw).charts[i];
+    delete c.bars; delete original.bars;
+    assert.deepEqual(c, original);
+  });
+  for (const raw of ['{', 'null', '[]', '{"unknown":true}']) assert.equal(migrateWorkspaceState(raw), raw);
+});
+
+test('workspace creation and operation survive localStorage getter security errors', () => {
+  const old = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw Error('SecurityError'); } });
+  try {
+    const store = createMigratingWorkspaceStorage();
+    assert.equal(store.get('x'), null);
+    store.set('x', '{"charts":[{"bars":500}]}');
+    assert.equal(JSON.parse(store.get('x')).charts[0].bars, 2000);
+    store.remove('x');
+    assert.equal(store.get('x'), null);
+  } finally {
+    if (old) Object.defineProperty(globalThis, 'localStorage', old);
+    else delete globalThis.localStorage;
+  }
+});
+
+test('failed writes and removal do not resurrect stored stale state; healthy reads remain current', () => {
+  let fail = true;
+  const values = new Map([['x', '{"charts":[{"bars":500}]}']]);
+  let writes = 0;
+  const backend = {
+    getItem: key => values.get(key) ?? null,
+    setItem(key, value) { writes++; if (fail) throw Error('quota'); values.set(key, value); },
+    removeItem(key) { if (fail) throw Error('blocked'); values.delete(key); },
+  };
+  const store = createMigratingWorkspaceStorage(backend);
+  assert.equal(JSON.parse(store.get('x')).charts[0].bars, 2000);
+  assert.equal(JSON.parse(store.get('x')).charts[0].bars, 2000);
+  assert.equal(writes, 1);
+  store.remove('x'); assert.equal(store.get('x'), null);
+  fail = false;
+  store.set('x', '{"charts":[{"bars":3000}]}');
+  values.set('x', '{"charts":[{"bars":4000}]}');
+  assert.equal(JSON.parse(store.get('x')).charts[0].bars, 4000);
+});
+
+test('read failures do not prevent the workspace from booting', () => {
+  const store = createMigratingWorkspaceStorage({ getItem() { throw Error('blocked'); } });
+  assert.equal(store.get('workspace'), null);
+});

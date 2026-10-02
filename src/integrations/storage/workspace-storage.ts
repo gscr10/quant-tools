@@ -1,10 +1,11 @@
+import { WORKSPACE_HISTORY_BARS } from '../../config/workspace-options.ts';
+export { WORKSPACE_HISTORY_BARS } from '../../config/workspace-options.ts';
+
 interface WorkspaceStorage {
   get(key: string): string | null | Promise<string | null>;
   set(key: string, value: string): void | Promise<void>;
   remove?(key: string): void | Promise<void>;
 }
-
-export const WORKSPACE_HISTORY_BARS = 2000;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -44,18 +45,36 @@ export function createMigratingWorkspaceStorage(
   storage?: Storage,
   minimumBars = WORKSPACE_HISTORY_BARS,
 ): WorkspaceStorage {
-  const backend = storage ?? window.localStorage;
+  // Accessing the browser property itself can throw in restricted contexts.
+  // Resolve lazily so constructing the workspace remains safe even there.
+  const backend = (): Storage | undefined => {
+    try { return storage ?? globalThis.localStorage; } catch { return undefined; }
+  };
+  // Failed writes must remain visible within this workspace, including removals.
+  const pending = new Map<string, string | null>();
+  const write = (key: string, value: string | null): void => {
+    pending.set(key, value);
+    try {
+      const target = backend();
+      if (!target) return;
+      if (value === null) target.removeItem(key);
+      else target.setItem(key, value);
+      pending.delete(key);
+    } catch { /* Keep a session-local fallback; never clear user storage. */ }
+  };
   return {
     get(key) {
-      const raw = backend.getItem(key);
+      let raw: string | null;
+      if (pending.has(key)) raw = pending.get(key) ?? null;
+      else {
+        try { raw = backend()?.getItem(key) ?? null; } catch { return null; }
+      }
       if (raw === null) return null;
       const migrated = migrateWorkspaceState(raw, minimumBars);
-      if (migrated !== raw) {
-        try { backend.setItem(key, migrated); } catch { /* Vela still has the in-memory state. */ }
-      }
+      if (migrated !== raw) write(key, migrated);
       return migrated;
     },
-    set(key, value) { backend.setItem(key, value); },
-    remove(key) { backend.removeItem(key); },
+    set(key, value) { write(key, value); },
+    remove(key) { write(key, null); },
   };
 }

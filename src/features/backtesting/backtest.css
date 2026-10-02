@@ -1109,6 +1109,15 @@
   border-radius: 8px;
 }
 
+.quant-backtest-performance-kpi-bar:focus {
+  outline: none;
+}
+
+.quant-backtest-performance-kpi-bar:focus-visible {
+  outline: 2px solid var(--quant-backtest-accent, #2962ff);
+  outline-offset: -2px;
+}
+
 .quant-backtest-performance-kpi-bar .quant-backtest-kpi {
   /* Preserve equal desktop columns, but never squeeze a label/value below
    * its intrinsic width: the existing bar scrolls on narrow viewports. */

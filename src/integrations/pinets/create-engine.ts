@@ -1,7 +1,7 @@
-import { PineWorkerEngine } from '@luxalgo/vela-pinets';
+import { LazyPineWorkerEngine } from '../vela/lazy-worker-engine.ts';
 
-export function createPineEngine(): PineWorkerEngine {
-  return new PineWorkerEngine();
+export function createPineEngine(): LazyPineWorkerEngine {
+  return new LazyPineWorkerEngine();
 }
 
 /**
@@ -12,12 +12,12 @@ export function createPineEngine(): PineWorkerEngine {
  * its last indicator was removed).
  */
 export interface PineEngineRegistry {
-  readonly create: () => PineWorkerEngine;
+  readonly create: () => LazyPineWorkerEngine;
   dispose(): void;
 }
 
 export function createPineEngineRegistry(): PineEngineRegistry {
-  const engines = new Set<PineWorkerEngine>();
+  const engines = new Set<LazyPineWorkerEngine>();
   let disposed = false;
 
   return {
@@ -35,7 +35,7 @@ export function createPineEngineRegistry(): PineEngineRegistry {
     dispose: () => {
       if (disposed) return;
       disposed = true;
-      for (const engine of engines) engine.terminate();
+      for (const engine of engines) engine.dispose();
       engines.clear();
     },
   };

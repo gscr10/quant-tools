@@ -9,7 +9,7 @@ import type {
   StrategyTrade,
 } from '@luxalgo/vela';
 import type { VelaWorkspace } from '@luxalgo/vela/workspace';
-import { batchPineSettings } from '@luxalgo/vela-pinets';
+import { batchPineSettings } from '@luxalgo/vela-pinets/audit';
 import {
   BACKTEST_CONTEXT_SELECT,
   type BacktestAdapterKey,
