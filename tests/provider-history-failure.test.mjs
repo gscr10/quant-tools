@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { guardProviderHistory, subscribeProviderHistoryRequests } from '../src/integrations/vela/provider-history.ts';
+import { enableProviderProgressiveHistory } from '../src/integrations/vela/provider-progressive.ts';
 import { createWorkspaceProviders } from '../src/integrations/vela/provider-registry.ts';
 import { observeWorkspaceHistory, observedWorkspaceHistory } from '../src/integrations/vela/workspace-history-observer.ts';
 
@@ -147,4 +148,38 @@ test('R11 two cells: a different-range failure cannot contaminate a proven adjac
   assert.equal(first.read().historyReason,'aborted');
   assert.equal(second.read().historyReason,'genesis');assert.equal(second.read().historyError,null);
   first.dispose();second.dispose();
+});
+
+test('R11 late provider failure after history:complete revises the completion instead of leaving genesis', async () => {
+  let rejectRequest;
+  const provider = guardProviderHistory({ getBars: () => new Promise((_, reject) => { rejectRequest = reject; }) });
+  const f = observed(provider);
+  const request = provider.getBars('BTCUSDT', '15', { limit: 500 });
+  // Vela can publish its synthetic completion before the request observer's
+  // Promise reaction runs. A late transport error must still invalidate this
+  // generation instead of leaving a false no-data/genesis state.
+  f.chart.emit('history:complete', { reason: 'genesis', barsLoaded: 0, oldestTime: 0 });
+  rejectRequest(Error('late 503'));
+  await assert.rejects(request, /late 503/);
+  await Promise.resolve();
+  assert.equal(f.read().historyReason, 'aborted');
+  assert.match(f.read().historyError, /late 503/);
+  assert.equal(f.read().noData, false);
+  f.dispose();
+});
+
+test('R11 late progressive failure after history:complete revises the completion', async () => {
+  let rejectRequest;
+  const provider = enableProviderProgressiveHistory({
+    getBars: () => new Promise((_, reject) => { rejectRequest = reject; }),
+  });
+  const f = observed(provider);
+  const request = provider.getBarsProgressive('BTCUSDT', '15', { limit: 2_000 }, () => {});
+  f.chart.emit('history:complete', { reason: 'genesis', barsLoaded: 500, oldestTime: 1000 });
+  rejectRequest(Error('late progressive 503'));
+  await request;
+  await Promise.resolve();
+  assert.equal(f.read().historyReason, 'aborted');
+  assert.match(f.read().historyError, /late progressive 503/);
+  f.dispose();
 });

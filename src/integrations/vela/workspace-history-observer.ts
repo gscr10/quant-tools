@@ -25,6 +25,10 @@ interface RecordState {
   facts: ObservedWorkspaceHistory;
   requests: Set<() => void>;
   responses: Array<{ range: Readonly<BarRange>; error: string | null; bars: number; oldestTime: number | null; progressive?: boolean }>;
+  /** The completion event for this generation. Provider result promises can
+   * settle one microtask after Vela emits history:complete, so retain its
+   * boundary and re-evaluate when a late transport result arrives. */
+  completion: { bars: number; boundary: number; reason: 'depth' | 'genesis' | 'aborted' } | null;
   dispose: () => void;
 }
 const observers = new WeakMap<VelaWorkspace, Map<string, RecordState>>();
@@ -56,14 +60,14 @@ export function observeWorkspaceHistory(workspace: VelaWorkspace): () => void {
     const chart = cell.chart;
     const listeners: Array<() => void> = [];
     const state: RecordState = { chart, market: identity(chart), accepting: true, committed: false, facts: empty(0),
-      requests: new Set(), responses: [],
+      requests: new Set(), responses: [], completion: null,
       dispose: () => { while (listeners.length) listeners.pop()?.(); state.requests.clear(); state.responses.length = 0; } };
     records.set(cell.id, state);
     const current = (): boolean => !disposed && records.get(cell.id) === state;
     const reset = (): void => {
       state.market = identity(chart); state.accepting = true; state.committed = false;
       state.facts = { ...empty(state.facts.generation + 1), historyComplete: false };
-      state.responses.length = 0;
+      state.responses.length = 0; state.completion = null;
     };
     const reconcile = (): void => { if (state.market !== identity(chart)) reset(); };
     // Depth-only setMarket can await the first older-range response without
@@ -100,6 +104,30 @@ export function observeWorkspaceHistory(workspace: VelaWorkspace): () => void {
       return (event.symbol === undefined || event.symbol === market.symbol)
         && (event.timeframe === undefined || event.timeframe === market.timeframe);
     };
+    const applyCompletion = (): void => {
+      const completion = state.completion;
+      if (!completion || !state.accepting) return;
+      const { bars, boundary } = completion;
+      const relevant = state.responses.filter(response => {
+        if (bars === 0) return response.range.from === undefined && response.range.to === undefined;
+        return (response.progressive && response.range.to === undefined
+          ? response.oldestTime === boundary || response.error !== null
+          : (response.range.to === boundary || response.range.to === boundary - 1))
+          && (response.range.from === undefined || response.range.from < boundary);
+      });
+      // Successful exhaustion at THIS exact oldest boundary is independent
+      // proof even if a different cell's range failed. Generic success/empty
+      // responses elsewhere, or the newest result alone, prove nothing here.
+      const exhausted = relevant.some(response => response.error === null
+        && (response.bars === 0 || ((response.oldestTime ?? -Infinity) >= boundary
+          && (response.range.limit ?? Infinity) > response.bars)));
+      const failure = relevant.find(response => response.error !== null)?.error ?? null;
+      const failed = failure !== null && !exhausted && bars < (chart.market.bars ?? 500);
+      state.facts = { ...state.facts,
+        noData: failed ? false : state.facts.noData,
+        historyReason: failed ? 'aborted' : completion.reason,
+        historyError: failed ? failure : null };
+    };
     // The upstream network/feed layers turn rejected requests into []. Retain
     // request-local failure proof before their synthetic genesis event arrives.
     // Capture the market generation at START, not when an old request rejects.
@@ -125,6 +153,7 @@ export function observeWorkspaceHistory(workspace: VelaWorkspace): () => void {
           // below establishes which request facts apply to that cell.
           state.responses.push({ range: request.range,
             error: error === null ? null : error instanceof Error ? error.message : String(error), bars, oldestTime });
+          applyCompletion();
         });
       }));
       listeners.push(subscribeProgressiveHistoryRequests(provider, request => {
@@ -140,6 +169,7 @@ export function observeWorkspaceHistory(workspace: VelaWorkspace): () => void {
           state.responses.push({ range: request.range, progressive: true,
             error: aborted ? 'history load aborted' : error === null ? null : error instanceof Error ? error.message : String(error),
             bars, oldestTime });
+          applyCompletion();
         });
       }));
     }
@@ -162,27 +192,15 @@ export function observeWorkspaceHistory(workspace: VelaWorkspace): () => void {
       reconcile(); if (!state.accepting) return;
       const bars = count(event.barsLoaded);
       const boundary = event.oldestTime;
-      const relevant = state.responses.filter(response => {
-        if ((bars ?? 0) === 0) return response.range.from === undefined && response.range.to === undefined;
-        return (response.progressive && response.range.to === undefined
-          ? response.oldestTime === boundary
-          : (response.range.to === boundary || response.range.to === boundary - 1))
-          && (response.range.from === undefined || response.range.from < boundary);
-      });
-      // Successful exhaustion at THIS exact oldest boundary is independent
-      // proof even if a different cell's range failed. Generic success/empty
-      // responses elsewhere, or the newest result alone, prove nothing here.
-      const exhausted = relevant.some(response => response.error === null
-        && (response.bars === 0 || ((response.oldestTime ?? -Infinity) >= boundary
-          && (response.range.limit ?? Infinity) > response.bars)));
-      const failure = relevant.find(response => response.error !== null)?.error ?? null;
-      const failed = failure !== null && !exhausted && (bars ?? 0) < (chart.market.bars ?? 500);
+      const normalizedBars = bars ?? 0;
+      state.completion = { bars: normalizedBars, boundary, reason: event.reason };
+      const priorError = state.facts.historyError;
       state.facts = { ...state.facts, historyLoaded: bars, historyBarsLoaded: bars,
-        noData: failed ? false : state.facts.noData,
+        noData: priorError ? false : state.facts.noData,
         historyTarget: state.facts.historyTarget ?? count(chart.market.bars ?? 500),
         historyOldestTime: Number.isFinite(event.oldestTime) ? event.oldestTime : null,
-        historyComplete: true, historyReason: failed ? 'aborted' : event.reason,
-        historyError: failed ? failure : null };
+        historyComplete: true, historyReason: event.reason, historyError: null };
+      applyCompletion();
       if (state.committed) state.accepting = false;
     }));
     listeners.push(chart.on('market:changed', (event) => {
