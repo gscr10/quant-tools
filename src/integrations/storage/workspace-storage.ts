@@ -22,13 +22,25 @@ function isRecord(value: unknown): value is JsonRecord {
 export function migrateWorkspaceState(raw: string, minimumBars = WORKSPACE_HISTORY_BARS): string {
   try {
     const state: unknown = JSON.parse(raw);
-    if (!isRecord(state) || !Number.isFinite(minimumBars) || minimumBars <= 0) return raw;
+    // This function is called at a runtime persistence boundary.  Keep the
+    // migration a no-op for an unusable threshold rather than writing an
+    // invalid (for example, zero or fractional) history budget back to the
+    // user's document.
+    const targetBars = Number.isFinite(minimumBars) && minimumBars > 0
+      ? Math.floor(minimumBars)
+      : 0;
+    if (!isRecord(state) || targetBars <= 0) return raw;
     let changed = false;
     const upgrade = (entry: unknown): void => {
       if (!isRecord(entry)) return;
       const bars = entry.bars;
-      if (bars === undefined || (typeof bars === 'number' && Number.isFinite(bars) && bars < minimumBars)) {
-        entry.bars = Math.floor(minimumBars);
+      // Vela drops malformed persisted fields, which would otherwise make an
+      // old document fall back to its generic default instead of the current
+      // 2000-bar policy.  Repair the chart/cell field here, while deliberately
+      // leaving rendererConfig.bars (a color object) untouched.
+      const validBars = typeof bars === 'number' && Number.isFinite(bars) && bars > 0;
+      if (!validBars || bars < targetBars) {
+        entry.bars = targetBars;
         changed = true;
       }
     };
@@ -53,6 +65,10 @@ export function createMigratingWorkspaceStorage(
   // Failed writes must remain visible within this workspace, including removals.
   const pending = new Map<string, string | null>();
   const write = (key: string, value: string | null): void => {
+    // Vela's storage contract is string|null at runtime too.  A malformed
+    // host call must not poison the pending fallback with an object/number
+    // that would later escape through get().
+    if (value !== null && typeof value !== 'string') return;
     pending.set(key, value);
     try {
       const target = backend();
@@ -67,7 +83,10 @@ export function createMigratingWorkspaceStorage(
       let raw: string | null;
       if (pending.has(key)) raw = pending.get(key) ?? null;
       else {
-        try { raw = backend()?.getItem(key) ?? null; } catch { return null; }
+        try {
+          const value = backend()?.getItem(key) ?? null;
+          raw = typeof value === 'string' || value === null ? value : null;
+        } catch { return null; }
       }
       if (raw === null) return null;
       const migrated = migrateWorkspaceState(raw, minimumBars);

@@ -20,6 +20,31 @@ test('history migration shares its default with new workspace and preserves user
   for (const raw of ['{', 'null', '[]', '{"unknown":true}']) assert.equal(migrateWorkspaceState(raw), raw);
 });
 
+test('history migration repairs malformed chart budgets without touching renderer bars', () => {
+  const state = {
+    version: 1,
+    charts: [
+      { id: 'missing' },
+      { id: 'null', bars: null },
+      { id: 'text', bars: '500' },
+      { id: 'negative', bars: -1 },
+      { id: 'boolean', bars: false },
+      { id: 'fractional', bars: 2000.5 },
+      { id: 'large', bars: 3000 },
+      { id: 'renderer', rendererConfig: { bars: { upColor: 'red' } } },
+    ],
+  };
+  const migrated = JSON.parse(migrateWorkspaceState(JSON.stringify(state)));
+  assert.deepEqual(migrated.charts.map((chart) => chart.bars), [
+    2000, 2000, 2000, 2000, 2000, 2000.5, 3000, 2000,
+  ]);
+  assert.deepEqual(migrated.charts.at(-1).rendererConfig.bars, { upColor: 'red' });
+  assert.equal(migrateWorkspaceState(JSON.stringify({ charts: [{ bars: 99 }] }), 2000.9),
+    JSON.stringify({ charts: [{ bars: 2000 }] }));
+  assert.equal(migrateWorkspaceState(JSON.stringify({ charts: [{ bars: 99 }] }), 0.5),
+    JSON.stringify({ charts: [{ bars: 99 }] }));
+});
+
 test('workspace creation and operation survive localStorage getter security errors', () => {
   const old = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw Error('SecurityError'); } });
@@ -58,5 +83,16 @@ test('failed writes and removal do not resurrect stored stale state; healthy rea
 
 test('read failures do not prevent the workspace from booting', () => {
   const store = createMigratingWorkspaceStorage({ getItem() { throw Error('blocked'); } });
+  assert.equal(store.get('workspace'), null);
+});
+
+test('runtime storage boundary rejects non-string host values', () => {
+  const store = createMigratingWorkspaceStorage({
+    getItem() { return 42; },
+    setItem() { throw Error('quota'); },
+    removeItem() { throw Error('blocked'); },
+  });
+  assert.equal(store.get('workspace'), null);
+  store.set('workspace', /** @type {any} */ ({ charts: [] }));
   assert.equal(store.get('workspace'), null);
 });

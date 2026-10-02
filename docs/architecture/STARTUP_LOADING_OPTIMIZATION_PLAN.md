@@ -13,6 +13,9 @@
 - 修复 Binance spot 异步解析 WebSocket 地址时的 unsubscribe 竞态：`spotWsBase()` 尚未完成时不提前恢复构造器 guard，Promise settle 后再让出一个 task 覆盖 `await` 后的迟到 `new WebSocket()`。
 - 覆盖 Hyperliquid 重连、迟到 `onopen`、多订阅嵌套释放顺序及重复 unsubscribe；Provider 生命周期专项 7/7，通过 TypeScript、根测试 460/460。
 - 本修复只位于集成层和测试层，未修改 `node_modules` 或 Vela 产物；长时真实网络故障、断网恢复和部署平台 rollback 仍保持开放，不能因专项通过而关闭 S5。
+- 修复 symbol index 在“缓存过期→故障 fallback→恢复”后再次故障时无法重新开启恢复周期的问题；对 malformed/缺失 ticker 的索引项拒绝并回退到安全默认目录。
+- 修复点位历史恢复的周期解析：严格区分 Pine/Vela 的月份 `M` 与分钟 `m`，并覆盖长英文周期拼写；同时将 Workspace 历史深度迁移的非法预算和非字符串存储值挡在持久化边界外。
+- 本轮新增 Provider/Storage 回归后根测试为 467/467，TypeScript、构建、启动探针、依赖契约、dist 独立性和 bundle budget 均通过。
 
 ## 1. 目标与边界
 

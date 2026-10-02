@@ -12,6 +12,9 @@
 - [x] S4 bundle threshold：新增 `npm run check:bundle-size`，对 main/worker/highcharts raw 与 gzip 产物建立可执行预算门禁。
 - [ ] 启动优化 Final Gate：本轮补测 Chromium/Firefox/WebKit 首绘与 getter/methods 存储故障均通过；完整冷/热 p95、长时 Provider/断网恢复、实际线上入口、部署制品 rollback、完整 Provider/品种/模板回归仍未关闭。
 - [x] 本地 release manifest/verify：旧 checkout、dist 篡改拒绝及当前 dist 完整性均通过；部署平台 slot rollback/CDN 缓存恢复仍需线上验收。
+- [x] Provider index 恢复周期：缓存过期后的重复故障可再次 fallback/retry/re-register；malformed symbol descriptor 不再污染交易品索引。
+- [x] 历史点位恢复周期解析严格区分 `M` 月与 `m` 分钟；Workspace 历史预算和 runtime storage 输入边界已补回归。
+- [x] 本轮回归：根测试 467/467、Provider network/history 专项通过、TypeScript、build、startup、依赖契约、dist 独立性、bundle budget 和 `git diff --check` 通过。
 
 ## 2026-10-01 R-08～R-11 修复后独立复查（当前状态）
 

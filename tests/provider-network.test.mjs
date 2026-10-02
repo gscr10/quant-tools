@@ -724,6 +724,61 @@ test('provider index clears Binance-like empty cache and preserves a later succe
   assert.equal(calls, 2);
 });
 
+test('provider index starts a fresh recovery episode after a later outage', async () => {
+  let calls = 0;
+  const recovered = [];
+  const provider = guardProviderIndex({
+    listSymbols: async () => {
+      calls += 1;
+      if (calls === 2 || calls === 4) throw new Error('temporary index outage');
+      return [{ ticker: calls === 1 ? 'ETHUSDT' : 'BTCUSDT', type: 'crypto' }];
+    },
+    getBars: async () => [],
+  }, 'binance', {
+    metadataCacheTtlMs: 0,
+    onIndexRecovered: (_kind, value) => recovered.push(value),
+  });
+
+  assert.equal((await provider.listSymbols())[0].ticker, 'ETHUSDT');
+  assert.equal((await provider.listSymbols())[0].ticker, 'BTCUSDT');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // The second call entered fallback and the queued retry recovered it.
+  assert.equal(recovered.length, 1);
+
+  assert.equal((await provider.listSymbols())[0].ticker, 'BTCUSDT');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal((await provider.listSymbols())[0].ticker, 'BTCUSDT');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(recovered.length, 2, 'a later outage must re-register recovery');
+});
+
+test('provider index rejects malformed descriptors instead of indexing an empty ticker', async () => {
+  const provider = guardProviderIndex({
+    listSymbols: async () => [{ description: 'missing ticker' }],
+    getBars: async () => [],
+  }, 'hyperliquid', { onIndexRecovered: () => {} });
+
+  assert.deepEqual(await provider.listSymbols(), [{
+    ticker: 'BTC', description: 'BTC / USD Perpetual', type: 'futures',
+  }]);
+});
+
+test('provider index without a recovery callback can recover after a later outage', async () => {
+  let calls = 0;
+  const provider = guardProviderIndex({
+    listSymbols: async () => {
+      calls += 1;
+      if (calls === 2) throw new Error('temporary index outage');
+      return [{ ticker: calls === 1 ? 'ETHUSDT' : 'BTCUSDT', type: 'crypto' }];
+    },
+    getBars: async () => [],
+  }, 'binance', { metadataCacheTtlMs: 0 });
+
+  assert.equal((await provider.listSymbols())[0].ticker, 'ETHUSDT');
+  assert.equal((await provider.listSymbols())[0].ticker, 'BTCUSDT');
+  assert.equal((await provider.listSymbols())[0].ticker, 'BTCUSDT');
+});
+
 test('provider index keeps a late Hyperliquid metadata result and notifies recovery', async () => {
   let calls = 0;
   let releaseFirst;
