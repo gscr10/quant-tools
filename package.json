@@ -23,6 +23,7 @@
     "release:verify": "node scripts/verify-release-manifest.mjs",
     "release:storage-check": "node scripts/storage-reconciliation.mjs",
     "check:dist:independence": "node scripts/check-dist-independence.mjs",
+    "check:bundle-size": "node scripts/check-bundle-size.mjs",
     "check:dependencies": "node scripts/check-dependency-contract.mjs",
     "build:forks": "npm run build:forks:pinets && npm run build:forks:vela-pinets",
     "build:forks:pinets": "npm --workspace packages/pinets run build:prod:all",

@@ -180,6 +180,7 @@ npm run test:forks
 npm run build
 npm run check:dependencies
 npm run check:dist:independence
+npm run check:bundle-size
 npm run test:e2e
 npm run test:e2e:settings
 npm run test:e2e:fault-isolation
@@ -207,7 +208,7 @@ kill-switch 测试后重新进行普通 production build，避免遗留禁用回
 | S1 路由和索引 | 部分完成 | 默认 Binance 显式路由，受控首绘提前约 1.07s；仍需完整品种搜索、模板及所有 Provider 回归 |
 | S2 渐进加载 | 部分完成 | Binance 原生 2000 根 progressive 模块、错误/取消/分页单测及真实 App 2×1000 请求；仍需真实首批策略门控、双引擎逐笔等价与长链路故障证据 |
 | S3 去重 | 已完成（有界缓存 + live 生命周期） | `provider-network.ts` 对 Binance JSON 和 Hyperliquid POST 做 provider-instance 级并发去重，并对 exchange metadata 使用可配置短 TTL；`provider-registry.ts` 对 symbol index 使用同一实例隔离 TTL；`provider-live.ts` 覆盖 async spot endpoint、重连和嵌套订阅释放。失败自动释放并可重试，网络专项 30 项、live 专项 7 项通过；受控启动中 Binance `exchangeInfo` 从 4 次降至 2 次，历史 K 线请求仍保持 2 次 |
-| S4 资源延迟加载 | 基线门禁通过，仍需长期观测 | Pine Worker 独立懒加载 chunk；主 JS 约 3.71MB 降至 2.27MB，Worker 约 825KB；跨浏览器、性能门禁和视觉/a11y 门禁通过，仍保留大 chunk 告警和长时资源观测项 |
+| S4 资源延迟加载 | 已完成基础门禁，长期观测仍开放 | Pine Worker 独立懒加载 chunk；主 JS 约 3.71MB 降至 2.27MB，Worker 约 825KB；新增 `npm run check:bundle-size`，对 main/worker/highcharts 同时检查 raw/gzip budgets；跨浏览器、性能门禁和视觉/a11y 门禁通过，长时资源观测仍开放 |
 | S5 组合回归/回滚/人工入口 | 部分完成 | 根测试 454/454、Provider live 7/7、Vela-PineTS 283/283、开发/生产 E2E、Settings、故障隔离、多 Cell、跨浏览器、性能和视觉/a11y 均通过；仍需人工线上入口、长时 Provider/断网恢复、真实制品 rollback 验收 |
 
 发现问题自主处理，不因一个失败路径停下；仍保留待办直到证据关闭。不可用“413/414 等历史测试数量”推断完成。性能无收益则自动调整方案或撤回该项代码，保留测量结论；业务回归必须修复后再前进。
@@ -220,6 +221,8 @@ kill-switch 测试后重新进行普通 production build，避免遗留禁用回
 
 2026-10-02 冷/热启动补测：Chromium 3 次首绘 `620.8/518.8/528.5ms`（median `528.5ms`），Firefox 2 次 `733/550ms`（median `641.5ms`），WebKit 2 次 `634/626ms`（median `630ms`）；getter 和 Storage methods 故障各 1 次均成功启动。该样本证明当前跨浏览器和存储降级链路可工作，但样本量仍不足以关闭完整 S0 冷/热 p95 门禁。
 2026-10-02 Chromium 扩展样本：受控索引 `200ms`、K 线 `300ms`，10 次首绘为 `671.1/567.4/535.7/511.8/525.7/512.4/501.8/530.4/515.7/530.6ms`，median `528.1ms`、离散 p95（第 10 个排序样本的近似）`567.4ms`，全部无失败。该结果用于启动观测，不替代跨机器基线和长期真实网络样本。
+
+2026-10-02 资源预算门禁：`npm run check:bundle-size` 通过；当前 main `2,274,833/640,437`、worker `825,094/206,251`、Highcharts 合计 `376,416/134,100`（raw/gzip bytes），均低于源码中定义的预算。预算只约束构建产物，不把历史 audit 附件纳入仓库或门禁。
 
 完整完成条件：所有必做阶段有实际证据，全部硬性不变量满足，受控性能预算达标且真实网络功能有效，正常/回退模式均通过，已给出可人工检查的服务。当前文档完成不代表这些实现门禁已通过。
 
