@@ -97,6 +97,26 @@ interface LowerTimeframeCacheEntry {
     expiresAt?: number;
 }
 
+/** Only complete finite OHLCV rows are safe to retain across retries. */
+function cacheableLowerBars(value: unknown): value is OHLCV[] {
+    if (!Array.isArray(value) || value.length === 0) return false;
+    return value.every((row) => {
+        try {
+            if (row === null || typeof row !== 'object') return false;
+            const candidate = row as Partial<OHLCV>;
+            return typeof candidate.time === 'number' && Number.isFinite(candidate.time)
+                && typeof candidate.open === 'number' && Number.isFinite(candidate.open)
+                && typeof candidate.high === 'number' && Number.isFinite(candidate.high)
+                && typeof candidate.low === 'number' && Number.isFinite(candidate.low)
+                && typeof candidate.close === 'number' && Number.isFinite(candidate.close)
+                && (candidate.volume === undefined
+                    || (typeof candidate.volume === 'number' && Number.isFinite(candidate.volume)));
+        } catch {
+            return false;
+        }
+    });
+}
+
 /**
  * A small, execution-session cache for Bar Magnifier's lower-timeframe feed.
  *
@@ -240,7 +260,7 @@ export class LowerTimeframeFetchCache {
                 // practice.  Treat it like a failed fetch for caching purposes:
                 // a later backfill/retry in the same execution session must be
                 // able to observe newly available child candles.
-                if (!Array.isArray(bars) || bars.length === 0) {
+                if (!cacheableLowerBars(bars)) {
                     if (this.entries.get(key)?.promise === promise) this.entries.delete(key);
                 } else if (this.entries.get(key)?.promise === promise) {
                     // TTL starts when usable data arrives. A pending request is

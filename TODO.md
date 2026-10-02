@@ -17,7 +17,8 @@
 - [x] Bar Magnifier lower-feed 对超大/非安全周期值安全降级，不构造不安全范围或 limit；补充 Vela-PineTS 回归。
 - [x] `request.security` secondary feed 对 resolved malformed OHLC、坏 getter、非法 volume、重复和乱序时间戳安全归一，同时保留 rejected Provider error metadata；补充 Vela-PineTS 回归。
 - [x] 渐进历史分页无进度保护：重复页、忽略 `to` 边界或非空但不可归一化响应不再误判 genesis；保留已绘制前缀并发布错误，补充回归。
-- [x] 本轮回归：根测试 470/470、Vela-PineTS 289/289、Provider network/history 专项通过、TypeScript、build、startup、依赖契约、dist 独立性、bundle budget 和 `git diff --check` 通过。
+- [x] lower-timeframe cache 只缓存完整有限 OHLCV；混合 malformed 结果不污染 TTL，后续 retry 可恢复。
+- [x] 本轮回归：根测试 470/470、Vela-PineTS 290/290、Provider network/history 专项通过、TypeScript、build、startup、依赖契约、dist 独立性、bundle budget 和 `git diff --check` 通过。
 
 ## 2026-10-01 R-08～R-11 修复后独立复查（当前状态）
 

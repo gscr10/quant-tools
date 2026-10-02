@@ -7,6 +7,7 @@
 ### 2026-10-02 本轮实现进展
 
 - 为渐进历史分页增加无进度保护：Provider 返回非空但全部越过请求边界、重复页或探测结果不可用时，不再把它误判为 genesis；保留已绘制前缀并发布明确错误，避免启动加载无限重试或开放不完整 Simulation。新增回归覆盖，根测试 469/469、Vela-PineTS 289/289。
+- lower-timeframe session cache 现在只保留完整、有限数值的 OHLCV 数组；混合 malformed 行不会污染 TTL，后续 retry 可重新获取有效精度数据。
 
 - 渐进历史遇到短页时增加可取消的单根历史探测：只有探测确认无更早数据才宣布 genesis；若探测到更早数据则继续分页，探测失败保留已绘制前缀但发布错误事实，避免短页造成静默缺历史。
 - 统一 `metadataCacheTtlMs <= 0` 对 REST 元数据和 symbol index 的禁用语义；模板仓储拒绝无法作为 Workspace document 应用的 null/数组/原语状态，并增加对应回归测试。
@@ -220,11 +221,11 @@ kill-switch 测试后重新进行普通 production build，避免遗留禁用回
 | S2 渐进加载 | 部分完成 | Binance 原生 2000 根 progressive 模块、短页 genesis 探测、错误/取消/分页单测及真实 App 2×1000 请求；长历史真实网络、低周期聚合和逐笔等价的完整证据仍开放 |
 | S3 去重 | 已完成（有界缓存 + live 生命周期） | `provider-network.ts` 对 Binance JSON 和 Hyperliquid POST 做 provider-instance 级并发去重，并对 exchange metadata 使用可配置短 TTL；`provider-registry.ts` 对 symbol index 使用同一实例隔离 TTL；`provider-live.ts` 覆盖 async spot endpoint、重连和嵌套订阅释放。失败自动释放并可重试，网络专项 30 项、live 专项 7 项通过；受控启动中 Binance `exchangeInfo` 从 4 次降至 2 次，历史 K 线请求仍保持 2 次 |
 | S4 资源延迟加载 | 已完成基础门禁，长期观测仍开放 | Pine Worker 独立懒加载 chunk；主 JS 约 3.71MB 降至 2.27MB，Worker 约 825KB；新增 `npm run check:bundle-size`，对 main/worker/highcharts 同时检查 raw/gzip budgets；跨浏览器、性能门禁和视觉/a11y 门禁通过，长时资源观测仍开放 |
-| S5 组合回归/回滚/人工入口 | 部分完成 | 根测试 470/470、Provider live 7/7、Vela-PineTS 289/289、PineTS 离线 1,637 tests、开发/生产 E2E、Settings、故障隔离、多 Cell、跨浏览器、性能和视觉/a11y 均通过；仍需人工线上入口、长时 Provider/断网恢复、真实制品 rollback 验收 |
+| S5 组合回归/回滚/人工入口 | 部分完成 | 根测试 470/470、Provider live 7/7、Vela-PineTS 290/290、PineTS 离线 1,637 tests、开发/生产 E2E、Settings、故障隔离、多 Cell、跨浏览器、性能和视觉/a11y 均通过；仍需人工线上入口、长时 Provider/断网恢复、真实制品 rollback 验收 |
 
 发现问题自主处理，不因一个失败路径停下；仍保留待办直到证据关闭。不可用“413/414 等历史测试数量”推断完成。性能无收益则自动调整方案或撤回该项代码，保留测量结论；业务回归必须修复后再前进。
 
-当前已通过：根测试 470/470、Provider network/progressive/live 60/60、Vela-PineTS 289/289、PineTS 离线 1,637 tests、TypeScript、构建、依赖契约、dist 独立性、主开发/生产 E2E、Settings、故障隔离、多 Cell、三浏览器 fixture、性能 strict、视觉/a11y 和 Provider smoke。PineTS 的 `test:network` 仍是显式联网覆盖，受 Binance/DNS/代理影响时只记录为外部未验证，不替代离线门禁。
+当前已通过：根测试 470/470、Provider network/progressive/live 60/60、Vela-PineTS 290/290、PineTS 离线 1,637 tests、TypeScript、构建、依赖契约、dist 独立性、主开发/生产 E2E、Settings、故障隔离、多 Cell、三浏览器 fixture、性能 strict、视觉/a11y 和 Provider smoke。PineTS 的 `test:network` 仍是显式联网覆盖，受 Binance/DNS/代理影响时只记录为外部未验证，不替代离线门禁。
 
 2026-10-02 追加验证：根测试 445/445；Vela-PineTS 283/283；Binance/Hyperliquid provider smoke 均取得 5 根历史并启用 live；Chromium/Firefox/WebKit 启动首绘约 282/503/439ms（受控 150ms 索引、80ms K 线延迟），首批 1000 根随后完成 2000 根；开发/生产 E2E、Settings、故障隔离、多 Cell、性能 strict、视觉/a11y、离线 smoke 均通过。离线 smoke 的外部 Provider 请求按测试策略被阻断，不能替代真实 Provider 长时故障验收；生产构建仍有约 2.27MB 主 chunk / 825KB Worker chunk 的非阻断 warning。
 
