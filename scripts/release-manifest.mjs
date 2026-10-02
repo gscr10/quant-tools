@@ -16,6 +16,17 @@ import { fileURLToPath } from 'node:url';
 
 const defaultRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
+const usage = `Usage: npm run release:manifest -- [--root <checkout>] [--dist <directory>] [--require-clean] [--require-dist]
+
+Emit a read-only JSON manifest for an already-built checkout. The manifest is
+written to stdout; redirect it to a file outside the checkout before verifying.
+`;
+
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  process.stdout.write(usage);
+  process.exit(0);
+}
+
 /**
  * Read a small `--name value`/`--name=value` option without pulling a CLI
  * parser into the release path.  The manifest command is intentionally
