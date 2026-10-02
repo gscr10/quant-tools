@@ -10,6 +10,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const BINANCE_GLOBAL_HOST = 'api.binance.com';
 const BINANCE_US_HOST = 'api.binance.us';
 const HYPERLIQUID_INFO_URL = 'https://api.hyperliquid.xyz/info';
+const MAX_METADATA_CACHE_ENTRIES = 64;
 
 type ProviderKind = 'binance' | 'hyperliquid';
 
@@ -103,6 +104,10 @@ function inFlightRequest<T>(
   };
   if (cacheable && cacheTtlMs > 0) {
     request.then((value) => {
+      if (completed.size >= MAX_METADATA_CACHE_ENTRIES && !completed.has(key)) {
+        const oldest = completed.keys().next().value;
+        if (oldest !== undefined) completed.delete(oldest);
+      }
       completed.set(key, { value, expiresAt: Date.now() + cacheTtlMs });
     }, () => {
       completed.delete(key);
