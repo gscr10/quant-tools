@@ -1,0 +1,1 @@
+export const BUILD_COMMIT = __QUANT_BUILD_COMMIT__;

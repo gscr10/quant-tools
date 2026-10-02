@@ -54,7 +54,7 @@ test('workspace defaults, toolbar composition, providers, and dependency version
       'quant-templates',
       'undo-redo',
     ],
-    right: ['panels', 'screenshot'],
+    right: ['quant-build-version', 'panels', 'screenshot'],
   });
 
   const { createWorkspaceProviders } = await import(
