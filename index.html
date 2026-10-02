@@ -4,11 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="data:," />
     <title>Quant Tools — Vela Pine Editor</title>
   </head>
   <body>
     <main id="app" aria-label="Quant chart workspace">
-      <div id="workspace"></div>
+      <div id="quant-workspace-shell">
+        <div id="workspace"></div>
+        <div id="backtest-workbench" aria-live="polite"></div>
+      </div>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

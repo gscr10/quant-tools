@@ -8,8 +8,7 @@
   </head>
   <body>
     <script type="module">
-      import { BinanceProvider } from '@luxalgo/vela/providers/binance';
-      import { HyperliquidProvider } from '@luxalgo/vela/providers/hyperliquid';
+      import { createWorkspaceProviders } from '/src/integrations/vela/provider-registry.ts';
 
       const TIMEOUT_MS = 30_000;
 
@@ -72,8 +71,9 @@
       }
 
       window.runProviderSmoke = async () => {
-        const binance = new BinanceProvider();
-        const hyperliquid = new HyperliquidProvider();
+        const providers = createWorkspaceProviders();
+        const binance = providers.binance();
+        const hyperliquid = providers.hyperliquid();
         const [binanceBars, hyperliquidBars] = await Promise.all([
           verifyHistory(binance, 'BTCUSDT', 'Binance'),
           verifyHistory(hyperliquid, 'BTC', 'Hyperliquid'),

@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Backtest Simulation Fixture</title>
+    <style>
+      html,
+      body,
+      #fixture-host {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      #fixture-host {
+        position: relative;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="fixture-host"></div>
+    <script type="module">
+      import { BacktestController } from '/src/app/backtest-controller.ts';
+      import { BacktestWorkbench } from '/src/features/backtesting/backtest-workbench.ts';
+
+      const key = { cellId: 'simulation-cell', indicatorId: 'simulation-strategy' };
+      const pnl = [120, -55, 80, -90, 140, -35, 60, -45, 110, -70, 95, -40, 130, -85, 75, -30];
+      const start = Date.UTC(2026, 0, 1, 0, 0, 0);
+      const trades = pnl.map((profit, index) => {
+        const side = index % 3 === 0 ? 'short' : 'long';
+        const entryPrice = 60_000 + index * 125;
+        return {
+          id: `simulation-trade-${index + 1}`,
+          side,
+          qty: 1,
+          entry: {
+            id: `simulation-entry-${index + 1}`,
+            time: start + index * 3_600_000,
+            price: entryPrice,
+          },
+          exit: {
+            id: `simulation-exit-${index + 1}`,
+            time: start + index * 3_600_000 + 1_800_000,
+            price: entryPrice + (side === 'long' ? profit : -profit),
+          },
+          entryBarIndex: index * 2,
+          exitBarIndex: index * 2 + 1,
+          open: false,
+          pnl: profit,
+          mae: profit < 0 ? Math.abs(profit) * 1.35 : 20 + index,
+          mfe: profit > 0 ? profit * 1.2 : 15 + index,
+        };
+      });
+      const netPnl = pnl.reduce((sum, value) => sum + value, 0);
+      const grossProfit = pnl.filter((value) => value > 0)
+        .reduce((sum, value) => sum + value, 0);
+      const grossLoss = pnl.filter((value) => value < 0)
+        .reduce((sum, value) => sum + value, 0);
+      const strategy = {
+        position: 0,
+        avgPrice: 0,
+        equity: 100_000 + netPnl,
+        openPnl: 0,
+        netPnl,
+        grossProfit,
+        grossLoss,
+        wins: pnl.filter((value) => value > 0).length,
+        losses: pnl.filter((value) => value < 0).length,
+        even: pnl.filter((value) => value === 0).length,
+        maxDrawdown: 175,
+        maxRunup: 300,
+        initialCapital: 100_000,
+        accountCurrency: 'USD',
+      };
+      const snapshot = {
+        key,
+        revision: 7,
+        epoch: 2,
+        runToken: 'simulation-run-7',
+        status: 'ready',
+        finality: 'historical-final',
+        ledgerState: 'ready',
+        ledgerRevision: 7,
+        capabilities: {
+          tradeLedger: true,
+          exactEquityCurve: false,
+          exactDrawdownCurve: false,
+          riskRatios: false,
+          benchmark: false,
+          rawOrders: false,
+          rawFills: false,
+          barIndices: true,
+          individualOpenPnl: false,
+          executionPrecision: 'chart-ohlc',
+        },
+        visible: true,
+        handle: {
+          id: key.indicatorId,
+          title: 'Simulation Strategy',
+          visible: true,
+          source: 'strategy("Simulation Strategy")',
+        },
+        run: {
+          id: key.indicatorId,
+          title: 'Simulation Strategy',
+          kind: 'strategy',
+          cause: 'history',
+          first: true,
+          bar: 40,
+          time: start + 40 * 3_600_000,
+          forming: false,
+          complete: true,
+          plots: {},
+          vars: {},
+          warnings: [],
+          strategy,
+          trades: async () => trades,
+        },
+        context: {
+          language: 'pine',
+          phase: 'idle',
+          barIndex: 40,
+          meta: { title: 'Simulation Strategy', overlay: true },
+          plots: {},
+          variables: {},
+          strategy,
+          trades,
+          warnings: [],
+        },
+        trades,
+        inputs: {
+          schema: [],
+          values: {},
+        },
+        props: {
+          schema: [],
+          values: {},
+        },
+        error: null,
+        source: 'strategy("Simulation Strategy")',
+      };
+
+      class FixtureSource {
+        listeners = new Set();
+        subscribeCount = 0;
+        unsubscribeCount = 0;
+        bootstrapCount = 0;
+        listSnapshotsCount = 0;
+        emittedEventCount = 0;
+
+        subscribe(listener) {
+          this.subscribeCount += 1;
+          this.listeners.add(listener);
+          return () => {
+            this.unsubscribeCount += 1;
+            this.listeners.delete(listener);
+          };
+        }
+
+        async bootstrap() {
+          this.bootstrapCount += 1;
+        }
+
+        listSnapshots() {
+          this.listSnapshotsCount += 1;
+          return [snapshot];
+        }
+      }
+
+      const source = new FixtureSource();
+      const controller = new BacktestController(source, {
+        getMarket: () => ({
+          provider: 'binance',
+          symbol: 'BTCUSDT',
+          timeframe: '1h',
+          timezone: 'UTC',
+          currency: 'USD',
+        }),
+      });
+      await controller.start();
+      controller.setActive(key);
+
+      const state = {
+        simulationChangeCount: 0,
+        includeSimulationDetails: false,
+        simulationProgress: [],
+      };
+      const workbench = new BacktestWorkbench('#fixture-host', {
+        initialReport: controller.getSnapshot(),
+        getSnapshot: () => controller.getSnapshot(),
+        subscribe: (listener) => controller.subscribe((nextReport) => {
+          if (state.includeSimulationDetails) {
+            const run = nextReport?.simulationRun;
+            if (run) {
+              state.simulationProgress.push({
+                status: run.status,
+                completedRuns: run.completedRuns,
+                totalRuns: run.totalRuns,
+                progress: run.progress,
+              });
+            } else if (nextReport?.simulation) {
+              const runs = nextReport.simulation.runs;
+              state.simulationProgress.push({
+                status: 'complete',
+                completedRuns: runs,
+                totalRuns: runs,
+                progress: 1,
+              });
+            }
+          }
+          listener(nextReport);
+        }),
+        onSimulationChange: (change) => {
+          state.simulationChangeCount += 1;
+          controller.updateSimulation(change);
+        },
+      });
+
+      window.__simulationFixture = {
+        ready: true,
+        rerunSimulation: (variationPercent) => {
+          return Number.isFinite(variationPercent)
+            && controller.updateSimulation({ variationPercent }) !== null;
+        },
+        state: () => {
+          const report = controller.getSnapshot();
+          return structuredClone({
+            source: {
+              subscribeCount: source.subscribeCount,
+              unsubscribeCount: source.unsubscribeCount,
+              bootstrapCount: source.bootstrapCount,
+              listSnapshotsCount: source.listSnapshotsCount,
+              emittedEventCount: source.emittedEventCount,
+            },
+            simulationChangeCount: state.simulationChangeCount,
+            report: report ? {
+              runId: report.runId,
+              revision: report.revision,
+              status: report.status,
+              simulation: report.simulation ? {
+                method: report.simulation.method,
+                runs: report.simulation.runs,
+                variationPercent: report.simulation.variationPercent,
+                preserveWinLoss: report.simulation.preserveWinLoss,
+                drawdownMultiple: report.simulation.drawdownMultiple,
+                drawdownUnit: report.simulation.drawdownUnit,
+                outcomeChartMode: report.simulation.outcomeChartMode,
+                drawdownChartMode: report.simulation.drawdownChartMode,
+              } : null,
+            } : null,
+            ...(state.includeSimulationDetails && report ? {
+              simulationRuntime: {
+                run: report.simulationRun ? {
+                  status: report.simulationRun.status,
+                  completedRuns: report.simulationRun.completedRuns,
+                  totalRuns: report.simulationRun.totalRuns,
+                  progress: report.simulationRun.progress,
+                } : null,
+                runs: report.simulation?.runs ?? null,
+                populationSize: report.simulation?.populationSize ?? null,
+                bandPoints: report.simulation?.bands?.index?.length ?? null,
+                progressEvents: state.simulationProgress,
+              },
+            } : {}),
+          });
+        },
+        runSimulation: (change) => {
+          state.includeSimulationDetails = true;
+          state.simulationProgress.length = 0;
+          const normalized = typeof change === 'number'
+            ? { variationPercent: change }
+            : (change ?? {});
+          return controller.updateSimulation(normalized) !== null;
+        },
+        destroy: () => {
+          workbench.destroy();
+          controller.destroy();
+        },
+      };
+    </script>
+  </body>
+</html>

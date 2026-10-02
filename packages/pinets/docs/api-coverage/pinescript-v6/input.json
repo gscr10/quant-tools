@@ -1,0 +1,17 @@
+{
+  "Input Types": {
+    "input.bool()": true,
+    "input.color()": true,
+    "input.enum()": true,
+    "input.float()": true,
+    "input.int()": true,
+    "input.price()": true,
+    "input.session()": true,
+    "input.source()": true,
+    "input.string()": true,
+    "input.symbol()": true,
+    "input.text_area()": true,
+    "input.time()": true,
+    "input.timeframe()": true
+  }
+}

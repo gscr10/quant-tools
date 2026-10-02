@@ -10,16 +10,65 @@
     <main id="app"><div id="workspace"></div></main>
     <script type="module">
       import { createApp } from '/src/app/create-app.ts';
+      import { mountBacktestFeature } from '/src/app/backtest-feature.ts';
       import '/src/style.css';
 
       let app = null;
-      window.mountQuantApp = () => {
+      const lifecycleStats = {
+        mounts: 0,
+        destroys: 0,
+        noopDestroys: 0,
+      };
+      window.__quantLifecycleStats = lifecycleStats;
+      window.mountQuantApp = (options = {}) => {
         if (app) throw new Error('App is already mounted');
-        app = createApp('#workspace');
+        const appOptions = options.failBacktest
+          ? {
+              mountBacktestFeature() {
+                throw new Error('injected backtest mount failure');
+              },
+            }
+          : options.failBacktestResize
+            ? {
+                mountBacktestFeature(workspace, featureOptions) {
+                  const previous = window.ResizeObserver;
+                  const stats = { created: 0, disconnected: 0 };
+                  window.__backtestResizeStats = stats;
+                  class ThrowingResizeObserver {
+                    constructor() {
+                      stats.created += 1;
+                    }
+                    observe() {
+                      throw new Error('injected ResizeObserver failure');
+                    }
+                    disconnect() {
+                      stats.disconnected += 1;
+                    }
+                  }
+                  window.ResizeObserver = ThrowingResizeObserver;
+                  try {
+                    return mountBacktestFeature(workspace, featureOptions);
+                  } finally {
+                    window.ResizeObserver = previous;
+                  }
+                },
+              }
+            : {};
+        if ('enableBacktesting' in options) {
+          appOptions.enableBacktesting = options.enableBacktesting;
+        }
+        app = createApp('#workspace', appOptions);
+        lifecycleStats.mounts += 1;
       };
       window.destroyQuantApp = () => {
-        app?.destroy();
+        if (!app) {
+          lifecycleStats.noopDestroys += 1;
+          return;
+        }
+        const current = app;
         app = null;
+        lifecycleStats.destroys += 1;
+        current.destroy();
       };
       window.failQuantAppMount = () => {
         try {

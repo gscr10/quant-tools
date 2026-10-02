@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Backtest Workbench G3a Fixture</title>
+    <style>
+      html,
+      body,
+      #fixture-host {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      #fixture-host {
+        position: relative;
+      }
+
+      #chart-focus {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="chart-focus" type="button">Chart focus target</button>
+    <div id="fixture-host"></div>
+    <script type="module">
+      import { BacktestWorkbench } from '/src/features/backtesting/backtest-workbench.ts';
+
+      const report = {
+        key: { cellId: 'fixture-cell', indicatorId: 'fixture-strategy' },
+        revision: 1,
+        runId: 'fixture-run',
+        strategyName: 'G3a Strategy',
+        status: 'ready',
+        range: { label: 'Jan 1 – Jan 31, 2026' },
+        currency: 'USD',
+        metrics: {
+          netProfit: 25,
+          trades: 2,
+          winRate: 50,
+          maxDrawdown: 10,
+          profitFactor: 1.5,
+        },
+        trades: [],
+      };
+      const settings = {
+        key: report.key,
+        title: report.strategyName,
+        source: 'strategy("G3a Strategy")',
+        inputs: [{
+          key: 'length',
+          title: 'Length',
+          type: 'int',
+          defval: 9,
+          min: 1,
+          max: 100,
+        }],
+        props: [],
+        inputValues: { length: 9 },
+        propValues: {},
+      };
+      const state = {
+        closeViewerCount: 0,
+        focusFallbackCount: 0,
+        resizeValues: [],
+      };
+      const chartFocus = document.querySelector('#chart-focus');
+      const workbench = new BacktestWorkbench('#fixture-host', {
+        initialReport: report,
+        settings: {
+          read: () => settings,
+          apply: () => true,
+        },
+        onCloseViewer: () => {
+          state.closeViewerCount += 1;
+        },
+        onFocusFallback: () => {
+          state.focusFallbackCount += 1;
+          chartFocus.focus();
+        },
+        onResize: (height) => {
+          state.resizeValues.push(height);
+        },
+      });
+
+      window.__g3aFixture = {
+        removeReport: () => workbench.setReport(null),
+        restoreReport: () => workbench.setReport(report),
+        state: () => structuredClone(state),
+      };
+    </script>
+  </body>
+</html>

@@ -1,0 +1,75 @@
+{
+    "Transformation": {
+        "array.abs()": true,
+        "array.join()": true,
+        "array.sort()": true,
+        "array.sort_indices()": true,
+        "array.standardize()": true
+    },
+    "Statistical": {
+        "array.avg()": true,
+        "array.covariance()": true,
+        "array.max()": true,
+        "array.median()": true,
+        "array.min()": true,
+        "array.mode()": true,
+        "array.range()": true,
+        "array.stdev()": true,
+        "array.sum()": true,
+        "array.variance()": true
+    },
+    "Search & Query": {
+        "array.binary_search()": true,
+        "array.binary_search_leftmost()": true,
+        "array.binary_search_rightmost()": true,
+        "array.includes()": true,
+        "array.indexof()": true,
+        "array.lastindexof()": true
+    },
+    "Modification": {
+        "array.clear()": true,
+        "array.fill()": true,
+        "array.insert()": true,
+        "array.pop()": true,
+        "array.push()": true,
+        "array.remove()": true,
+        "array.reverse()": true,
+        "array.shift()": true,
+        "array.unshift()": true
+    },
+    "Size & Shape": {
+        "array.concat()": true,
+        "array.size()": true,
+        "array.slice()": true
+    },
+    "Creation & Initialization": {
+        "array.copy()": true,
+        "array.from()": true,
+        "array.new_bool()": true,
+        "array.new_box()": true,
+        "array.new_color()": true,
+        "array.new_float()": true,
+        "array.new_int()": true,
+        "array.new_label()": true,
+        "array.new_line()": true,
+        "array.new_linefill()": true,
+        "array.new_string()": true,
+        "array.new_table()": true,
+        "array.new<type>()": true
+    },
+    "Logical": {
+        "array.every()": true,
+        "array.some()": true
+    },
+    "Element Access": {
+        "array.first()": true,
+        "array.get()": true,
+        "array.last()": true,
+        "array.set()": true
+    },
+    "Percentiles": {
+        "array.percentile_linear_interpolation()": true,
+        "array.percentile_nearest_rank()": true,
+        "array.percentrank()": true
+    }
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "packageName": "@luxalgo/vela-pinets",
+  "packageVersion": "0.2.13",
+  "upstreamSha": "a2a2097be8f30b4b596b13212ed4608c36c2ea26",
+  "localPatchRevision": "quant-tools-g8.1",
+  "bridgeSha": "a2a2097be8f30b4b596b13212ed4608c36c2ea26",
+  "embeddedPinetsSha": "beacd587e83aa7ee061023f8cea66b2e887d5676",
+  "embeddedPinetsFingerprint": "pinets@0.9.34|upstream=beacd587e83aa7ee061023f8cea66b2e887d5676|patch=quant-tools-g8.1|schema=4",
+  "reportSchemaVersion": 4,
+  "sentinel": "vela-pinets-local-build-v1",
+  "buildFingerprint": "@luxalgo/vela-pinets@0.2.13|upstream=a2a2097be8f30b4b596b13212ed4608c36c2ea26|patch=quant-tools-g8.1|pinets=beacd587e83aa7ee061023f8cea66b2e887d5676|schema=4"
+}

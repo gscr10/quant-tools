@@ -38,3 +38,12 @@ export {
   saveWorkspaceTemplate,
   type WorkspaceTemplate,
 } from './integrations/storage/template-repository.ts';
+
+export {
+  loadBacktestDockPreferences,
+  saveBacktestDockPreferences,
+} from './integrations/storage/backtest-preferences-repository.ts';
+export type {
+  BacktestDockPreferences,
+  BacktestPreferencesRepository,
+} from './domain/ports/backtest-preferences.ts';
