@@ -7,7 +7,7 @@
 - [x] D-01 新策略首轮上下文缺少 `trades` 时不再误判为已结算空账本；历史完成后立即挂载、晚挂载、两种引擎及 hide/show/市场切换复核通过。
 - [x] Provider live 生命周期：Binance 异步 `spotWsBase()`、Hyperliquid 重连、迟到 `onopen`、嵌套订阅和重复 unsubscribe 均有回归测试；专项 7/7 通过。
 - [x] 根回归：`npm test` 454/454；TypeScript 与 `git diff --check` 通过。
-- [ ] 启动优化 Final Gate：完整冷/热多轮样本、长时 Provider/断网恢复、实际线上入口、部署制品 rollback、完整 Provider/品种/模板回归仍未关闭。
+- [ ] 启动优化 Final Gate：本轮补测 Chromium/Firefox/WebKit 首绘与 getter/methods 存储故障均通过；完整冷/热 p95、长时 Provider/断网恢复、实际线上入口、部署制品 rollback、完整 Provider/品种/模板回归仍未关闭。
 
 ## 2026-10-01 R-08～R-11 修复后独立复查（当前状态）
 
