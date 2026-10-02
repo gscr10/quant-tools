@@ -939,7 +939,21 @@ export async function secondaryKlines(
     syminfo?: Record<string, unknown>,
 ): Promise<Array<Record<string, number>>> {
     if (!fetchSeries || !sym || !tf) return [];
-    const bars = await fetchSeries(sym, tf, { from: sDate, to: eDate, limit });
+    const fetched = await fetchSeries(sym, tf, { from: sDate, to: eDate, limit });
+    // Secondary feeds cross the same host/provider boundary as Bar Magnifier.
+    // A malformed *resolved* response must degrade to an empty series, not
+    // throw from `toKlines()`; a rejected Promise is deliberately preserved so
+    // provider error metadata can reach the Pine session error channel.
+    if (!Array.isArray(fetched)) return [];
+    const bars = fetched.filter((bar): bar is OHLCV => (
+        bar !== null
+        && typeof bar === 'object'
+        && Number.isFinite(bar.time)
+        && Number.isFinite(bar.open)
+        && Number.isFinite(bar.high)
+        && Number.isFinite(bar.low)
+        && Number.isFinite(bar.close)
+    ));
     return toKlines(bars, tf, syminfo);
 }
 
