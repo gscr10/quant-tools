@@ -28,7 +28,8 @@ def required_url(name: str) -> str:
 
 
 def check_slot(page, url: str, label: str) -> dict[str, object]:
-    origin = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
+    parsed_url = urlparse(url)
+    origin = f"{parsed_url.scheme}://{parsed_url.netloc}"
     errors: list[str] = []
     blocked: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
@@ -59,7 +60,17 @@ def check_slot(page, url: str, label: str) -> dict[str, object]:
     assets = sorted(set(re.findall(r"(?:src|href)=['\"]([^'\"]*/assets/[^'\"]+)['\"]", html)))
     asset_results = []
     for asset in assets:
-        asset_url = urljoin(origin + "/", asset)
+        # Resolve relative assets against the deployed entry path.  Using only
+        # the origin breaks valid sub-path deployments such as /quant/.
+        asset_url = urljoin(url + "/", asset)
+        asset_parsed = urlparse(asset_url)
+        if (
+            asset_parsed.scheme != parsed_url.scheme
+            or asset_parsed.netloc != parsed_url.netloc
+        ):
+            raise RuntimeError(
+                f"{label}: asset escapes deployment origin: {asset_url}"
+            )
         asset_response = page.request.get(asset_url, timeout=30_000)
         if asset_response.status != 200:
             raise RuntimeError(
@@ -95,9 +106,18 @@ def main() -> int:
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
-        page = browser.new_page()
-        results = [check_slot(page, url, label) for url, label in urls]
-        browser.close()
+        try:
+            # A fresh page per slot prevents pageerror/request-route listeners
+            # from a candidate run leaking into the previous/rollback result.
+            results = []
+            for url, label in urls:
+                page = browser.new_page()
+                try:
+                    results.append(check_slot(page, url, label))
+                finally:
+                    page.close()
+        finally:
+            browser.close()
     print(json.dumps({"status": "passed", "slots": results}, ensure_ascii=False))
     return 0
 
