@@ -50,3 +50,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo 'QUANT_DEPLOY_URL is not configured; real deployment Final Gate remains not_run.'
+
+  provider-soak:
+    # Real exchanges are intentionally opt-in: transient upstream outages must
+    # not make ordinary pull requests red, while a maintainer can still run the
+    # same ten-round soak on a clean GitHub runner when collecting evidence.
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:providers:long
