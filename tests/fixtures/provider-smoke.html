@@ -99,6 +99,68 @@
         return { ...result, roundsCompleted: count };
       };
 
+      // Keep both live subscriptions in one browser/page for duration-based
+      // soak runs. Recreating the page for every round only proves that a
+      // fresh socket can open; it does not exercise the lease across a long
+      // lived connection (or expose a late callback after the page remains
+      // mounted).
+      window.runProviderSoak = async (durationMs = 60_000) => {
+        const duration = Number.isFinite(durationMs) && durationMs > 0
+          ? durationMs
+          : 60_000;
+        const providers = createWorkspaceProviders();
+        const states = [
+          { name: 'binance', provider: providers.binance(), symbol: 'BTCUSDT', bars: [], error: null },
+          { name: 'hyperliquid', provider: providers.hyperliquid(), symbol: 'BTC', bars: [], error: null },
+        ];
+        const unsubscriptions = [];
+        try {
+          await Promise.all(states.map(async state => {
+            const history = await verifyHistory(state.provider, state.symbol, '15', `${state.name} soak`);
+            state.historyBars = history;
+            const callback = bar => {
+              try {
+                assertBar(bar, `${state.name} soak live`);
+                state.bars.push({ time: bar.time, close: bar.close });
+              } catch (error) {
+                state.error = String(error?.message ?? error);
+              }
+            };
+            unsubscriptions.push(state.provider.subscribe(state.symbol, '15', callback));
+          }));
+          const futuresInfo = await withTimeout(
+            providers.binance().getSymbolInfo('BTCUSDT.P'),
+            'Binance futures soak symbol info',
+          );
+          if (futuresInfo?.type !== 'futures') throw new Error('Binance futures soak symbol did not resolve as futures');
+          const futuresBars = await verifyHistory(
+            providers.binance(),
+            'BTCUSDT.P',
+            '60',
+            'Binance futures soak',
+          );
+          await new Promise(resolve => setTimeout(resolve, duration));
+          for (const state of states) {
+            if (state.error) throw new Error(state.error);
+          }
+          const subscriptions = Object.fromEntries(states.map(state => [state.name, {
+            historyBars: state.historyBars,
+            liveCallbacks: state.bars.length,
+          }]));
+          return {
+            durationMs: duration,
+            subscriptions,
+            // Keep the same route keys as the short smoke contract so the
+            // command-line gate validates both modes uniformly.
+            binance: { historyBars: subscriptions.binance.historyBars, live: true },
+            binanceFutures: { historyBars: futuresBars, timeframe: '60', symbol: 'BTCUSDT.P' },
+            hyperliquid: { historyBars: subscriptions.hyperliquid.historyBars, live: true },
+          };
+        } finally {
+          for (const unsubscribe of unsubscriptions.splice(0)) unsubscribe?.();
+        }
+      };
+
       // This is intentionally separate from the short smoke above.  The
       // caller toggles the real browser network state between the two polls;
       // the provider wrapper must tear down the old lease and deliver a bar
