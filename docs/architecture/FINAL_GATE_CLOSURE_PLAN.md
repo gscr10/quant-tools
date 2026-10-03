@@ -58,6 +58,7 @@ npm run test:e2e:deployment
 - 新增 `npm run test:reference:golden`：完整导出的交易数组按 Trade #、方向、Entry/Exit 时间和价格、Size、P&L、MFE、MAE 逐字段比较；缺少输入、行数不等或任意字段不一致都会失败，半截参考站抓取不会被当成通过。Comparator 同时拒绝缺少/重复 Trade #、省略字段、非有限数值和无法归一化的数字；未平仓 Exit 允许显式 `null`，但不能省略。该工具仍只验证已提供的两份导出，不能替代真实参考站数据采集。
 - 外部验证所需的地址、导出文件、真实设备和通过标准集中记录在 [EXTERNAL_FINAL_GATE_INPUTS.md](EXTERNAL_FINAL_GATE_INPUTS.md)。
 
-- GitHub Actions workflow `37132010789`（2026-10-03）已完成一次 60 秒真实连续订阅：provider-soak 与 browser offline/online recovery 均成功，Binance、Binance Futures、Hyperliquid 均返回有效历史/live 数据；该结果提升了真实网络证据，但不等同于长时间（小时级）稳定性或跨区域故障恢复。另一个 600 秒连续运行已启动，待其终态后再更新证据。
+- GitHub Actions workflow `37132010789`（2026-10-03）已完成一次 60 秒真实连续订阅：provider-soak 与 browser offline/online recovery 均成功，Binance、Binance Futures、Hyperliquid 均返回有效历史/live 数据；该结果提升了真实网络证据，但不等同于长时间（小时级）稳定性或跨区域故障恢复。
+- 随后 workflow `37133498353` 的 600 秒尝试在启动阶段因 GitHub runner 到 Binance 的 `TypeError: Failed to fetch` 失败，未进入连续订阅阶段；该失败保留为真实网络 blocker，不能被解释为业务断线恢复通过。下一次长时验证必须在可访问交易所 API 的 runner/网络条件下重试。
 
 > 2026-10-03 外部网络门禁补充：push 门禁已通过；手动 provider soak 的 fork 构建缺口已修复，但一次 60 秒真实网络运行在 Binance `Failed to fetch` 处失败，未被标记为通过。长时 WebSocket/断网恢复仍需可访问交易所 API 的连续运行证据。
