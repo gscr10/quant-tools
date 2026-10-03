@@ -23,8 +23,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - run: npm ci
+      - name: Install Python Playwright for Python E2E gates
+        run: python3 -m pip install --disable-pip-version-check playwright
       - run: npx playwright install --with-deps chromium firefox webkit
+      - run: python3 -m playwright install chromium firefox webkit
       - run: npm run verify:final-gates:local
 
   deployment-smoke:
@@ -37,8 +43,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - run: npm ci
+      - name: Install Python Playwright for deployment smoke
+        run: python3 -m pip install --disable-pip-version-check playwright
       - run: npx playwright install --with-deps chromium
+      - run: python3 -m playwright install chromium
       - name: Check deployed candidate and optional rollback slot
         env:
           QUANT_DEPLOY_URL: ${{ vars.QUANT_DEPLOY_URL }}
@@ -64,6 +76,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - name: Install Python Playwright for provider smoke
+        run: python3 -m pip install --disable-pip-version-check playwright
+      - run: python3 -m playwright install --with-deps chromium
       - run: npm run test:providers:long
