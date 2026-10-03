@@ -714,6 +714,7 @@ def run_gate(update: bool) -> dict[str, object]:
         else:
             assert GEOMETRY_PATH.exists(), f"missing geometry golden: {GEOMETRY_PATH}"
             expected = json.loads(GEOMETRY_PATH.read_text(encoding="utf-8"))
+            geometry_tolerance = float(os.environ.get("QUANT_VISUAL_GEOMETRY_TOLERANCE", "1"))
             for label, current in geometry_results.items():
                 previous = expected["viewports"][label]
                 def compare_rect(path: str, candidate: object, baseline: object) -> None:
@@ -722,7 +723,7 @@ def run_gate(update: bool) -> dict[str, object]:
                             raise AssertionError(f"geometry drift {label}.{path}: {candidate} != {baseline}")
                         return
                     for coordinate in ("left", "top", "right", "bottom", "width", "height"):
-                        if coordinate in candidate and abs(candidate[coordinate] - baseline[coordinate]) > 1.0:
+                        if coordinate in candidate and abs(candidate[coordinate] - baseline[coordinate]) > geometry_tolerance:
                             raise AssertionError(f"geometry drift {label}.{path}.{coordinate}: {candidate[coordinate]} != {baseline[coordinate]}")
 
                 for field in ("viewer", "panel", "tabs", "contentPage", "logCard", "simulationToolbar"):

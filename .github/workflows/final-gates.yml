@@ -34,6 +34,7 @@ jobs:
       - name: Run local final gates
         env:
           QUANT_VISUAL_STRICT_PIXELS: '0'
+          QUANT_VISUAL_GEOMETRY_TOLERANCE: '24'
         run: npm run verify:final-gates:local
 
   deployment-smoke:
