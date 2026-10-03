@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import argparse
 from pathlib import Path
@@ -123,8 +124,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.rounds < 1:
         parser.error('--rounds must be positive')
-    if args.duration_seconds < 0:
-        parser.error('--duration-seconds must be non-negative')
+    if not math.isfinite(args.duration_seconds) or args.duration_seconds < 0:
+        parser.error('--duration-seconds must be finite and non-negative')
     global PORT, URL
     PORT = choose_port()
     URL = f"http://{HOST}:{PORT}/tests/fixtures/provider-smoke.html"
@@ -154,7 +155,7 @@ def main() -> int:
             # short smoke processes would only test cold-start connections and
             # could never prove that a mounted subscription survives the soak.
             started = time.monotonic()
-            result = run_smoke(1, duration_seconds=args.duration_seconds)
+            result = run_smoke(1, recovery=args.recovery, duration_seconds=args.duration_seconds)
             result["roundsCompleted"] = 1
             result["durationSeconds"] = round(time.monotonic() - started, 3)
         else:

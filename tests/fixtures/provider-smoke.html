@@ -19,6 +19,23 @@
       // an otherwise healthy real-network gate red.
       const ROUND_RETRY_ATTEMPTS = 3;
       const ROUND_RETRY_DELAYS_MS = [750, 1_500];
+      // A soak is evidence of a live lease, not merely proof that subscribe()
+      // returned a function.  Keep these limits bounded so a silent socket
+      // cannot be reported as healthy forever.
+      const SOAK_POLL_MS = 250;
+      const SOAK_FIRST_CALLBACK_TIMEOUT_MS = 20_000;
+      const SOAK_MAX_CALLBACK_GAP_MS = 20_000;
+
+      class SoakContinuityError extends Error {
+        constructor(message) {
+          super(message);
+          this.name = 'SoakContinuityError';
+          // Transport/setup failures may use the bounded round retry.  Once a
+          // subscription was established, a continuity failure is conclusive;
+          // retrying it would hide the failed continuous attempt.
+          this.retryable = false;
+        }
+      }
 
       function assertBar(bar, label) {
         if (!Number.isFinite(bar?.time)) throw new Error(`${label}: invalid time`);
@@ -49,6 +66,7 @@
             return await operation(attempt);
           } catch (error) {
             lastError = error;
+            if (error?.retryable === false) break;
             if (attempt + 1 >= ROUND_RETRY_ATTEMPTS) break;
             await new Promise(resolve => setTimeout(resolve, ROUND_RETRY_DELAYS_MS[attempt] ?? 1_500));
           }
@@ -171,24 +189,49 @@
           : 60_000;
         const providers = createWorkspaceProviders();
         const states = [
-          { name: 'binance', provider: providers.binance(), symbol: 'BTCUSDT', bars: [], error: null },
-          { name: 'hyperliquid', provider: providers.hyperliquid(), symbol: 'BTC', bars: [], error: null },
+          { name: 'binance', provider: providers.binance(), symbol: 'BTCUSDT', bars: [], error: null, firstLiveAt: null, lastLiveAt: null, maxGapMs: 0 },
+          { name: 'hyperliquid', provider: providers.hyperliquid(), symbol: 'BTC', bars: [], error: null, firstLiveAt: null, lastLiveAt: null, maxGapMs: 0 },
         ];
-        const unsubscriptions = [];
+        let active = true;
+        const unsubscriptions = new Set();
+        const addSubscription = (unsubscribe) => {
+          if (typeof unsubscribe !== 'function') return;
+          if (!active) {
+            try { unsubscribe(); } catch { /* teardown is best effort */ }
+            return;
+          }
+          unsubscriptions.add(unsubscribe);
+        };
+        const cleanup = () => {
+          active = false;
+          for (const unsubscribe of unsubscriptions) {
+            try { unsubscribe?.(); } catch { /* teardown is best effort */ }
+          }
+          unsubscriptions.clear();
+        };
         try {
           await Promise.all(states.map(async state => {
             const history = await verifyHistory(state.provider, state.symbol, '15', `${state.name} soak`);
+            if (!active) return;
             state.historyBars = history;
             const callback = bar => {
               try {
                 assertBar(bar, `${state.name} soak live`);
+                const now = Date.now();
+                if (state.lastLiveAt !== null) {
+                  state.maxGapMs = Math.max(state.maxGapMs, now - state.lastLiveAt);
+                }
+                state.firstLiveAt ??= now;
+                state.lastLiveAt = now;
                 state.bars.push({ time: bar.time, close: bar.close });
               } catch (error) {
-                state.error = String(error?.message ?? error);
+                state.error = new SoakContinuityError(String(error?.message ?? error));
               }
             };
-            unsubscriptions.push(state.provider.subscribe(state.symbol, '15', callback));
+            const unsubscribe = state.provider.subscribe(state.symbol, '15', callback);
+            addSubscription(unsubscribe);
           }));
+          if (!active) throw new Error('provider soak setup was superseded');
           const futuresMetadata = await probeFuturesInfo(
             providers.binance(),
             'BTCUSDT.P',
@@ -200,13 +243,35 @@
             '60',
             'Binance futures soak',
           );
-          await new Promise(resolve => setTimeout(resolve, duration));
+          const startedAt = Date.now();
+          while (Date.now() - startedAt < duration) {
+            await new Promise(resolve => setTimeout(resolve, Math.min(SOAK_POLL_MS, duration)));
+            const elapsed = Date.now() - startedAt;
+            for (const state of states) {
+              if (state.error) throw state.error;
+              if (state.firstLiveAt === null && elapsed >= Math.min(duration, SOAK_FIRST_CALLBACK_TIMEOUT_MS)) {
+                throw new SoakContinuityError(`${state.name} soak produced no live callbacks`);
+              }
+              if (state.lastLiveAt !== null && Date.now() - state.lastLiveAt > SOAK_MAX_CALLBACK_GAP_MS) {
+                throw new SoakContinuityError(`${state.name} soak live callback gap exceeded ${SOAK_MAX_CALLBACK_GAP_MS}ms`);
+              }
+            }
+          }
           for (const state of states) {
-            if (state.error) throw new Error(state.error);
+            if (state.error) throw state.error;
+            if (state.bars.length === 0) {
+              throw new SoakContinuityError(`${state.name} soak produced no live callbacks`);
+            }
+            if (state.lastLiveAt === null || Date.now() - state.lastLiveAt > SOAK_MAX_CALLBACK_GAP_MS) {
+              throw new SoakContinuityError(`${state.name} soak ended without fresh live evidence`);
+            }
           }
           const subscriptions = Object.fromEntries(states.map(state => [state.name, {
             historyBars: state.historyBars,
             liveCallbacks: state.bars.length,
+            firstLiveAt: state.firstLiveAt,
+            lastLiveAt: state.lastLiveAt,
+            maxGapMs: state.maxGapMs,
           }]));
           return {
             durationMs: duration,
@@ -219,7 +284,7 @@
             hyperliquid: { historyBars: subscriptions.hyperliquid.historyBars, live: true },
           };
         } finally {
-          for (const unsubscribe of unsubscriptions.splice(0)) unsubscribe?.();
+          cleanup();
         }
       }
 

@@ -4,7 +4,7 @@
 
 - [x] 部署 smoke 对 HTML 引用的每个静态资源强制检查 HTTP 200；非 hash 资源不再可能以 404 被误报通过。
 - [x] 部署 smoke 拒绝 candidate 与 previous/rollback 使用同一 URL，避免同槽配置伪造回滚证据。
-- [x] 修复 `wait-for-http` 失败路径测试在全量并发下的 Node 子进程启动抖动；当前根测试 526/526 通过。
+- [x] 修复 `wait-for-http` 失败路径测试在全量并发下的 Node 子进程启动抖动；当前根测试 531/531 通过。
 - [x] TypeScript、生产构建、release 29/29、`git diff --check` 通过。
 - [ ] 线上部署地址、完整参考站 Trades Log、实体 Safari/VoiceOver/真实设备及可访问交易所的长时断网恢复仍需外部输入；不得以本地 fixture 或 preview 标记为 Final Gate 已关闭。
 - [x] GitHub Actions `37132010789` 完成 60 秒真实 Binance/Hyperliquid 连续订阅与 offline→online recovery；仅作为短时真实网络证据，小时级 soak、跨区域代理黑洞和线上部署仍开放。
@@ -15,7 +15,7 @@
 
 本轮基于 `feature/startup-loading-optimization` 的当前源码重新执行，不沿用旧 fixture 作为唯一证据。启动优化计划见 [STARTUP_LOADING_OPTIMIZATION_PLAN.md](docs/architecture/STARTUP_LOADING_OPTIMIZATION_PLAN.md)。
 
-截至 2026-10-03，完整本地验收序列的各阶段均已通过；当前根测试为 526/526、Vela-PineTS 为 292/292、release 专项为 29/29、Provider recovery 本地验证通过。GitHub workflow `37132010789` 曾完成 60 秒真实网络连续订阅与 offline→online recovery；后续 600 秒/120 秒尝试分别因 runner 到 Binance 的 `Failed to fetch` 在初始化阶段失败，不能写成 10/10 长时通过。类型/构建、Bundle/依赖/repository-hygiene/dist/release、启动与视觉/a11y 门禁均通过；真实长时断网恢复、跨机器、线上 rollback 和复杂撮合等外部 Final Gate 仍未关闭。
+截至 2026-10-03，完整本地验收序列的各阶段均已通过；当前根测试为 531/531、Vela-PineTS 为 292/292、release 专项为 29/29、Provider recovery 本地验证通过。GitHub workflow `37132010789` 曾完成 60 秒真实网络连续订阅与 offline→online recovery；后续 600 秒/120 秒尝试分别因 runner 到 Binance 的 `Failed to fetch` 在初始化阶段失败，不能写成 10/10 长时通过。类型/构建、Bundle/依赖/repository-hygiene/dist/release、启动与视觉/a11y 门禁均通过；真实长时断网恢复、跨机器、线上 rollback 和复杂撮合等外部 Final Gate 仍未关闭。
 
 ### `task/network-release-gates` 追加推进
 
