@@ -64,3 +64,60 @@ test('reference golden comparator returns not-run for missing complete inputs', 
     error => error?.code === 2 && /both complete golden inputs are required/.test(String(error.stdout)),
   );
 });
+
+test('reference golden comparator rejects an omitted required field instead of equating two missing values', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quant-reference-golden-'));
+  try {
+    const reference = join(root, 'reference.json');
+    const local = join(root, 'local.json');
+    const incomplete = { ...rows[0] };
+    delete incomplete.mfe;
+    await writeFile(reference, JSON.stringify({ rows: incomplete ? [incomplete] : [] }));
+    await writeFile(local, JSON.stringify({ trades: rows }));
+    await assert.rejects(
+      invoke(reference, local),
+      error => error?.code === 1 && /missing-field/.test(String(error.stdout)),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('reference golden comparator rejects duplicate Trade # records without overwriting one', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quant-reference-golden-'));
+  try {
+    const reference = join(root, 'reference.json');
+    const local = join(root, 'local.json');
+    await writeFile(reference, JSON.stringify({ rows: [rows[0], { ...rows[0], pnl: 99 }] }));
+    await writeFile(local, JSON.stringify({ trades: rows }));
+    await assert.rejects(
+      invoke(reference, local),
+      error => error?.code === 1 && /duplicate-trade-number/.test(String(error.stdout)),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('reference golden comparator normalizes side case and numeric strings', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quant-reference-golden-'));
+  try {
+    const reference = join(root, 'reference.json');
+    const local = join(root, 'local.json');
+    const equivalent = {
+      ...rows[0],
+      side: 'LONG',
+      entryTime: '1700000000000',
+      exitTime: '1700003600000',
+      entryPrice: '100',
+      qty: '1',
+      pnl: '5',
+    };
+    await writeFile(reference, JSON.stringify({ rows }));
+    await writeFile(local, JSON.stringify({ trades: [equivalent] }));
+    const result = await invoke(reference, local);
+    assert.match(result.stdout, /"pass": true/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

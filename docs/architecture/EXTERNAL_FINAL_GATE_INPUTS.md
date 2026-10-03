@@ -52,6 +52,8 @@ npm run test:reference:golden
 
 通过标准：交易数量一致，且每笔 Trade # 的方向、Entry/Exit 时间与价格、Size、P&L、MFE、MAE 全部在约定容差内一致；open row 的展示差异必须单独记录。
 
+Comparator 还会在输入阶段拒绝以下不完整证据：缺少或重复的 Trade #、双方都省略的字段、非有限数值，以及无法归一化的数字。未平仓交易的 Exit 字段可以显式为 `null`，但不能省略；方向大小写和数字字符串会按规范归一化。这样可以避免把截断导出或字段缺失误报为 parity。
+
 ## 4. Safari / VoiceOver / 真实触摸设备
 
 需要提供：

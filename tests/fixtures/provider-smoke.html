@@ -98,6 +98,36 @@
         for (let round = 0; round < count; round += 1) result = await runProviderSmokeRound();
         return { ...result, roundsCompleted: count };
       };
+
+      // This is intentionally separate from the short smoke above.  The
+      // caller toggles the real browser network state between the two polls;
+      // the provider wrapper must tear down the old lease and deliver a bar
+      // from the resumed subscription.  Keeping the subscription alive here
+      // also makes this useful for a longer, manually-triggered soak without
+      // making ordinary pull requests depend on a public exchange's timing.
+      let recoveryState;
+      window.beginProviderRecovery = (providerName = 'hyperliquid') => {
+        if (recoveryState?.unsubscribe) recoveryState.unsubscribe();
+        const provider = createWorkspaceProviders()[providerName];
+        if (typeof provider !== 'function') throw new Error(`unknown provider: ${providerName}`);
+        const instance = provider();
+        const state = { bars: [], error: null, unsubscribe: null };
+        state.unsubscribe = instance.subscribe(
+          providerName === 'binance' ? 'BTCUSDT' : 'BTC',
+          '15',
+          bar => state.bars.push({ time: bar.time, close: bar.close }),
+        );
+        recoveryState = state;
+        return true;
+      };
+      window.providerRecoveryState = () => {
+        if (!recoveryState) return { bars: [], error: null };
+        return { bars: recoveryState.bars.slice(), error: recoveryState.error };
+      };
+      window.endProviderRecovery = () => {
+        recoveryState?.unsubscribe?.();
+        recoveryState = undefined;
+      };
       window.providerSmokeReady = true;
     </script>
   </body>
