@@ -492,19 +492,20 @@ def run_gate(update: bool) -> dict[str, object]:
     launch_options: dict[str, object] = {"headless": True}
     if executable:
         launch_options["executable_path"] = executable
+    # Invoke Vite directly instead of `npm run dev`: the latter runs the
+    # repository's predev fork rebuild hook and can leave the fixture in a
+    # transient module state on a cold CI runner. The startup gate already
+    # built and checked the fork artifacts; this process should only serve the
+    # no-HMR visual harness.
+    vite = ROOT / "node_modules/.bin/vite"
+    command = [
+        str(vite) if vite.exists() else "npx",
+        *([] if vite.exists() else ["vite"]),
+        "--config", "tests/vite-performance.config.ts",
+        "--host", HOST, "--port", str(PORT), "--strictPort",
+    ]
     server = subprocess.Popen(
-        # Use the same no-HMR Vite harness as the performance/cross-browser
-        # gates.  The fixture imports the locally built fork bundles; another
-        # workspace task may rebuild those bundles while this gate is taking
-        # screenshots.  A normal dev server would apply the resulting HMR
-        # update and navigate the page halfway through a geometry sample,
-        # which presents as a missing Viewer (or a destroyed evaluation
-        # context) rather than a real UI regression.
-        [
-            "npm", "run", "dev", "--",
-            "--config", "tests/vite-performance.config.ts",
-            "--host", HOST, "--port", str(PORT), "--strictPort",
-        ],
+        command,
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
