@@ -63,6 +63,7 @@ npm run test:e2e:deployment
 - 最新 workflow `37134927725`（120 秒）在有限三次重试后仍为 `provider soak failed after 3 attempts: Failed to fetch`；重试机制本身已生效，但 runner 的上游网络不可用，长时门禁继续保持未通过。
 - 本机真实网络复测（2026-10-03，`python3 tests/provider_smoke.py --duration-seconds 120 --recovery`）通过：Binance 61 callbacks、最大间隔 2,091ms；Hyperliquid 98 callbacks、最大间隔 6,022ms；两者均完成 offline→online recovery，且 Binance Futures history/metadata 可用。该结果是 120 秒单机证据，不替代小时级、跨区域或代理黑洞验证。
 - 本轮复测（2026-10-03，`python3 tests/provider_smoke.py --rounds 10 --recovery`）通过：Binance Spot/Futures 与 Hyperliquid 每轮历史/live 均成功，10 轮均完成 offline→online recovery；这是连续轮次证据，不替代小时级、跨区域或代理黑洞验证。
+- 远端 workflow `37144883619`（2026-10-03，HEAD `53eb4a6`）的 local-gates 全部通过；provider-soak 在首次真实请求阶段因 GitHub runner 对 Binance 返回 `TypeError: Failed to fetch`，未进入连续订阅，故该运行不计入长时 Final Gate 证据。
 - 断网探针现额外断言 offline 窗口不得收到任何行情 callback，并输出 `offlineBars`；本地 recovery 回归结果为 Binance/Hyperliquid `offlineBars=0`。这只增强了断网语义的可观测性，不扩大外部验收范围。
 
 > 2026-10-03 外部网络门禁补充：push 门禁已通过；手动 provider soak 的 fork 构建缺口已修复，但一次 60 秒真实网络运行在 Binance `Failed to fetch` 处失败，未被标记为通过。长时 WebSocket/断网恢复仍需可访问交易所 API 的连续运行证据。
