@@ -1,0 +1,52 @@
+name: Final gates
+
+on:
+  push:
+    branches:
+      - task/network-release-gates
+  pull_request:
+    branches:
+      - master
+      - task/network-release-gates
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run verify:final-gates:local
+
+  deployment-smoke:
+    if: ${{ vars.QUANT_DEPLOY_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Check deployed candidate and optional rollback slot
+        env:
+          QUANT_DEPLOY_URL: ${{ vars.QUANT_DEPLOY_URL }}
+          QUANT_PREVIOUS_URL: ${{ vars.QUANT_PREVIOUS_URL }}
+        run: npm run test:e2e:deployment
+
+  deployment-not-configured:
+    if: ${{ vars.QUANT_DEPLOY_URL == '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'QUANT_DEPLOY_URL is not configured; real deployment Final Gate remains not_run.'
