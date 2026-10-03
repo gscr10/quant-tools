@@ -49,7 +49,11 @@ test('wait-for-http fails with the last observed status instead of sleeping fore
         // Starting a fresh Node child can exceed two seconds when the full
         // repository suite is running in parallel. Keep the assertion focused
         // on the final HTTP status rather than process-startup scheduling.
-        '--timeout-ms', '5000', '--interval-ms', '10',
+        // The child process can spend several seconds starting while the
+        // complete repository suite is running.  Keep the production script's
+        // timeout semantics under test, but leave startup scheduling headroom
+        // so the assertion observes the server's final HTTP 503.
+        '--timeout-ms', '15000', '--interval-ms', '10',
       ], { cwd: process.cwd() }),
       error => error?.code === 1 && /HTTP 503/.test(String(error?.stderr)),
     );

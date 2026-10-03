@@ -61,6 +61,10 @@ def check_slot(page, url: str, label: str) -> dict[str, object]:
     for asset in assets:
         asset_url = urljoin(origin + "/", asset)
         asset_response = page.request.get(asset_url, timeout=30_000)
+        if asset_response.status != 200:
+            raise RuntimeError(
+                f"{label}: asset returned HTTP {asset_response.status}: {asset_url}"
+            )
         asset_cache = asset_response.headers.get("cache-control", "").lower()
         hashed = bool(re.search(r"/assets/[^/]+-[A-Za-z0-9_-]+\.[^/?#]+$", asset_url))
         if hashed and not ("immutable" in asset_cache and "max-age=" in asset_cache):
@@ -81,9 +85,13 @@ def main() -> int:
         print(json.dumps({"status": "not_run", "reason": str(error)}))
         return 2
     previous = os.environ.get("QUANT_PREVIOUS_URL", "").strip()
+    if previous:
+        previous = required_url("QUANT_PREVIOUS_URL")
+        if previous == candidate:
+            raise RuntimeError("QUANT_PREVIOUS_URL must be different from QUANT_DEPLOY_URL")
     urls = [(candidate, "candidate")]
     if previous:
-        urls.append((required_url("QUANT_PREVIOUS_URL"), "previous/rollback"))
+        urls.append((previous, "previous/rollback"))
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
