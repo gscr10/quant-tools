@@ -33,13 +33,15 @@ def check_slot(page, url: str, label: str) -> dict[str, object]:
     blocked: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
 
-    def on_request(request) -> None:
-        host = urlparse(request.url).hostname or ""
+    def route_request(route) -> None:
+        host = urlparse(route.request.url).hostname or ""
         if host in {"app.luxalgo.com", "vela.luxalgo.com"}:
-            blocked.append(request.url)
-            request.abort()
+            blocked.append(route.request.url)
+            route.abort()
+            return
+        route.continue_()
 
-    page.on("request", on_request)
+    page.route("**/*", route_request)
     response = page.goto(url, wait_until="domcontentloaded", timeout=60_000)
     if response is None or response.status != 200:
         raise RuntimeError(f"{label}: entry returned {response.status if response else 'no response'}")
