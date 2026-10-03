@@ -12,7 +12,7 @@
 - 既有 release manifest 已覆盖 candidate/previous 同槽切换、制品篡改拒绝和 Storage reconciliation；新增缓存 smoke 校验入口 HTML 可重新验证、hash 资源 immutable 且回滚保留旧资源。不把本地模拟等同真实 CDN/线上回滚。
 - Provider smoke 使用独立的无 HMR Vite 配置，避免 fork 构建或源文件变更触发测试页导航；已完成 Binance Spot/Futures、Hyperliquid 真实网络 10 轮历史与 live 验证。
 - `vite preview` 已提供发布缓存契约：HTML 入口 `no-cache/no-store/must-revalidate`，带 hash 的静态资源 `immutable`；这只证明本地预览协议，线上 CDN 仍需部署实测。
-- 本地回归门禁已补齐：等待服务测试在高负载下不再因 Node 子进程启动抖动误报；根测试当前 526/526，release 29/29，Provider recovery 本地验证通过，触摸 E2E 6/6，Bar Magnifier golden 通过。
+- 本地回归门禁已补齐：等待服务测试在高负载下不再因 Node 子进程启动抖动误报；根测试当前 531/531，release 29/29，Provider recovery 本地验证通过，触摸 E2E 6/6，Bar Magnifier golden 通过。
 
 ## 验证命令
 
