@@ -21,7 +21,11 @@ permissions:
 jobs:
   local-gates:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The full cross-browser/a11y suite installs three browser engines and
+    # intentionally exercises cold-start, touch and visual gates.  Keep the
+    # job bounded, but leave enough room for a busy hosted runner instead of
+    # turning a slow install into a false Final Gate failure.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
