@@ -79,5 +79,6 @@ Comparator 还会在输入阶段拒绝以下不完整证据：缺少或重复的
 ## 6. 最近一次真实网络门禁记录（2026-10-03）
 
 - 普通 push 门禁：已通过（本地构建、单元、复杂撮合、触摸、视觉/a11y）。
-- 手动 provider soak：工作流已成功构建 fork artifacts，但本次运行在真实 Binance 请求阶段收到 `TypeError: Failed to fetch`，因此 provider soak **失败且不能计为通过**；恢复步骤未继续执行。
-- 该结果证明门禁能正确暴露上游网络不可用，不证明断网恢复或长时 WebSocket 已完成。应在上游可访问的 runner/网络条件下重新触发 `Final gates`，并保留完整输出。
+- 手动 workflow `37132010789`：60 秒连续订阅及 browser offline/online recovery 成功，Binance Spot/Futures 与 Hyperliquid history/live 均返回有效数据；这只是短时真实网络证据。
+- 手动 workflow `37133498353`（600 秒）和 `37134927725`（120 秒）：在 Binance 初始请求处收到 `TypeError: Failed to fetch`；有限重试后仍失败，未进入连续订阅阶段，因此不能计为长时通过。
+- 这些结果证明门禁能正确暴露上游网络不可用，也证明短时恢复路径可运行；不证明小时级 WebSocket 稳定性、跨区域代理黑洞或持续断网恢复。后续长时验证应在可访问交易所 API 的 runner/网络条件下执行并保留完整输出。
