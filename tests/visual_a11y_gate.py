@@ -492,15 +492,11 @@ def run_gate(update: bool) -> dict[str, object]:
     launch_options: dict[str, object] = {"headless": True}
     if executable:
         launch_options["executable_path"] = executable
-    # Invoke Vite directly instead of `npm run dev`: the latter runs the
-    # repository's predev fork rebuild hook and can leave the fixture in a
-    # transient module state on a cold CI runner. The startup gate already
-    # built and checked the fork artifacts; this process should only serve the
-    # no-HMR visual harness.
-    vite = ROOT / "node_modules/.bin/vite"
+    # Use the repository's fast launcher: it verifies that fork artifacts are
+    # present, skips the expensive predev rebuild, and then starts Vite with
+    # the same process environment used by the rest of the E2E gates.
     command = [
-        str(vite) if vite.exists() else "npx",
-        *([] if vite.exists() else ["vite"]),
+        "npm", "run", "dev:fast", "--",
         "--config", "tests/vite-performance.config.ts",
         "--host", HOST, "--port", str(PORT), "--strictPort",
     ]
