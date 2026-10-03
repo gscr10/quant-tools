@@ -14,6 +14,7 @@
 - [x] 本机真实网络 10 轮连续历史/live 与恢复（2026-10-03）：Binance Spot/Futures、Hyperliquid 每轮均成功，10/10 轮 offline→online 恢复；仅作为增强的单机证据，小时级和跨区域 Final Gate 仍开放。
 - [ ] 远端 workflow `37144883619` 的 local-gates 已通过，但 provider-soak 在首次 Binance 请求处 `Failed to fetch`，未形成连续订阅证据；需可访问交易所 API 的 runner/网络后重试。
 - [x] 修复视觉/a11y CI 冷 runner 死锁：`tests/visual_a11y_gate.py` 不再将 Vite 输出写入未读取的 PIPE，改用临时日志文件；新增架构回归断言，等待 `f34a1c5` 后的新 CI 运行确认。
+- [x] 修复一次性浏览器 fixture 的 Vite `Outdated Optimize Dep` 竞态：性能/Provider 配置关闭自动依赖 discovery，并新增架构回归断言；本地视觉/a11y 已通过，等待远端复核。
 - [x] 断网恢复 smoke 增加 `offlineBars=0` 断言，确保 offline 窗口不接受旧/迟到行情；新增恢复合同回归测试。
 
 ## 2026-10-02 首次加载优化分支复核（当前状态）

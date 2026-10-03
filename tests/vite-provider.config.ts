@@ -12,6 +12,11 @@ const withoutDevClient = {
 
 export default defineConfig({
   plugins: [withoutDevClient],
+  // Provider smoke is also a one-shot page; avoid optimizer cache churn when
+  // the fork build and the browser start at the same time.
+  optimizeDeps: {
+    noDiscovery: true,
+  },
   server: {
     hmr: false,
   },
