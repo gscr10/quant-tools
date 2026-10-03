@@ -305,18 +305,33 @@
         const provider = createWorkspaceProviders()[providerName];
         if (typeof provider !== 'function') throw new Error(`unknown provider: ${providerName}`);
         const instance = provider();
-        const state = { bars: [], error: null, unsubscribe: null };
+        const state = { bars: [], error: null, offlineBars: 0, online: true, unsubscribe: null };
         state.unsubscribe = instance.subscribe(
           providerName === 'binance' ? 'BTCUSDT' : 'BTC',
           '15',
-          bar => state.bars.push({ time: bar.time, close: bar.close }),
+          bar => {
+            try {
+              assertBar(bar, `${providerName} recovery`);
+              if (state.online) state.bars.push({ time: bar.time, close: bar.close });
+              else state.offlineBars += 1;
+            } catch (error) {
+              state.error = String(error?.message ?? error);
+            }
+          },
         );
         recoveryState = state;
         return true;
       };
       window.providerRecoveryState = () => {
         if (!recoveryState) return { bars: [], error: null };
-        return { bars: recoveryState.bars.slice(), error: recoveryState.error };
+        return {
+          bars: recoveryState.bars.slice(),
+          error: recoveryState.error,
+          offlineBars: recoveryState.offlineBars,
+        };
+      };
+      window.setProviderRecoveryOnline = online => {
+        if (recoveryState) recoveryState.online = Boolean(online);
       };
       window.endProviderRecovery = () => {
         recoveryState?.unsubscribe?.();
