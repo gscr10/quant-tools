@@ -37,6 +37,13 @@ test('visual gate drains Vite output instead of deadlocking on an unread pipe', 
   assert.doesNotMatch(source, /stdout=subprocess\.PIPE/);
 });
 
+test('one-shot browser fixtures do not race Vite dependency optimization', async () => {
+  for (const file of ['vite-performance.config.ts', 'vite-provider.config.ts']) {
+    const source = await readFile(new URL(`./${file}`, import.meta.url), 'utf8');
+    assert.match(source, /optimizeDeps:\s*\{[\s\S]*noDiscovery:\s*true/);
+  }
+});
+
 test('Pine Editor CodeMirror stays behind a first-open dynamic import', async () => {
   const source = await readFile(new URL('../src/app/create-app.ts', import.meta.url), 'utf8');
   const lazy = await readFile(new URL('../src/features/pine-editor/lazy-pine-editor.ts', import.meta.url), 'utf8');

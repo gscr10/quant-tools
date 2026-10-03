@@ -62,6 +62,14 @@ const withoutCssClient = {
  */
 export default defineConfig({
     plugins: [withoutCssClient, withoutDevClient],
+    // These fixtures are one-shot regression pages. Automatic dependency
+    // discovery can invalidate an optimized module while the first browser
+    // request is already in flight, yielding a transient 504 (Outdated
+    // Optimize Dep) on a clean hosted runner. Let Vite transform the source
+    // graph directly instead of racing the optimizer cache.
+    optimizeDeps: {
+        noDiscovery: true,
+    },
     server: {
         allowedHosts: ['.monkeycode-ai.online'],
         hmr: false,
