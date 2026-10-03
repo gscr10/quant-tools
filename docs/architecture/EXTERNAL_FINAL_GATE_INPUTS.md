@@ -1,0 +1,72 @@
+# External Final Gate Inputs
+
+本文件只记录无法在本机自证的验收输入与判定标准。没有对应输入时必须标记 `not_run` 或 `PARTIAL`，不得用本地 fixture 代替。
+
+## 1. 线上部署 / rollback / CDN
+
+需要提供：
+
+- candidate HTTPS 地址：`QUANT_DEPLOY_URL`
+- previous/rollback HTTPS 地址：`QUANT_PREVIOUS_URL`
+- 实际部署槽位切换记录（时间、制品 commit、manifest SHA-256）
+- CDN purge/invalidation 记录和浏览器缓存清理方式
+
+执行：
+
+```bash
+QUANT_DEPLOY_URL=https://candidate.example \
+QUANT_PREVIOUS_URL=https://previous.example \
+npm run test:e2e:deployment
+```
+
+通过标准：candidate 和 previous 均返回 200；入口不可缓存；hash 资源 immutable；页面无错误；无参考站请求；切回 previous 后旧 hash 仍可加载。
+
+## 2. 长时 WebSocket / 断网恢复
+
+需要提供：
+
+- 可持续运行至少 2 小时的浏览器/服务器环境
+- 可控断网、代理黑洞或网络策略注入
+- Binance Spot/Futures 与 Hyperliquid 的实际连接日志
+
+通过标准：断网期间无旧代次数据回写；恢复后只建立一个有效 lease；无重复 socket、定时器或订阅；恢复后的行情和回测 revision 连续。
+
+## 3. 参考站逐笔 golden
+
+需要提供：
+
+- 与本地完全相同的 ticker、周期、时间区间、策略源码和参数
+- 参考站完整 Trades Log JSON（不能是截断的 DOM 文本）
+- 本地对应 report JSON
+
+执行：
+
+```bash
+REFERENCE_GOLDEN=/path/reference.json \
+LOCAL_GOLDEN=/path/local.json \
+npm run test:reference:golden
+```
+
+通过标准：交易数量一致，且每笔 Trade # 的方向、Entry/Exit 时间与价格、Size、P&L、MFE、MAE 全部在约定容差内一致；open row 的展示差异必须单独记录。
+
+## 4. Safari / VoiceOver / 真实触摸设备
+
+需要提供：
+
+- 实体 macOS Safari + safaridriver 授权
+- VoiceOver 开启的 macOS/iOS 设备
+- 至少一台真实 iOS 或 Android 触摸设备
+
+通过标准：四个 Viewer Tab、Settings、Simulation、返回图表、焦点回收、读屏名称/状态、触摸滚动和点击均通过；Playwright WebKit 只能作为补充证据。
+
+## 5. 全量像素级对账
+
+需要提供：
+
+- 同一浏览器版本、DPR、字体、时区和窗口尺寸
+- 参考站与本地各页面的稳定截图
+- 截图生成时间和输入数据 SHA-256
+
+通过标准：按页面、viewport、状态和交互阶段逐张比较；差异阈值、允许的动态区域和未对账区域必须显式列出，不能只比较单个 Performance 页面。
+
+当前这些输入均未完整提供，因此整体 Final Gate 继续保持 `PARTIAL`。
