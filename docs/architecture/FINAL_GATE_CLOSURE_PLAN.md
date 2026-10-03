@@ -74,3 +74,5 @@ npm run test:e2e:deployment
 > 2026-10-03 外部网络门禁补充：push 门禁已通过；手动 provider soak 的 fork 构建缺口已修复，但一次 60 秒真实网络运行在 Binance `Failed to fetch` 处失败，未被标记为通过。长时 WebSocket/断网恢复仍需可访问交易所 API 的连续运行证据。
 
 > 2026-10-03 workflow `37150267544`（手动触发，`QUANT_PROVIDER_SMOKE_DURATION_SECONDS=7200`）：local-gates 通过；deployment 因未配置 `QUANT_DEPLOY_URL` 明确 `not_run`；provider-soak 在首次真实请求阶段经 3 次重试后仍为 `Failed to fetch`，未进入 WebSocket/断网恢复阶段。该运行不计入长时 Final Gate 通过证据。
+
+> 2026-10-03 本机尝试启动 7200 秒连续 lease soak 时，上游行情未产生 live callback，探针按设计失败关闭并清理服务；没有把这次失败计入通过证据。此前 10 分钟连续运行和 10 轮 recovery 仍是当前最强本机证据。
