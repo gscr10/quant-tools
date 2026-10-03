@@ -11,6 +11,8 @@
 - 实际部署槽位切换记录（时间、制品 commit、manifest SHA-256）
 - CDN purge/invalidation 记录和浏览器缓存清理方式
 
+远程 CI 可使用仓库 Variables `QUANT_DEPLOY_URL` 和可选的 `QUANT_PREVIOUS_URL` 自动执行同一 smoke；未配置时会显式标记 `not_run`，不会让 CI 伪造线上通过。
+
 执行：
 
 ```bash
