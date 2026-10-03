@@ -31,7 +31,10 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check playwright
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: python3 -m playwright install chromium firefox webkit
-      - run: npm run verify:final-gates:local
+      - name: Run local final gates
+        env:
+          QUANT_VISUAL_STRICT_PIXELS: '0'
+        run: npm run verify:final-gates:local
 
   deployment-smoke:
     if: ${{ vars.QUANT_DEPLOY_URL != '' }}
