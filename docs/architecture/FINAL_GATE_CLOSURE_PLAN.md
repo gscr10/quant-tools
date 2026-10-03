@@ -72,3 +72,5 @@ npm run test:e2e:deployment
 - 断网探针现额外断言 offline 窗口不得收到任何行情 callback，并输出 `offlineBars`；本地 recovery 回归结果为 Binance/Hyperliquid `offlineBars=0`。这只增强了断网语义的可观测性，不扩大外部验收范围。
 
 > 2026-10-03 外部网络门禁补充：push 门禁已通过；手动 provider soak 的 fork 构建缺口已修复，但一次 60 秒真实网络运行在 Binance `Failed to fetch` 处失败，未被标记为通过。长时 WebSocket/断网恢复仍需可访问交易所 API 的连续运行证据。
+
+> 2026-10-03 workflow `37150267544`（手动触发，`QUANT_PROVIDER_SMOKE_DURATION_SECONDS=7200`）：local-gates 通过；deployment 因未配置 `QUANT_DEPLOY_URL` 明确 `not_run`；provider-soak 在首次真实请求阶段经 3 次重试后仍为 `Failed to fetch`，未进入 WebSocket/断网恢复阶段。该运行不计入长时 Final Gate 通过证据。
