@@ -24,6 +24,8 @@ npm run test:e2e:touch
 npm run test:pinets:golden
 npm run test:release
 npm run test:providers:long
+# 完整参考站 Trades Log 对账（两个输入都必须是完整导出）
+REFERENCE_GOLDEN=/path/reference.json LOCAL_GOLDEN=/path/local.json npm run test:reference:golden
 # 真实部署（必须提供外部地址；没有地址会以 not_run/exit 2 结束）
 QUANT_DEPLOY_URL=https://<candidate-host> npm run test:e2e:deployment
 # 可选：同时验证 previous/rollback 槽位
@@ -50,3 +52,4 @@ npm run test:e2e:deployment
 - 参考站自动登录流程已再次执行，能够进入 Vela workspace 并采集移动端真实页面；但从 `app.luxalgo.com` 到 `vela.luxalgo.com` 的 RSC 导航受到浏览器 CORS/连接关闭影响，未获得完整 Trades Log，因此不能把本次运行升级为完整逐笔 golden 证据。
 - 本机没有可无交互授权的实体 Safari/VoiceOver 运行条件，也没有部署槽位、CDN purge 和线上回滚凭据；这些仍然是外部验收依赖，不用 Playwright WebKit 或本地 preview 冒充。
 - 新增 `npm run test:e2e:deployment` 作为真实地址驱动的入口：会检查 candidate/previous 的入口缓存头、hash 资源 `immutable`、页面错误和参考站请求；本地 preview 只用于验证脚本本身，不计入线上 Final Gate。
+- 新增 `npm run test:reference:golden`：完整导出的交易数组按 Trade #、方向、Entry/Exit 时间和价格、Size、P&L、MFE、MAE 逐字段比较；缺少输入、行数不等或任意字段不一致都会失败，半截参考站抓取不会被当成通过。

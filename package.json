@@ -32,6 +32,7 @@
     "test:pinets:offline": "npm --workspace packages/pinets run test:offline",
     "test:pinets:golden": "npm --workspace packages/pinets run test -- --run tests/namespaces/strategy/reference-golden.test.ts",
     "test:pinets:matching": "npm --workspace packages/pinets run test -- --run tests/namespaces/strategy/bar-magnifier.test.ts tests/namespaces/strategy/bar-magnifier-audit.test.ts tests/namespaces/strategy/oca.test.ts tests/namespaces/strategy/pyramiding-reversal.test.ts tests/namespaces/strategy/margin-call.test.ts",
+    "test:reference:golden": "python3 tests/reference_golden_compare.py --reference \"$REFERENCE_GOLDEN\" --local \"$LOCAL_GOLDEN\"",
     "test:vela-pinets": "npm --workspace packages/vela-pinets run test -- --run",
     "test:pinets:network": "npm --workspace packages/pinets run test:network",
     "test:fixture:btcusdt": "npm --workspace packages/vela-pinets run test -- --run test/btcusdt-fixture-determinism.test.ts",
