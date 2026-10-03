@@ -75,3 +75,9 @@ Comparator 还会在输入阶段拒绝以下不完整证据：缺少或重复的
 通过标准：按页面、viewport、状态和交互阶段逐张比较；差异阈值、允许的动态区域和未对账区域必须显式列出，不能只比较单个 Performance 页面。
 
 当前这些输入均未完整提供，因此整体 Final Gate 继续保持 `PARTIAL`。
+
+## 6. 最近一次真实网络门禁记录（2026-10-03）
+
+- 普通 push 门禁：已通过（本地构建、单元、复杂撮合、触摸、视觉/a11y）。
+- 手动 provider soak：工作流已成功构建 fork artifacts，但本次运行在真实 Binance 请求阶段收到 `TypeError: Failed to fetch`，因此 provider soak **失败且不能计为通过**；恢复步骤未继续执行。
+- 该结果证明门禁能正确暴露上游网络不可用，不证明断网恢复或长时 WebSocket 已完成。应在上游可访问的 runner/网络条件下重新触发 `Final gates`，并保留完整输出。
