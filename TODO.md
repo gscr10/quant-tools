@@ -485,5 +485,6 @@ TradingView 文档中的 tick 是历史回测使用的“模拟 K 线内价格�
 - [x] 新增 `npm run test:e2e:deployment`：配置 `QUANT_DEPLOY_URL`（可选 `QUANT_PREVIOUS_URL`）后检查真实 candidate/previous 入口、hash 资源缓存策略、页面错误和参考站请求；未配置地址时明确 `not_run`，不会伪造通过。
 - [x] 新增 `npm run test:reference:golden`：完整参考站/本地交易 JSON 的逐笔字段比较入口；缺少完整输入时明确 `not_run`，不把部分采集结果当成 parity。
 - [x] 外部 Final Gate 输入与验收标准已集中记录：[EXTERNAL_FINAL_GATE_INPUTS.md](docs/architecture/EXTERNAL_FINAL_GATE_INPUTS.md)。
+- [x] 新增 `npm run verify:final-gates:local`，统一执行本地启动、类型、构建、release、复杂撮合、Bar Magnifier、触摸和视觉/a11y 门禁；外部 golden/线上设备仍需单独输入。
 
 2026-10-03 已重新执行参考站自动登录与动态采集：进入 Vela workspace 并获得真实移动端页面，但 RSC 从 `app.luxalgo.com` 跳转至 `vela.luxalgo.com` 时出现 CORS/连接关闭，未能采集完整 Trades Log；该运行仅作为黑盒行为证据，未关闭逐笔 golden。

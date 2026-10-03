@@ -24,6 +24,8 @@ npm run test:e2e:touch
 npm run test:pinets:golden
 npm run test:release
 npm run test:providers:long
+# 本地 Final Gate 聚合门禁（不包含需要外部输入的 golden/线上设备）
+npm run verify:final-gates:local
 # 完整参考站 Trades Log 对账（两个输入都必须是完整导出）
 REFERENCE_GOLDEN=/path/reference.json LOCAL_GOLDEN=/path/local.json npm run test:reference:golden
 # 真实部署（必须提供外部地址；没有地址会以 not_run/exit 2 结束）

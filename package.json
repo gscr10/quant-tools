@@ -27,6 +27,7 @@
     "test:release": "node --test tests/release-artifacts.test.mjs tests/release-cache-rollback.test.mjs tests/fork-build-lock.test.mjs tests/fork-build-recovery.test.mjs",
     "verify:startup": "npm test && npm run test:vela-pinets && npm run typecheck && npm run build && npm run check:bundle-size && npm run check:dependencies && npm run check:repository-hygiene && npm run check:dist:independence && npm run test:release && npm run dev:fast -- --check-only",
     "verify:startup:deploy": "npm run verify:startup && npm run test:providers:long",
+    "verify:final-gates:local": "npm run verify:startup && npm run test:pinets:matching && npm run test:pinets:golden && npm run test:e2e:touch && npm run test:visual:a11y",
     "verify:startup:full": "npm run verify:startup && npm run test:startup:matrix -- --samples 3 --max-p95 5000 && npm run test:startup:zero-delay && npm run test:startup -- --samples 1 --storage-fault getter && npm run test:startup -- --samples 1 --storage-fault methods && npm run test:startup -- --samples 1 --storage-fault quota && npm run test:providers:soak && npm run test:e2e && npm run test:e2e:settings && npm run test:e2e:fault-isolation && npm run test:e2e:multicell && npm run test:e2e:prod && npm run test:e2e:cross-browser && npm run test:e2e:offline && npm run test:e2e:performance && npm run test:visual:a11y",
     "typecheck": "tsc --noEmit && npm --workspace packages/vela-pinets run typecheck",
     "test:pinets:offline": "npm --workspace packages/pinets run test:offline",
