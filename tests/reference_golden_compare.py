@@ -35,9 +35,18 @@ def load_rows(path: Path) -> list[dict]:
     if isinstance(payload, list):
         rows = payload
     elif isinstance(payload, dict):
-        rows = payload.get("trades") or payload.get("rows")
-        if rows is None and isinstance(payload.get("context"), dict):
-            rows = payload["context"].get("trades")
+        # Do not use ``a or b`` here.  An explicitly exported empty ``trades``
+        # array is meaningful evidence and must not silently fall back to a
+        # different, possibly stale ``rows`` field in the same envelope.
+        containers = [key for key in ("trades", "rows") if key in payload]
+        if len(containers) > 1:
+            raise ValueError(f"{path}: ambiguous trade envelope contains both trades and rows")
+        if containers:
+            rows = payload[containers[0]]
+        elif isinstance(payload.get("context"), dict) and "trades" in payload["context"]:
+            rows = payload["context"]["trades"]
+        else:
+            rows = None
     else:
         rows = None
     if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
@@ -91,8 +100,15 @@ def indexed_rows(rows: list[dict], source: str) -> tuple[dict[int, dict], list[d
         if number is None or (isinstance(number, str) and not number.strip()):
             errors.append({"source": source, "row": index, "reason": "missing-trade-number"})
             continue
+        if isinstance(number, bool):
+            errors.append({"source": source, "row": index, "reason": "invalid-trade-number", "value": number})
+            continue
         try:
             trade_number = int(number)
+            if isinstance(number, float) and not number.is_integer():
+                raise ValueError("non-integral number")
+            if isinstance(number, str) and str(trade_number) != number.strip():
+                raise ValueError("non-integral or non-canonical number")
         except (TypeError, ValueError):
             errors.append({"source": source, "row": index, "reason": "invalid-trade-number", "value": number})
             continue
