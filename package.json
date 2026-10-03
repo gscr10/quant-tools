@@ -24,6 +24,7 @@
     "test:providers": "python3 tests/provider_smoke.py",
     "test:providers:soak": "python3 tests/provider_smoke.py --rounds 3",
     "test:providers:long": "python3 tests/provider_smoke.py --rounds 10",
+    "test:providers:recovery": "python3 tests/provider_smoke.py --rounds 3 --recovery",
     "test:release": "node --test tests/release-artifacts.test.mjs tests/release-cache-rollback.test.mjs tests/fork-build-lock.test.mjs tests/fork-build-recovery.test.mjs",
     "verify:startup": "npm test && npm run test:vela-pinets && npm run typecheck && npm run build && npm run check:bundle-size && npm run check:dependencies && npm run check:repository-hygiene && npm run check:dist:independence && npm run test:release && npm run dev:fast -- --check-only",
     "verify:startup:deploy": "npm run verify:startup && npm run test:providers:long",

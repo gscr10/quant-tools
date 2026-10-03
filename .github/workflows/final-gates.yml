@@ -9,6 +9,11 @@ on:
       - master
       - task/network-release-gates
   workflow_dispatch:
+    inputs:
+      provider_duration_seconds:
+        description: 'Optional real-provider soak duration (seconds); 0 uses the normal 10-round check'
+        required: false
+        default: '0'
 
 permissions:
   contents: read
@@ -73,7 +78,7 @@ jobs:
     # same ten-round soak on a clean GitHub runner when collecting evidence.
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -87,4 +92,9 @@ jobs:
       - name: Install Python Playwright for provider smoke
         run: python3 -m pip install --disable-pip-version-check playwright
       - run: python3 -m playwright install --with-deps chromium
-      - run: npm run test:providers:long
+      - name: Run real-provider soak
+        env:
+          QUANT_PROVIDER_SMOKE_DURATION_SECONDS: ${{ inputs.provider_duration_seconds || '0' }}
+        run: npm run test:providers:long
+      - name: Exercise real browser offline/online recovery
+        run: npm run test:providers:recovery

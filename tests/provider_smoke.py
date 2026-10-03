@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+import socket
 from urllib.request import urlopen
 
 from playwright.sync_api import sync_playwright
@@ -17,7 +18,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST = "127.0.0.1"
-PORT = 4179
+PORT = int(os.environ.get("QUANT_PROVIDER_PORT", "4179"))
 URL = f"http://{HOST}:{PORT}/tests/fixtures/provider-smoke.html"
 
 
@@ -39,7 +40,20 @@ def wait_for_server(process: subprocess.Popen[str]) -> None:
     raise TimeoutError("Timed out waiting for the Vite provider-smoke server")
 
 
-def run_smoke(rounds: int = 1) -> dict[str, object]:
+def wait_for_recovery_bar(page, minimum: int, timeout_ms: int = 90_000) -> list[dict[str, object]]:
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        state = page.evaluate("window.providerRecoveryState()")
+        if state.get("error"):
+            raise AssertionError(state["error"])
+        bars = state.get("bars", [])
+        if len(bars) >= minimum:
+            return bars
+        time.sleep(0.25)
+    raise TimeoutError(f"provider recovery did not deliver bar {minimum} within {timeout_ms}ms")
+
+
+def run_smoke(rounds: int = 1, recovery: bool = False) -> dict[str, object]:
     executable = os.environ.get("CHROMIUM_EXECUTABLE")
     if not executable:
         mac_chromium = "/Applications/Chromium.app/Contents/MacOS/Chromium"
@@ -59,23 +73,58 @@ def run_smoke(rounds: int = 1) -> dict[str, object]:
         assert response is not None and response.status == 200
         page.wait_for_function("window.providerSmokeReady === true")
         result = page.evaluate("rounds => window.runProviderSmoke(rounds)", rounds)
+        if recovery:
+            recovery_results = {}
+            for provider_name in ("binance", "hyperliquid"):
+                page.evaluate("name => window.beginProviderRecovery(name)", provider_name)
+                before = wait_for_recovery_bar(page, 1)
+                page.context.set_offline(True)
+                time.sleep(1.0)
+                page.context.set_offline(False)
+                after = wait_for_recovery_bar(page, len(before) + 1)
+                page.evaluate("window.endProviderRecovery()")
+                recovery_results[provider_name] = {
+                    "initialBars": len(before),
+                    "resumedBars": len(after),
+                    "resumed": True,
+                }
+            result["networkRecovery"] = recovery_results
         browser.close()
         if page_errors:
             raise AssertionError(page_errors)
         return result
 
 
+def choose_port() -> int:
+    requested = os.environ.get("QUANT_PROVIDER_PORT")
+    if requested:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            probe.bind((HOST, PORT))
+        return PORT
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind((HOST, 0))
+        return int(probe.getsockname()[1])
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--rounds', type=int, default=int(os.environ.get('QUANT_PROVIDER_SMOKE_ROUNDS', '1')))
+    parser.add_argument('--recovery', action='store_true', help='toggle the real browser offline/online state')
+    parser.add_argument('--duration-seconds', type=float, default=float(os.environ.get('QUANT_PROVIDER_SMOKE_DURATION_SECONDS', '0')))
     args = parser.parse_args()
     if args.rounds < 1:
         parser.error('--rounds must be positive')
+    if args.duration_seconds < 0:
+        parser.error('--duration-seconds must be non-negative')
+    global PORT, URL
+    PORT = choose_port()
+    URL = f"http://{HOST}:{PORT}/tests/fixtures/provider-smoke.html"
     server = subprocess.Popen(
         [
             "npm",
             "run",
-            "dev",
+            "dev:fast",
             "--",
             "--host",
             HOST,
@@ -92,12 +141,24 @@ def main() -> int:
     )
     try:
         wait_for_server(server)
-        result = run_smoke(args.rounds)
+        if args.duration_seconds:
+            started = time.monotonic()
+            completed = 0
+            result = None
+            while completed == 0 or time.monotonic() - started < args.duration_seconds:
+                result = run_smoke(1)
+                completed += 1
+            assert result is not None
+            result["roundsCompleted"] = completed
+            result["durationSeconds"] = round(time.monotonic() - started, 3)
+        else:
+            result = run_smoke(args.rounds, args.recovery)
         required = {'binance', 'binanceFutures', 'hyperliquid'}
         missing = required.difference(result)
         if missing:
             raise AssertionError(f'provider smoke omitted routes: {sorted(missing)}')
-        if result.get('roundsCompleted') != args.rounds:
+        expected_rounds = args.rounds if not args.duration_seconds else int(result.get("roundsCompleted", 0))
+        if result.get('roundsCompleted') != expected_rounds:
             raise AssertionError(f"provider smoke completed {result.get('roundsCompleted')} rounds, expected {args.rounds}")
         print(json.dumps(result, sort_keys=True))
         return 0

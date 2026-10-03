@@ -17,6 +17,17 @@ from pathlib import Path
 
 FIELDS = ("side", "entryTime", "entryPrice", "exitTime", "exitPrice", "qty", "pnl", "mfe", "mae")
 NUMERIC = {"entryPrice", "exitPrice", "qty", "pnl", "mfe", "mae"}
+ALIASES = {
+    "entryTime": ("entryTime", "entry_time", "openTime", "entryTimestamp"),
+    "exitTime": ("exitTime", "exit_time", "closeTime", "exitTimestamp"),
+    "entryPrice": ("entryPrice", "entry_price", "openPrice"),
+    "exitPrice": ("exitPrice", "exit_price", "closePrice"),
+    "qty": ("qty", "quantity", "size"),
+    "pnl": ("pnl", "profit", "netProfit"),
+    "mfe": ("mfe", "maxRunup", "max_runup"),
+    "mae": ("mae", "maxDrawdown", "max_drawdown"),
+    "side": ("side", "direction"),
+}
 
 
 def load_rows(path: Path) -> list[dict]:
@@ -35,27 +46,32 @@ def load_rows(path: Path) -> list[dict]:
 
 
 def value(row: dict, field: str):
-    aliases = {
-        "entryTime": ("entryTime", "entry_time", "openTime", "entryTimestamp"),
-        "exitTime": ("exitTime", "exit_time", "closeTime", "exitTimestamp"),
-        "entryPrice": ("entryPrice", "entry_price", "openPrice"),
-        "exitPrice": ("exitPrice", "exit_price", "closePrice"),
-        "qty": ("qty", "quantity", "size"),
-        "pnl": ("pnl", "profit", "netProfit"),
-        "mfe": ("mfe", "maxRunup", "max_runup"),
-        "mae": ("mae", "maxDrawdown", "max_drawdown"),
-        "side": ("side", "direction"),
-    }[field]
-    for key in aliases:
+    for key in ALIASES[field]:
         if key in row:
             current = row[key]
             if field in {"entryTime", "exitTime"} and isinstance(current, str):
                 try:
                     return int(datetime.fromisoformat(current.replace("Z", "+00:00")).timestamp() * 1000)
                 except ValueError:
-                    pass
+                    try:
+                        numeric_time = float(current.strip())
+                        return int(numeric_time) if numeric_time.is_integer() else numeric_time
+                    except ValueError:
+                        pass
+            if field == "side" and isinstance(current, str):
+                return current.strip().lower()
+            if field in NUMERIC and isinstance(current, str):
+                try:
+                    return float(current)
+                except ValueError:
+                    return current
             return current
     return None
+
+
+def has_value_field(row: dict, field: str) -> bool:
+    """Distinguish an explicit null (valid for an open exit) from omission."""
+    return any(alias in row for alias in ALIASES[field])
 
 
 def key(row: dict, index: int) -> int:
@@ -66,18 +82,48 @@ def key(row: dict, index: int) -> int:
         return index + 1
 
 
+def indexed_rows(rows: list[dict], source: str) -> tuple[dict[int, dict], list[dict]]:
+    """Index rows without silently dropping duplicate Trade # records."""
+    indexed: dict[int, dict] = {}
+    errors: list[dict] = []
+    for index, row in enumerate(rows):
+        number = row.get("number", row.get("tradeNumber", row.get("id")))
+        if number is None or (isinstance(number, str) and not number.strip()):
+            errors.append({"source": source, "row": index, "reason": "missing-trade-number"})
+            continue
+        try:
+            trade_number = int(number)
+        except (TypeError, ValueError):
+            errors.append({"source": source, "row": index, "reason": "invalid-trade-number", "value": number})
+            continue
+        if trade_number in indexed:
+            errors.append({"source": source, "row": index, "trade": trade_number, "reason": "duplicate-trade-number"})
+            continue
+        indexed[trade_number] = row
+    return indexed, errors
+
+
 def compare(reference: list[dict], local: list[dict], tolerance: float) -> dict:
-    ref = {key(row, index): row for index, row in enumerate(reference)}
-    actual = {key(row, index): row for index, row in enumerate(local)}
+    ref, ref_errors = indexed_rows(reference, "reference")
+    actual, local_errors = indexed_rows(local, "local")
     differences = []
+    errors = ref_errors + local_errors
     for number in sorted(set(ref) | set(actual)):
         if number not in ref or number not in actual:
             differences.append({"trade": number, "reason": "missing-row"})
             continue
         for field in FIELDS:
+            if not has_value_field(ref[number], field) or not has_value_field(actual[number], field):
+                differences.append({"trade": number, "field": field, "reason": "missing-field"})
+                continue
             expected, observed = value(ref[number], field), value(actual[number], field)
             if field in NUMERIC and expected is not None and observed is not None:
-                equal = math.isclose(float(expected), float(observed), abs_tol=tolerance, rel_tol=0)
+                try:
+                    expected_number, observed_number = float(expected), float(observed)
+                    equal = (math.isfinite(expected_number) and math.isfinite(observed_number)
+                             and math.isclose(expected_number, observed_number, abs_tol=tolerance, rel_tol=0))
+                except (TypeError, ValueError):
+                    equal = False
             else:
                 equal = expected == observed
             if not equal:
@@ -87,7 +133,8 @@ def compare(reference: list[dict], local: list[dict], tolerance: float) -> dict:
         "localTrades": len(local),
         "matchedTrades": len(set(ref) & set(actual)),
         "differenceCount": len(differences),
-        "pass": not differences and len(ref) == len(actual),
+        "pass": not errors and not differences and len(reference) == len(local),
+        "errors": errors,
         "differences": differences,
     }
 
