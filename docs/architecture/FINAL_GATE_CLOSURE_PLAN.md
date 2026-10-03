@@ -66,6 +66,8 @@ npm run test:e2e:deployment
 - 远端 workflow `37144883619`（2026-10-03，HEAD `53eb4a6`）的 local-gates 全部通过；provider-soak 在首次真实请求阶段因 GitHub runner 对 Binance 返回 `TypeError: Failed to fetch`，未进入连续订阅，故该运行不计入长时 Final Gate 证据。
 - 远端 workflow `37147134495`（2026-10-03，HEAD `f34a1c5`）的启动、撮合、golden、触摸阶段通过；视觉/a11y 步骤触发 15 分钟超时。复核发现视觉脚本把 Vite stdout 接到未读取的 PIPE，冷 runner 输出填满管道后会死锁；已改为临时日志文件并加入架构回归断言，待新 CI run 复核。
 - 同一视觉门禁的后续 run `37148415893`（HEAD `ec6b205`）进一步暴露 Vite 自动依赖优化在冷 runner 上返回 504 `Outdated Optimize Dep`；性能/Provider 一次性 fixture 已禁用 `optimizeDeps` discovery，并加入架构回归断言；本地视觉/a11y 复跑通过，待下一次远端 run 复核。
+- 远端 workflow `37148882921`（2026-10-03，HEAD `9cd2536`）已通过全部 local-gates：启动/仓库、复杂撮合、reference golden、触摸和视觉/a11y 均成功；Provider soak、真实 deployment 因未配置外部输入而分别跳过/not_run。
+- 本轮在两个独立本地 preview 槽位（candidate/previous）执行 `test:e2e:deployment`，入口 no-cache、hash 资源 immutable、页面错误和槽位隔离均通过；这验证部署脚本与 preview 合同，不等同真实线上 CDN/rollback。
 - 断网探针现额外断言 offline 窗口不得收到任何行情 callback，并输出 `offlineBars`；本地 recovery 回归结果为 Binance/Hyperliquid `offlineBars=0`。这只增强了断网语义的可观测性，不扩大外部验收范围。
 
 > 2026-10-03 外部网络门禁补充：push 门禁已通过；手动 provider soak 的 fork 构建缺口已修复，但一次 60 秒真实网络运行在 Binance `Failed to fetch` 处失败，未被标记为通过。长时 WebSocket/断网恢复仍需可访问交易所 API 的连续运行证据。
