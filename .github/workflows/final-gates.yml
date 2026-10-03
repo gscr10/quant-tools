@@ -89,6 +89,8 @@ jobs:
         with:
           python-version: '3.12'
       - run: npm ci
+      - name: Build local fork artifacts for provider harness
+        run: npm run build:forks
       - name: Install Python Playwright for provider smoke
         run: python3 -m pip install --disable-pip-version-check playwright
       - run: python3 -m playwright install --with-deps chromium
