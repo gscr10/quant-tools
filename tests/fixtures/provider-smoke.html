@@ -70,17 +70,33 @@
         }), `${label} live update`);
       }
 
+      async function verifyFuturesInfo(provider, symbol, label) {
+        // Exchange metadata can be cold or briefly served from the spot
+        // endpoint while the futures route is warming. Retry only the
+        // metadata classification; history and live assertions remain strict.
+        let lastType;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const info = await withTimeout(
+            provider.getSymbolInfo(symbol),
+            `${label} symbol info`,
+          );
+          lastType = info?.type;
+          if (lastType === 'futures') return info;
+          if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+        }
+        throw new Error(`${label} symbol did not resolve as futures (last type: ${String(lastType)})`);
+      }
+
       async function runProviderSmokeRound() {
         const providers = createWorkspaceProviders();
         const binance = providers.binance();
         const hyperliquid = providers.hyperliquid();
-        const [binanceBars, binanceFuturesBars, hyperliquidBars, futuresInfo] = await Promise.all([
+        const [binanceBars, binanceFuturesBars, hyperliquidBars] = await Promise.all([
           verifyHistory(binance, 'BTCUSDT', '15', 'Binance spot 15m'),
           verifyHistory(binance, 'BTCUSDT.P', '60', 'Binance futures 1h'),
           verifyHistory(hyperliquid, 'BTC', '15', 'Hyperliquid 15m'),
-          withTimeout(binance.getSymbolInfo('BTCUSDT.P'), 'Binance futures symbol info'),
         ]);
-        if (futuresInfo?.type !== 'futures') throw new Error('Binance futures symbol did not resolve as futures');
+        await verifyFuturesInfo(binance, 'BTCUSDT.P', 'Binance futures');
         await Promise.all([
           verifyLive(binance, 'BTCUSDT', '15', 'Binance spot 15m'),
           verifyLive(hyperliquid, 'BTC', '15', 'Hyperliquid 15m'),
@@ -128,11 +144,7 @@
             };
             unsubscriptions.push(state.provider.subscribe(state.symbol, '15', callback));
           }));
-          const futuresInfo = await withTimeout(
-            providers.binance().getSymbolInfo('BTCUSDT.P'),
-            'Binance futures soak symbol info',
-          );
-          if (futuresInfo?.type !== 'futures') throw new Error('Binance futures soak symbol did not resolve as futures');
+          await verifyFuturesInfo(providers.binance(), 'BTCUSDT.P', 'Binance futures soak');
           const futuresBars = await verifyHistory(
             providers.binance(),
             'BTCUSDT.P',
