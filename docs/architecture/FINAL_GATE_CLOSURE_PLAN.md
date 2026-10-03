@@ -53,3 +53,4 @@ npm run test:e2e:deployment
 - 本机没有可无交互授权的实体 Safari/VoiceOver 运行条件，也没有部署槽位、CDN purge 和线上回滚凭据；这些仍然是外部验收依赖，不用 Playwright WebKit 或本地 preview 冒充。
 - 新增 `npm run test:e2e:deployment` 作为真实地址驱动的入口：会检查 candidate/previous 的入口缓存头、hash 资源 `immutable`、页面错误和参考站请求；本地 preview 只用于验证脚本本身，不计入线上 Final Gate。
 - 新增 `npm run test:reference:golden`：完整导出的交易数组按 Trade #、方向、Entry/Exit 时间和价格、Size、P&L、MFE、MAE 逐字段比较；缺少输入、行数不等或任意字段不一致都会失败，半截参考站抓取不会被当成通过。
+- 外部验证所需的地址、导出文件、真实设备和通过标准集中记录在 [EXTERNAL_FINAL_GATE_INPUTS.md](EXTERNAL_FINAL_GATE_INPUTS.md)。
