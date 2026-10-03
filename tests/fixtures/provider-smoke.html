@@ -87,6 +87,21 @@
         throw new Error(`${label} symbol did not resolve as futures (last type: ${String(lastType)})`);
       }
 
+      async function probeFuturesInfo(provider, symbol, label) {
+        try {
+          const info = await withTimeout(provider.getSymbolInfo(symbol), `${label} symbol info`);
+          if (info != null && info.type !== 'futures') {
+            throw new Error(`${label} symbol resolved with unexpected type: ${String(info.type)}`);
+          }
+          return info?.type ?? 'unavailable';
+        } catch (error) {
+          // Futures exchangeInfo is independent from the kline/live routes.
+          // Preserve the status in the soak result without misclassifying a
+          // metadata outage as a WebSocket failure.
+          return `unavailable: ${String(error?.message ?? error)}`;
+        }
+      }
+
       async function runProviderSmokeRound() {
         const providers = createWorkspaceProviders();
         const binance = providers.binance();
@@ -144,7 +159,11 @@
             };
             unsubscriptions.push(state.provider.subscribe(state.symbol, '15', callback));
           }));
-          await verifyFuturesInfo(providers.binance(), 'BTCUSDT.P', 'Binance futures soak');
+          const futuresMetadata = await probeFuturesInfo(
+            providers.binance(),
+            'BTCUSDT.P',
+            'Binance futures soak',
+          );
           const futuresBars = await verifyHistory(
             providers.binance(),
             'BTCUSDT.P',
@@ -162,6 +181,7 @@
           return {
             durationMs: duration,
             subscriptions,
+            futuresMetadata,
             // Keep the same route keys as the short smoke contract so the
             // command-line gate validates both modes uniformly.
             binance: { historyBars: subscriptions.binance.historyBars, live: true },
