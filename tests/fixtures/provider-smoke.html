@@ -11,6 +11,14 @@
       import { createWorkspaceProviders } from '/src/integrations/vela/provider-registry.ts';
 
       const TIMEOUT_MS = 30_000;
+      // Public exchange endpoints occasionally fail before a browser has
+      // finished establishing its first network path (for example a transient
+      // `TypeError: Failed to fetch` from the hosted runner).  Keep the soak
+      // strict about the eventual response, but retry a fresh provider round
+      // a small, bounded number of times so one transport blip does not turn
+      // an otherwise healthy real-network gate red.
+      const ROUND_RETRY_ATTEMPTS = 3;
+      const ROUND_RETRY_DELAYS_MS = [750, 1_500];
 
       function assertBar(bar, label) {
         if (!Number.isFinite(bar?.time)) throw new Error(`${label}: invalid time`);
@@ -32,6 +40,20 @@
         } finally {
           clearTimeout(timer);
         }
+      }
+
+      async function withRoundRetry(operation, label) {
+        let lastError;
+        for (let attempt = 0; attempt < ROUND_RETRY_ATTEMPTS; attempt += 1) {
+          try {
+            return await operation(attempt);
+          } catch (error) {
+            lastError = error;
+            if (attempt + 1 >= ROUND_RETRY_ATTEMPTS) break;
+            await new Promise(resolve => setTimeout(resolve, ROUND_RETRY_DELAYS_MS[attempt] ?? 1_500));
+          }
+        }
+        throw new Error(`${label} failed after ${ROUND_RETRY_ATTEMPTS} attempts: ${String(lastError?.message ?? lastError)}`);
       }
 
       async function verifyHistory(provider, symbol, timeframe, label) {
@@ -126,7 +148,15 @@
       window.runProviderSmoke = async (rounds = 1) => {
         const count = Number.isInteger(rounds) && rounds > 0 ? rounds : 1;
         let result;
-        for (let round = 0; round < count; round += 1) result = await runProviderSmokeRound();
+        for (let round = 0; round < count; round += 1) {
+          // Create providers inside each attempt.  Vela memoizes rejected
+          // REST promises on an instance, so retrying the same objects would
+          // simply replay the first failure instead of testing recovery.
+          result = await withRoundRetry(
+            () => runProviderSmokeRound(),
+            `provider smoke round ${round + 1}`,
+          );
+        }
         return { ...result, roundsCompleted: count };
       };
 
@@ -135,7 +165,7 @@
       // fresh socket can open; it does not exercise the lease across a long
       // lived connection (or expose a late callback after the page remains
       // mounted).
-      window.runProviderSoak = async (durationMs = 60_000) => {
+      async function runProviderSoakAttempt(durationMs = 60_000) {
         const duration = Number.isFinite(durationMs) && durationMs > 0
           ? durationMs
           : 60_000;
@@ -191,7 +221,12 @@
         } finally {
           for (const unsubscribe of unsubscriptions.splice(0)) unsubscribe?.();
         }
-      };
+      }
+
+      window.runProviderSoak = async (durationMs = 60_000) => withRoundRetry(
+        () => runProviderSoakAttempt(durationMs),
+        'provider soak',
+      );
 
       // This is intentionally separate from the short smoke above.  The
       // caller toggles the real browser network state between the two polls;
