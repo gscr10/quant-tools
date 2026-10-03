@@ -18,6 +18,13 @@ on:
 permissions:
   contents: read
 
+# A push can arrive while a full three-browser gate is still running.  Keep
+# only the newest run for this branch so stale runners cannot consume the
+# entire queue and hide the result for the current commit.
+concurrency:
+  group: final-gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   local-gates:
     runs-on: ubuntu-latest
