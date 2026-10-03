@@ -9,6 +9,7 @@
 - [ ] 线上部署地址、完整参考站 Trades Log、实体 Safari/VoiceOver/真实设备及可访问交易所的长时断网恢复仍需外部输入；不得以本地 fixture 或 preview 标记为 Final Gate 已关闭。
 - [x] GitHub Actions `37132010789` 完成 60 秒真实 Binance/Hyperliquid 连续订阅与 offline→online recovery；仅作为短时真实网络证据，小时级 soak、跨区域代理黑洞和线上部署仍开放。
 - [ ] GitHub Actions `37133498353` 的 600 秒尝试在 Binance 初始请求处 `Failed to fetch`，未形成小时级证据；需在可访问交易所 API 的 runner 上重试，不能将网络失败标记为通过。
+- [ ] GitHub Actions `37134927725` 的 120 秒尝试在三次有限重试后仍无法访问 Binance；测试已正确 fail-closed，需更换可访问交易所 API 的 runner/网络。
 
 ## 2026-10-02 首次加载优化分支复核（当前状态）
 
