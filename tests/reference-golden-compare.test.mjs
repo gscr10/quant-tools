@@ -121,3 +121,53 @@ test('reference golden comparator normalizes side case and numeric strings', asy
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('reference golden comparator preserves an explicitly empty trades array', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quant-reference-golden-'));
+  try {
+    const reference = join(root, 'reference.json');
+    const local = join(root, 'local.json');
+    await writeFile(reference, JSON.stringify({ trades: [] }));
+    await writeFile(local, JSON.stringify({ trades: rows }));
+    await assert.rejects(
+      invoke(reference, local),
+      error => error?.code === 1 && /"referenceTrades": 0/.test(`${error.stdout ?? ''}${error.stderr ?? ''}`),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('reference golden comparator rejects an envelope containing both trade containers', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quant-reference-golden-'));
+  try {
+    const reference = join(root, 'reference.json');
+    const local = join(root, 'local.json');
+    await writeFile(reference, JSON.stringify({ trades: [], rows }));
+    await writeFile(local, JSON.stringify({ trades: rows }));
+    await assert.rejects(
+      invoke(reference, local),
+      error => error?.code === 1 && /ambiguous trade envelope/.test(`${error.stdout ?? ''}${error.stderr ?? ''}`),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('reference golden comparator rejects boolean and fractional Trade # values', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quant-reference-golden-'));
+  try {
+    const local = join(root, 'local.json');
+    await writeFile(local, JSON.stringify({ trades: rows }));
+    for (const number of [true, 1.5]) {
+      const reference = join(root, `reference-${String(number)}.json`);
+      await writeFile(reference, JSON.stringify({ rows: [{ ...rows[0], number }] }));
+      await assert.rejects(
+        invoke(reference, local),
+        error => error?.code === 1 && /invalid-trade-number/.test(`${error.stdout ?? ''}${error.stderr ?? ''}`),
+      );
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
