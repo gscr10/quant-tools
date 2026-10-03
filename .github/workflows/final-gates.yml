@@ -63,7 +63,10 @@ jobs:
         env:
           QUANT_VISUAL_STRICT_PIXELS: '0'
           QUANT_VISUAL_GEOMETRY_TOLERANCE: '24'
-        run: npm run test:visual:a11y
+        # Keep a lost browser/Vite child from occupying the hosted runner
+        # until the 60-minute job timeout. The Python gate has per-page
+        # readiness timeouts; this is the outer process-level safety net.
+        run: timeout --signal=TERM --kill-after=30s 15m npm run test:visual:a11y
 
   deployment-smoke:
     if: ${{ vars.QUANT_DEPLOY_URL != '' }}
