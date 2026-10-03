@@ -43,11 +43,26 @@ function provider({ callback = true, historyDelay = 0, historyError = null, coun
     getSymbolInfo: async () => ({ type: 'futures' }),
     subscribe: (_symbol, _timeframe, onBar) => {
       counters.subscriptions += 1;
+      counters.callbacks ??= [];
+      counters.callbacks.push(onBar);
       if (callback) onBar(bars()[1]);
       return () => { counters.unsubscriptions += 1; };
     },
   };
 }
+
+test('recovery probe validates bars and records callbacks delivered while offline', () => {
+  const counters = { subscriptions: 0, unsubscriptions: 0, callbacks: [] };
+  const page = loadFixture(providerRegistry(() => provider({ counters })));
+  page.beginProviderRecovery('binance');
+  assert.equal(page.providerRecoveryState().bars.length, 1);
+  page.setProviderRecoveryOnline(false);
+  counters.callbacks[0]({ time: 3, open: 2, high: 3, low: 2, close: 2.5 });
+  assert.equal(page.providerRecoveryState().offlineBars, 1);
+  page.setProviderRecoveryOnline(true);
+  page.endProviderRecovery();
+  assert.equal(counters.subscriptions, counters.unsubscriptions);
+});
 
 function providerRegistry(makeProvider) {
   return () => ({

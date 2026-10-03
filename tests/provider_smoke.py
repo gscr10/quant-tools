@@ -87,14 +87,22 @@ def run_smoke(rounds: int = 1, recovery: bool = False, duration_seconds: float =
             for provider_name in ("binance", "hyperliquid"):
                 page.evaluate("name => window.beginProviderRecovery(name)", provider_name)
                 before = wait_for_recovery_bar(page, 1)
+                page.evaluate("window.setProviderRecoveryOnline(false)")
                 page.context.set_offline(True)
                 time.sleep(1.0)
+                offline_state = page.evaluate("window.providerRecoveryState()")
                 page.context.set_offline(False)
+                page.evaluate("window.setProviderRecoveryOnline(true)")
                 after = wait_for_recovery_bar(page, len(before) + 1)
                 page.evaluate("window.endProviderRecovery()")
+                if offline_state.get("offlineBars", 0):
+                    raise AssertionError(
+                        f"{provider_name} delivered {offline_state['offlineBars']} bars while offline"
+                    )
                 recovery_results[provider_name] = {
                     "initialBars": len(before),
                     "resumedBars": len(after),
+                    "offlineBars": offline_state.get("offlineBars", 0),
                     "resumed": True,
                 }
             result["networkRecovery"] = recovery_results
