@@ -11,6 +11,7 @@
 - [ ] GitHub Actions `37133498353` 的 600 秒尝试在 Binance 初始请求处 `Failed to fetch`，未形成小时级证据；需在可访问交易所 API 的 runner 上重试，不能将网络失败标记为通过。
 - [ ] GitHub Actions `37134927725` 的 120 秒尝试在三次有限重试后仍无法访问 Binance；测试已正确 fail-closed，需更换可访问交易所 API 的 runner/网络。
 - [x] 本机真实网络 120 秒连续订阅与恢复：Binance 61 callbacks/最大间隔 2,091ms，Hyperliquid 98 callbacks/最大间隔 6,022ms，offline→online 均恢复；仅作为单机短时证据，小时级和跨区域 Final Gate 仍开放。
+- [x] 断网恢复 smoke 增加 `offlineBars=0` 断言，确保 offline 窗口不接受旧/迟到行情；新增恢复合同回归测试。
 
 ## 2026-10-02 首次加载优化分支复核（当前状态）
 
