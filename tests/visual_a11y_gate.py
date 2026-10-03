@@ -541,6 +541,21 @@ def run_gate(update: bool) -> dict[str, object]:
                 context = browser.new_context(viewport={"width": width, "height": height}, device_scale_factor=1)
                 install_offline_guard(context)
                 page = context.new_page()
+                page_errors: list[str] = []
+                console_errors: list[str] = []
+                failed_requests: list[str] = []
+                page.on("pageerror", lambda error: page_errors.append(str(error)))
+                page.on(
+                    "console",
+                    lambda message: console_errors.append(message.text)
+                    if message.type == "error" else None,
+                )
+                page.on(
+                    "requestfailed",
+                    lambda request: failed_requests.append(
+                        f"{request.url}: {request.failure}"
+                    ),
+                )
                 response = page.goto(BASE_URL, wait_until="domcontentloaded", timeout=30_000)
                 assert response is not None and response.status == 200
                 try:
@@ -563,8 +578,19 @@ def run_gate(update: bool) -> dict[str, object]:
                             ready: window.__btcFixture.ready,
                             metadata: window.__btcFixture.metadata,
                           } : null,
+                          pageErrors: window.__quantVisualPageErrors ?? [],
                         })"""
                     )
+                    server_output = ""
+                    if server.stdout:
+                        try:
+                            server_output = server.stdout.read()[-4000:]
+                        except Exception:
+                            server_output = "<unavailable>"
+                    diagnostics["pageErrors"] = page_errors
+                    diagnostics["consoleErrors"] = console_errors
+                    diagnostics["failedRequests"] = failed_requests
+                    diagnostics["serverOutput"] = server_output
                     raise AssertionError(
                         f"BTC fixture did not become ready: {diagnostics}"
                     ) from error
