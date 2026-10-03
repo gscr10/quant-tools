@@ -68,6 +68,7 @@ npm run test:e2e:deployment
 - 同一视觉门禁的后续 run `37148415893`（HEAD `ec6b205`）进一步暴露 Vite 自动依赖优化在冷 runner 上返回 504 `Outdated Optimize Dep`；性能/Provider 一次性 fixture 已禁用 `optimizeDeps` discovery，并加入架构回归断言；本地视觉/a11y 复跑通过，待下一次远端 run 复核。
 - 远端 workflow `37148882921`（2026-10-03，HEAD `9cd2536`）已通过全部 local-gates：启动/仓库、复杂撮合、reference golden、触摸和视觉/a11y 均成功；Provider soak、真实 deployment 因未配置外部输入而分别跳过/not_run。
 - 本轮在两个独立本地 preview 槽位（candidate/previous）执行 `test:e2e:deployment`，入口 no-cache、hash 资源 immutable、页面错误和槽位隔离均通过；这验证部署脚本与 preview 合同，不等同真实线上 CDN/rollback。
+- 本机 10 分钟真实连续运行（2026-10-03，`python3 tests/provider_smoke.py --duration-seconds 600 --recovery`）通过：Binance 288 callbacks、最大间隔 6,061ms；Hyperliquid 383 callbacks、最大间隔 10,838ms；两者均完成 offline→online，offline 窗口 0 条旧数据、恢复后重新收到行情。该结果仍不替代跨区域代理黑洞、小时级多次故障和线上环境证据。
 - 断网探针现额外断言 offline 窗口不得收到任何行情 callback，并输出 `offlineBars`；本地 recovery 回归结果为 Binance/Hyperliquid `offlineBars=0`。这只增强了断网语义的可观测性，不扩大外部验收范围。
 
 > 2026-10-03 外部网络门禁补充：push 门禁已通过；手动 provider soak 的 fork 构建缺口已修复，但一次 60 秒真实网络运行在 Binance `Failed to fetch` 处失败，未被标记为通过。长时 WebSocket/断网恢复仍需可访问交易所 API 的连续运行证据。
