@@ -1,5 +1,13 @@
 # TODO
 
+## 2026-10-03 Final Gate 门禁加固（当前）
+
+- [x] 部署 smoke 对 HTML 引用的每个静态资源强制检查 HTTP 200；非 hash 资源不再可能以 404 被误报通过。
+- [x] 部署 smoke 拒绝 candidate 与 previous/rollback 使用同一 URL，避免同槽配置伪造回滚证据。
+- [x] 修复 `wait-for-http` 失败路径测试在全量并发下的 Node 子进程启动抖动；根测试 523/523 通过。
+- [x] TypeScript、生产构建、release 29/29、`git diff --check` 通过。
+- [ ] 线上部署地址、完整参考站 Trades Log、实体 Safari/VoiceOver/真实设备及可访问交易所的长时断网恢复仍需外部输入；不得以本地 fixture 或 preview 标记为 Final Gate 已关闭。
+
 ## 2026-10-02 首次加载优化分支复核（当前状态）
 
 本轮基于 `feature/startup-loading-optimization` 的当前源码重新执行，不沿用旧 fixture 作为唯一证据。启动优化计划见 [STARTUP_LOADING_OPTIMIZATION_PLAN.md](docs/architecture/STARTUP_LOADING_OPTIMIZATION_PLAN.md)。
