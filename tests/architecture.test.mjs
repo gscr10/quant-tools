@@ -30,6 +30,13 @@ test('main remains a composition entry without Vela or feature logic', async () 
   assert.ok(source.split('\n').length <= 12);
 });
 
+test('visual gate drains Vite output instead of deadlocking on an unread pipe', async () => {
+  const source = await readFile(new URL('./visual_a11y_gate.py', import.meta.url), 'utf8');
+  assert.match(source, /NamedTemporaryFile\(/);
+  assert.match(source, /server_log\.flush\(\)/);
+  assert.doesNotMatch(source, /stdout=subprocess\.PIPE/);
+});
+
 test('Pine Editor CodeMirror stays behind a first-open dynamic import', async () => {
   const source = await readFile(new URL('../src/app/create-app.ts', import.meta.url), 'utf8');
   const lazy = await readFile(new URL('../src/features/pine-editor/lazy-pine-editor.ts', import.meta.url), 'utf8');

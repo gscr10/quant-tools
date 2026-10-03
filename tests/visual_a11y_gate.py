@@ -33,6 +33,7 @@ import struct
 import subprocess
 import sys
 import socket
+import tempfile
 import time
 import zlib
 
@@ -522,13 +523,32 @@ def run_gate(update: bool) -> dict[str, object]:
         "--config", "tests/vite-performance.config.ts",
         "--host", HOST, "--port", str(PORT), "--strictPort",
     ]
+    # Do not leave the Vite child attached to an unread PIPE.  The visual
+    # runner can emit enough transform/HMR output on a cold hosted runner to
+    # fill that pipe, which blocks Vite and makes the browser appear hung.
+    # A bounded diagnostic log preserves failure context without applying
+    # back-pressure to the server process.
+    server_log = tempfile.NamedTemporaryFile(
+        mode="w+", prefix="quant-visual-vite-", suffix=".log", delete=False
+    )
+    server_log_path = Path(server_log.name)
     server = subprocess.Popen(
         command,
         cwd=ROOT,
-        stdout=subprocess.PIPE,
+        stdout=server_log,
         stderr=subprocess.STDOUT,
         text=True,
     )
+
+    def read_server_log(limit: int = 4000) -> str:
+        try:
+            server_log.flush()
+            server_log.seek(0)
+            content = server_log.read()
+            return content[-limit:]
+        except Exception:
+            return "<unavailable>"
+
     try:
         wait_for_server(server)
         with sync_playwright() as playwright:
@@ -581,12 +601,7 @@ def run_gate(update: bool) -> dict[str, object]:
                           pageErrors: window.__quantVisualPageErrors ?? [],
                         })"""
                     )
-                    server_output = ""
-                    if server.stdout:
-                        try:
-                            server_output = server.stdout.read()[-4000:]
-                        except Exception:
-                            server_output = "<unavailable>"
+                    server_output = read_server_log()
                     diagnostics["pageErrors"] = page_errors
                     diagnostics["consoleErrors"] = console_errors
                     diagnostics["failedRequests"] = failed_requests
@@ -742,6 +757,11 @@ def run_gate(update: bool) -> dict[str, object]:
         except subprocess.TimeoutExpired:
             server.kill()
             server.wait(timeout=5)
+        try:
+            server_log.close()
+            server_log_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def main() -> int:
