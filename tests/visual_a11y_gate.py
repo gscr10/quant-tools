@@ -32,6 +32,7 @@ from pathlib import Path
 import struct
 import subprocess
 import sys
+import socket
 import time
 import zlib
 
@@ -69,6 +70,24 @@ def wait_for_server(process: subprocess.Popen[str]) -> None:
         except Exception:  # noqa: BLE001 - startup probe retries by design.
             time.sleep(0.15)
     raise TimeoutError(f"Vite did not start within {deadline} seconds")
+
+
+def choose_port() -> int:
+    """Reserve an isolated port unless CI explicitly requests one."""
+    requested = os.environ.get("QUANT_VISUAL_PORT")
+    if requested:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                probe.bind((HOST, PORT))
+            except OSError as error:
+                raise RuntimeError(
+                    f"visual port {PORT} is already in use; choose another QUANT_VISUAL_PORT"
+                ) from error
+        return PORT
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind((HOST, 0))
+        return int(probe.getsockname()[1])
 
 
 def rgba_from_png(data: bytes) -> tuple[int, int, bytes]:
@@ -486,6 +505,9 @@ def keyboard_audit(page: Page) -> dict[str, object]:
 
 
 def run_gate(update: bool) -> dict[str, object]:
+    global PORT, BASE_URL
+    PORT = choose_port()
+    BASE_URL = f"http://{HOST}:{PORT}/tests/fixtures/backtest-btcusdt.html"
     executable = os.environ.get("CHROMIUM_EXECUTABLE")
     if not executable and Path("/Applications/Chromium.app/Contents/MacOS/Chromium").exists():
         executable = "/Applications/Chromium.app/Contents/MacOS/Chromium"
