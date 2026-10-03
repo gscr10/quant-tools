@@ -596,10 +596,18 @@ def create_script_and_template(page: Page) -> None:
     assert object_tree.get_attribute("data-active") == "1"
     assert data_window.get_attribute("data-active") != "1"
 
+    # CodeMirror is an optional first-open chunk. The initial-graph assertion
+    # is made before any earlier indicator action can intentionally open the
+    # editor; this helper also verifies that the real side-panel interaction
+    # loads it on demand.
     pine_editor.click()
     assert pine_editor.get_attribute("data-active") == "1"
     assert object_tree.get_attribute("data-active") != "1"
     page.locator(".quant-pine-body").wait_for(state="visible")
+    page.wait_for_function(
+        """() => performance.getEntriesByType('resource').some(entry =>
+        entry.name.includes('pine-editor-controller'))"""
+    )
     page.locator(".quant-script-title").click()
     page.locator(".quant-script-menu-item", has_text="+ 新建脚本").click()
     source = page.locator(".cm-content").inner_text()
@@ -2581,7 +2589,15 @@ def verify_backtest_workspace(
         '[role="tablist"][aria-label="Trades Log view mode"] [role="tab"]'
     )
     view_tabs = viewer.locator(view_tabs_selector)
-    page.wait_for_timeout(500)
+    # The view-mode buttons are mounted after the report tab transition.  A
+    # fixed sleep made the production preview occasionally observe the outgoing
+    # empty tablist and fail even though the next render was correct.  Wait on
+    # the DOM contract instead of wall-clock time so slow CI and fast local
+    # runs share the same deterministic gate.
+    page.wait_for_function(
+        """selector => document.querySelectorAll(selector).length === 2""",
+        arg=view_tabs_selector,
+    )
     assert view_tabs.count() == 2
     if view_tabs.count() == 2:
         assert viewer.locator(
@@ -2595,6 +2611,24 @@ def verify_backtest_workspace(
         # source-only contract tests cannot hide a wiring or CSS regression.
         trade_table = viewer.locator(".quant-backtest-trade-table")
         assert trade_table.count() == 1
+        headers = [
+            value.strip()
+            for value in trade_table.locator("thead th").all_text_contents()
+        ]
+        # A live report can replace the table between the view-mode click and
+        # the first DOM read.  Wait for the complete sortable header row before
+        # comparing the snapshot; otherwise one read can observe the outgoing
+        # table while the next observes the incoming table and produce a
+        # timing-only failure.
+        page.wait_for_function(
+            """() => {
+              const table = document.querySelector('.quant-backtest-trade-table');
+              if (!table) return false;
+              const headers = table.querySelectorAll('thead th');
+              const buttons = table.querySelectorAll('thead button');
+              return headers.length > 0 && buttons.length === headers.length;
+            }"""
+        )
         headers = [
             value.strip()
             for value in trade_table.locator("thead th").all_text_contents()
@@ -3640,6 +3674,7 @@ def run_browser_regression() -> None:
             assert page.locator('[data-backtest-host="true"]').count() == 0
 
             visible_button(page, "Indicators").click()
+            page.locator(".quant-indicator-category-label").first.wait_for(state="visible")
             assert page.locator(".quant-indicator-category").count() == 4
             page.keyboard.press("Escape")
 
@@ -3692,7 +3727,14 @@ def run_browser_regression() -> None:
             assert page.locator(selector).count() == 1, selector
         assert page.get_by_role("button", name="Indicators", exact=True).count() == 1
 
+        initial_editor_chunk = page.evaluate(
+            """() => performance.getEntriesByType('resource').some(entry =>
+            entry.name.includes('pine-editor-controller'))"""
+        )
+        assert not initial_editor_chunk, "Pine Editor chunk was eagerly loaded"
+
         visible_button(page, "Indicators").click()
+        page.locator(".quant-indicator-category-label").first.wait_for(state="visible")
         categories = page.locator(".quant-indicator-category-label").all_text_contents()
         assert categories == ["On chart", "Favorites", "My indicators", "Built-ins"]
         page.locator('.quant-indicator-category[data-section="built-ins"]').click()

@@ -1,5 +1,6 @@
 import type { BarRange, Vela } from '@luxalgo/vela';
 import type { ChartCell, VelaWorkspace } from '@luxalgo/vela/workspace';
+import { WORKSPACE_HISTORY_BARS } from '../../config/workspace-options.ts';
 import { subscribeProviderHistoryRequests } from './provider-history.ts';
 import { subscribeProgressiveHistoryRequests } from './provider-progressive.ts';
 
@@ -122,7 +123,8 @@ export function observeWorkspaceHistory(workspace: VelaWorkspace): () => void {
         && (response.bars === 0 || ((response.oldestTime ?? -Infinity) >= boundary
           && (response.range.limit ?? Infinity) > response.bars)));
       const failure = relevant.find(response => response.error !== null)?.error ?? null;
-      const failed = failure !== null && !exhausted && bars < (chart.market.bars ?? 500);
+      const failed = failure !== null && !exhausted
+        && bars < (chart.market.bars ?? WORKSPACE_HISTORY_BARS);
       state.facts = { ...state.facts,
         noData: failed ? false : state.facts.noData,
         historyReason: failed ? 'aborted' : completion.reason,
@@ -197,7 +199,7 @@ export function observeWorkspaceHistory(workspace: VelaWorkspace): () => void {
       const priorError = state.facts.historyError;
       state.facts = { ...state.facts, historyLoaded: bars, historyBarsLoaded: bars,
         noData: priorError ? false : state.facts.noData,
-        historyTarget: state.facts.historyTarget ?? count(chart.market.bars ?? 500),
+        historyTarget: state.facts.historyTarget ?? count(chart.market.bars ?? WORKSPACE_HISTORY_BARS),
         historyOldestTime: Number.isFinite(event.oldestTime) ? event.oldestTime : null,
         historyComplete: true, historyReason: event.reason, historyError: null };
       applyCompletion();

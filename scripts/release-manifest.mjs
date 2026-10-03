@@ -8,7 +8,7 @@
  * without changing files, checking out another ref, or deleting build output.
  */
 import { createHash } from 'node:crypto';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { lstat, readFile, readdir } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
@@ -72,6 +72,13 @@ async function walk(directory) {
   const files = [];
   for (const entry of entries) {
     const path = join(directory, entry.name);
+    // A release manifest must describe the bytes that will be served.  A
+    // symlink would make that contract depend on the deployment tar/rsync
+    // implementation (and could point outside dist), so fail closed instead
+    // of silently omitting it from the manifest.
+    if (entry.isSymbolicLink()) {
+      throw new Error(`dist contains unsupported symbolic link: ${path}`);
+    }
     if (entry.isDirectory()) files.push(...await walk(path));
     else if (entry.isFile()) files.push(path);
   }
@@ -87,17 +94,19 @@ async function digest(path) {
 }
 
 async function optionalDigest(path) {
+  let info;
   try {
-    const info = await stat(path);
-    if (!info.isFile()) return null;
-    return digest(path);
+    info = await lstat(path);
   } catch {
     return null;
   }
+  if (info.isSymbolicLink()) throw new Error(`unsupported symbolic link: ${path}`);
+  if (!info.isFile()) return null;
+  return digest(path);
 }
 
 async function main() {
-  const distInfo = await stat(distRoot).catch(() => null);
+  const distInfo = await lstat(distRoot).catch(() => null);
   const distFiles = [];
   if (distInfo?.isDirectory()) {
     for (const path of await walk(distRoot)) {

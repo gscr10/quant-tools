@@ -59,6 +59,29 @@ function metadataCacheTtlMs(value: number | undefined): number {
   return Math.max(1_000, Math.floor(value));
 }
 
+/**
+ * Provider responses are JSON snapshots, but Vela passes the decoded object
+ * directly through its provider seam. Returning the same cached object to
+ * every caller lets one consumer (or a diagnostic that annotates symbols)
+ * silently mutate the next caller's snapshot. Keep the in-flight/cache state
+ * private and hand each consumer an independent JSON-shaped value. `structuredClone`
+ * is available in the supported browsers/Node versions; the JSON fallback is
+ * only for older test hosts and is safe because these responses contain no
+ * dates, maps, or functions.  If neither clone path can represent a value,
+ * fail closed.  Returning the original object here would re-introduce a
+ * shared mutable payload and make a failed/hostile response live in
+ * the TTL cache.
+ */
+function cloneJsonPayload<T>(value: T): T {
+  const clone = (globalThis as { structuredClone?: (input: T) => T }).structuredClone;
+  if (typeof clone === 'function') {
+    try { return clone(value); } catch { /* fall through for unusual test doubles */ }
+  }
+  if (value === null || typeof value !== 'object') return value;
+  try { return JSON.parse(JSON.stringify(value)) as T; }
+  catch { throw new Error('Provider JSON payload could not be safely cloned'); }
+}
+
 function isBinanceMetadataUrl(url: string): boolean {
   try {
     return new URL(url).pathname.endsWith('/exchangeInfo');
@@ -90,33 +113,51 @@ function inFlightRequest<T>(
   if (cacheable && cacheTtlMs > 0) {
     const cached = completed.get(key);
     if (cached) {
-      if (cached.expiresAt > Date.now()) return Promise.resolve(cached.value);
+      if (cached.expiresAt > Date.now()) return Promise.resolve(cloneJsonPayload(cached.value));
       completed.delete(key);
     }
   }
   const existing = requests.get(key);
-  if (existing) return existing;
+  // The transport is shared, but its decoded JSON value is not.  History
+  // responses are arrays just like metadata responses, and Vela/provider
+  // consumers are allowed to sort, trim, or annotate their own copy.  Return
+  // a clone to every concurrent caller, including non-cacheable requests;
+  // otherwise one cell can mutate another cell's in-flight K-line snapshot.
+  if (existing) return existing.then(cloneJsonPayload);
 
   const request = operation();
-  requests.set(key, request);
+  // Disabling the settled TTL cache must not disable isolation for concurrent
+  // consumers. The first caller also receives its own clone; the request
+  // promise itself remains private to the in-flight map and is never exposed
+  // as a mutable shared snapshot.
+  const published = request.then(value => cloneJsonPayload(value));
+  requests.set(key, published);
   const clear = (): void => {
-    if (requests.get(key) === request) requests.delete(key);
+    if (requests.get(key) === published) requests.delete(key);
   };
   if (cacheable && cacheTtlMs > 0) {
-    request.then((value) => {
+    published.then((value) => {
       if (completed.size >= MAX_METADATA_CACHE_ENTRIES && !completed.has(key)) {
         const oldest = completed.keys().next().value;
         if (oldest !== undefined) completed.delete(oldest);
       }
-      completed.set(key, { value, expiresAt: Date.now() + cacheTtlMs });
+      // Keep a private copy separate from the value delivered to this caller.
+      // Do not let a clone failure escape from this bookkeeping callback as an
+      // unhandled rejection; the published request itself already succeeded,
+      // but an uncacheable value must simply remain uncached.
+      try {
+        completed.set(key, { value: cloneJsonPayload(value), expiresAt: Date.now() + cacheTtlMs });
+      } catch {
+        completed.delete(key);
+      }
     }, () => {
       completed.delete(key);
     });
   }
   // Do not replace the returned promise with `finally()`: that would create a
   // second rejection path which callers could accidentally leave unhandled.
-  request.then(clear, clear);
-  return request;
+  published.then(clear, clear);
+  return published;
 }
 
 class ProviderHttpError extends Error {

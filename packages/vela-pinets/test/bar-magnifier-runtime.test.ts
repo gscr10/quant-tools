@@ -695,6 +695,43 @@ describe('Bar Magnifier runtime request resolution', () => {
             { openTime: 1, open: 1, high: 2, low: 0, close: 1, volume: 1 },
             { openTime: 3, open: 30, high: 31, low: 29, close: 30, volume: 2 },
         ]);
+
+    });
+
+    it('re-applies secondary range and newest-tail limits when a provider over-fetches', async () => {
+        await expect(secondaryKlines(
+            async () => [
+                { time: 0, open: 0, high: 1, low: 0, close: 1, volume: 1 },
+                { time: 1, open: 1, high: 2, low: 1, close: 2, volume: 1 },
+                { time: 2, open: 2, high: 3, low: 2, close: 3, volume: 1 },
+                { time: 3, open: 3, high: 4, low: 3, close: 4, volume: 1 },
+            ],
+            'ETHUSDT',
+            '60',
+            1,
+            1,
+            2,
+        )).resolves.toEqual([{
+            openTime: 2,
+            open: 2,
+            high: 3,
+            low: 2,
+            close: 3,
+            volume: 1,
+        }]);
+    });
+
+    it('rejects invalid secondary ranges before calling a permissive provider', async () => {
+        let calls = 0;
+        const fetcher = async () => {
+            calls += 1;
+            return [{ time: 1, open: 1, high: 2, low: 0, close: 1, volume: 1 }];
+        };
+        await expect(secondaryKlines(fetcher, 'ETHUSDT', '60', 0)).resolves.toEqual([]);
+        await expect(secondaryKlines(fetcher, 'ETHUSDT', '60', -1)).resolves.toEqual([]);
+        await expect(secondaryKlines(fetcher, 'ETHUSDT', '60', 1, 2, 1)).resolves.toEqual([]);
+        await expect(secondaryKlines(fetcher, 'ETHUSDT', '60', 1, Number.NaN, 2)).resolves.toEqual([]);
+        expect(calls).toBe(0);
     });
 });
 

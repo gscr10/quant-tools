@@ -60,6 +60,20 @@ test('no history subscriber: capability declines rather than publish unsafe comp
   assert.equal(await provider.getBarsProgressive('BTCUSDT', '15', { limit: 2000 }, () => {}), null);
 });
 
+test('truthy non-callable capability does not suppress installation', async () => {
+  const provider = enableProviderProgressiveHistory({
+    getBars: async (_, __, range) => rows(Math.min(range.limit ?? 0, 1)),
+    getBarsProgressive: 'stale serialized capability',
+  });
+  const stop = subscribeProgressiveHistoryRequests(provider, () => {});
+  try {
+    assert.equal(typeof provider.getBarsProgressive, 'function');
+    assert.deepEqual(await provider.getBarsProgressive('BTCUSDT', '15', { limit: 2000 }, () => {}), rows(1));
+  } finally {
+    stop();
+  }
+});
+
 for (const length of [0, 523, 1000, 1523, 2000, 2300]) {
   test(`genesis/last partial page ${length}: exact rows, bounded requests`, async () => {
     const all = rows(length);
@@ -170,6 +184,7 @@ test('aborted consumer settles promptly; late transport cannot publish or start 
   controller.abort();
   assert.deepEqual(await result, []);
   assert.equal((await fixture.requests[0].result).aborted, true);
+  assert.match((await fixture.requests[0].result).error.message, /aborted/);
   pending.resolve(rows(1000));
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(calls, 1); assert.equal(batches, 0);
@@ -185,6 +200,7 @@ test('abort after first batch retains prefix and stops pagination without touchi
   assert.deepEqual(await cancelled, all.slice(1000));
   assert.deepEqual(await active, all);
   assert.equal((await fixture.requests[0].result).aborted, true);
+  assert.match((await fixture.requests[0].result).error.message, /aborted/);
   assert.equal((await fixture.requests[1].result).aborted, false);
   fixture.stop();
 });
@@ -208,9 +224,10 @@ test('pre-aborted stream sends no request; thrown callback is a failure, not suc
   const controller = new AbortController(); controller.abort();
   await fixture.provider.getBarsProgressive('BTCUSDT', '15', { limit: 2000 }, () => {}, { signal: controller.signal });
   assert.equal(calls, 0);
+  assert.equal(fixture.requests.length, 0);
   const failure = Error('renderer failed');
   await fixture.provider.getBarsProgressive('BTCUSDT', '15', { limit: 2000 }, () => { throw failure; });
-  assert.equal((await fixture.requests[1].result).error, failure);
+  assert.equal((await fixture.requests[0].result).error, failure);
   fixture.stop();
 });
 

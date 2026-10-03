@@ -188,6 +188,11 @@ function withWebSocketOpenGuard<T>(
   }
 
   const scope = globalThis as { WebSocket?: unknown };
+  // Preserve a still-active outer lease.  Nested subscriptions temporarily
+  // replace the constructor, and an inner provider failure must unwind to the
+  // constructor that was active immediately before this lease—not blindly to
+  // the native constructor, which would disable the outer lifecycle guard.
+  const previousWebSocket = scope.WebSocket;
   scope.WebSocket = Wrapped;
   try {
     const value = invoke();
@@ -210,7 +215,7 @@ function withWebSocketOpenGuard<T>(
       },
     };
   } catch (error) {
-    if (scope.WebSocket === Wrapped) scope.WebSocket = native;
+    if (scope.WebSocket === Wrapped) scope.WebSocket = previousWebSocket;
     throw error;
   }
 }

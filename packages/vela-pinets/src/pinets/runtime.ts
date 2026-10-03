@@ -996,7 +996,17 @@ export async function secondaryKlines(
     syminfo?: Record<string, unknown>,
 ): Promise<Array<Record<string, number>>> {
     if (!fetchSeries || !sym || !tf) return [];
-    const fetched = await fetchSeries(sym, tf, { from: sDate, to: eDate, limit });
+    // Keep the direct Worker/in-process path aligned with the application
+    // provider boundary.  A permissive third-party fetcher must not turn an
+    // invalid range into a successful series (notably `limit: 0`, which would
+    // otherwise skip the tail slice and expose every returned bar).
+    if ((sDate !== undefined && !Number.isFinite(sDate))
+        || (eDate !== undefined && !Number.isFinite(eDate))
+        || (sDate !== undefined && eDate !== undefined && sDate > eDate)
+        || (limit !== undefined && (!Number.isFinite(limit) || limit <= 0))) return [];
+    const normalizedLimit = limit === undefined ? undefined : Math.floor(limit);
+    if (normalizedLimit !== undefined && normalizedLimit <= 0) return [];
+    const fetched = await fetchSeries(sym, tf, { from: sDate, to: eDate, limit: normalizedLimit });
     // Secondary feeds cross the same host/provider boundary as Bar Magnifier.
     // A malformed *resolved* response must degrade to an empty series, not
     // throw from `toKlines()`; a rejected Promise is deliberately preserved so
@@ -1036,7 +1046,21 @@ export async function secondaryKlines(
     // occurrence for a timestamp, matching the primary history normalizer.
     const byTime = new Map<number, OHLCV>();
     for (const bar of normalized) byTime.set(bar.time, bar);
-    const bars = [...byTime.values()].sort((a, b) => a.time - b.time);
+    // A provider gateway is expected to honor the requested range, but this
+    // function is also the boundary used by direct Worker/in-process hosts and
+    // by third-party providers.  Do not let an over-fetching or range-ignoring
+    // provider leak candles outside request.security's requested window into
+    // PineTS.  Apply the inclusive timestamp bounds locally, then preserve the
+    // contract's newest-tail limit (the same direction as the primary history
+    // normalizer).  This also makes retries deterministic when a provider
+    // returns a wider page than requested.
+    let bars = [...byTime.values()]
+        .filter((bar) => (sDate === undefined || bar.time >= sDate)
+            && (eDate === undefined || bar.time <= eDate))
+        .sort((a, b) => a.time - b.time);
+    if (normalizedLimit !== undefined) {
+        bars = bars.slice(-normalizedLimit);
+    }
     return toKlines(bars, tf, syminfo);
 }
 

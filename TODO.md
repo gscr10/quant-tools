@@ -4,13 +4,38 @@
 
 本轮基于 `feature/startup-loading-optimization` 的当前源码重新执行，不沿用旧 fixture 作为唯一证据。启动优化计划见 [STARTUP_LOADING_OPTIMIZATION_PLAN.md](docs/architecture/STARTUP_LOADING_OPTIMIZATION_PLAN.md)。
 
+截至 2026-10-03，完整本地验收序列的各阶段均已通过；首次整串执行时 Provider soak 曾因 Hyperliquid 外部 API 瞬时 10 秒超时中止，随后独立重跑 3 轮并通过，不能把该次瞬时网络异常记为代码回归。当前根测试为 512/512、Vela-PineTS 为 292/292、release 专项为 27/27、Provider live 为 11/11。新增 `npm run test:providers:long` 已实际完成 10/10 真实网络轮次。类型/构建、Bundle/依赖/repository-hygiene/dist/release、3×4 启动矩阵（p95 5 秒护栏）、0 延迟三浏览器探针、getter/methods/quota 存储故障启动探针均通过；生产 E2E 的 Tab 等待竞态也已修复并纳入验证。真实断网恢复、跨机器、线上 rollback 和复杂撮合等外部 Final Gate 仍未关闭。
+
+追加真实网络 soak：`python3 tests/provider_smoke.py --rounds 10` 通过，Binance Spot/Futures 与 Hyperliquid 每轮历史、symbol-info/live/unsubscribe 均成功；这是短时增强证据，仍不等同于长时间断网恢复验收。
+
+追加兼容性回归：`npm run test:e2e:kill-switch` 通过（禁用回测的生产构建和页面入口均正确）；`npm run test:pinets:offline` 通过，PineTS 离线套件 1,637 tests、1 skipped。kill-switch 会生成禁用回测的 dist，因此保持为独立发布前检查，不并入默认 full 命令。
+
 - [x] D-01 新策略首轮上下文缺少 `trades` 时不再误判为已结算空账本；历史完成后立即挂载、晚挂载、两种引擎及 hide/show/市场切换复核通过。
-- [x] Provider live 生命周期：Binance 异步 `spotWsBase()`、Hyperliquid 重连、迟到 `onopen`、嵌套订阅和重复 unsubscribe 均有回归测试；专项 7/7 通过。
-- [x] 根回归：`npm test` 467/467；Provider/storage/progressive 专项、TypeScript 与 `git diff --check` 通过。
+- [x] Provider live 生命周期：Binance 异步 `spotWsBase()`、Binance Futures 与 Hyperliquid 重连、迟到 `onopen`、嵌套订阅和重复 unsubscribe 均有回归测试；专项 11/11 通过，Binance/Hyperliquid 均覆盖 30 轮断开/重连后销毁，确认不会泄漏重连定时器或复活最后连接。
+- [x] 根回归（历史批次）：当时工作树 `npm test` 506/506；当前总数以本节顶部最新验收为准（512/512）。Provider metadata（含 TTL=0 并发隔离）/storage/progressive、fork lock/recovery、release artifacts 专项、统一 HTTP 就绪探测、TypeScript 与 `git diff --check` 通过。
+- [x] Provider 历史边界再次 fail-closed：即使未经过网络守卫的自定义 DataProvider 返回非数组或全为 malformed OHLC 行，也会发布明确错误，不再伪装成成功的空行情/genesis；新增根级回归。
+- [x] `npm run verify:startup` 聚合门禁已完整执行：根测试、类型、构建、Bundle/依赖/dist、Release 和 `dev:fast --check-only` 均通过；真实 Provider smoke 与浏览器 E2E 仍单独执行。
+- [x] 新增 `npm run verify:startup:full` 完整本地验收入口，串联快速门禁、三样本启动矩阵（每个单元首绘 p95 5 秒护栏）、Provider soak、主流程/Settings/故障隔离/多 Cell、开发/生产/三浏览器 E2E、离线 smoke、严格性能和视觉/a11y 回归；线上长时网络与 rollback 仍单独保留。
+- [x] 新增显式 `npm run test:providers:soak` 三轮真实 Provider soak；Binance Spot/Futures 与 Hyperliquid 每轮历史、symbol-info、live 首帧和 unsubscribe 均通过。该证据不替代长时 WebSocket/断网恢复验收。
+- [x] `dev:fast` 现在由独立入口消费 `--check-only`，只读校验不会再把该参数错误转发给 Vite；只读命令和真实临时端口启动均已回归。
+- [x] `dev:fast` 在只读校验时检测活动 fork-build lock，避免与正在生成的产物并发启动 Vite；新增竞态回归。
+- [x] 增加独立 `npm run test:release` 门禁，统一覆盖 fork-build lock/recovery、release manifest、Storage 对账和 rollback 闭环；当前 27/27，包含产物、发布根目录、锁文件及构建输入符号链接的 fail-closed 回归。
+- [x] 发布 manifest 和 verifier 均拒绝 `dist` 符号链接，避免部署 tar/rsync 解析差异或链接越界导致制品字节不可控；新增独立回归。
+- [x] fork 构建指纹拒绝构建输入符号链接，避免外部路径内容被纳入缓存身份或绕过工作区边界；新增 `check-only` 回归。
+- [x] 生产 E2E 的 Trades Log 视图模式等待改为 DOM 契约，移除固定 500ms 睡眠，避免 Tab 切换中间态造成偶发验收失败；生产预览重新构建复跑通过。
+- [x] 增加 `npm run test:startup:matrix`：按 ABBA 顺序隔离运行裸 ticker 与显式 provider 路由，输出每组首绘 median/p95；2026-10-02 最新 Chromium dev 20×4 样本 80/80 无页面错误，baseline median-of-medians `2677ms`、optimized `738ms`，baseline/optimized p95 上界分别 `2885ms/1039ms`。该受控收益不能关闭跨机器 p95、真实网络和长时 Provider 门禁。
+- [x] 启动矩阵新增可选 `--max-p95` / `--max-failures` 自动护栏；三样本 `--max-p95 5000` 实测 12/12 样本无失败，baseline p95 约 `2945ms`、显式 provider p95 约 `980ms`。
+- [x] 存储故障启动探针覆盖 `localStorage` getter、get/set/remove 方法和 `QuotaExceededError`；三种故障注入均能完成首绘且不阻断工作区启动，quota 已纳入 `verify:startup:full`。
+- [x] 0 延迟初始化竞态探针纳入 `verify:startup:full`：Chromium、Firefox、WebKit 各执行一次 `index-delay=0`、`bar-delay=0`，当前 3/3 首绘成功；此前仅手工覆盖的同 tick 事件顺序现在有自动化门禁。
+- [x] 仓库卫生门禁纳入 `verify:startup`：拒绝 Git 跟踪 `audit-evidence/`、`docs/audit/`、`dist/`、`node_modules/`，并校验 `audit-evidence/` 的忽略规则，避免部署分支携带本地审计附件或生成物。
+- [x] 架构回归固定 `test:release` 脚本契约，避免部署前门禁依赖手工拼接命令。
 - [x] S1/S2 本轮补强：symbol index 的 `metadataCacheTtlMs <= 0` 语义与 REST 元数据一致；模板状态校验；渐进短页 genesis 探测及失败门控均有回归测试。
 - [x] PineTS 测试分流：`npm --workspace packages/pinets run test:offline` 提供 1,637 个离线测试；`test:network` 显式保留联网覆盖，网络故障不再混入启动优化本地门禁。
 - [x] S4 bundle threshold：新增 `npm run check:bundle-size`，对 main/worker/highcharts raw 与 gzip 产物建立可执行预算门禁。
-- [ ] 启动优化 Final Gate：本轮补测 Chromium/Firefox/WebKit 首绘与 getter/methods 存储故障均通过；完整冷/热 p95、长时 Provider/断网恢复、实际线上入口、部署制品 rollback、完整 Provider/品种/模板回归仍未关闭。
+- [ ] 启动优化 Final Gate：本轮补测 Chromium/Firefox/WebKit 首绘与 getter/methods/quota 存储故障均通过；完整冷/热 p95、长时 Provider/断网恢复、实际线上入口、部署制品 rollback、完整 Provider/品种/模板回归仍未关闭。
+- [x] 增加安全的 `npm run dev:fast`：复用 fork 输入/输出/toolchain 指纹做只读校验；过期或缺失时拒绝启动并提示先构建，普通 `npm run dev` 仍负责自动修复。
+- [x] Pine Editor 真正按首次可见/用户操作懒加载：隐藏侧栏挂载、后台诊断和删除事件不会触发 CodeMirror chunk；打开/新建/打开脚本才加载，失败可重试，destroy 会断开观察器。
+- [x] 修复嵌套 WebSocket 订阅的异常回滚：内层同步失败恢复进入该 lease 前的外层构造器，不再破坏仍存活的 Provider guard；新增嵌套失败及 30 轮生命周期回归。
 - [x] 本地 release manifest/verify：旧 checkout、dist 篡改拒绝及当前 dist 完整性均通过；部署平台 slot rollback/CDN 缓存恢复仍需线上验收。
 - [x] Provider index 恢复周期：缓存过期后的重复故障可再次 fallback/retry/re-register；malformed symbol descriptor 不再污染交易品索引，ticker 外层空白会被归一化。
 - [x] 历史点位恢复周期解析严格区分 `M` 月与 `m` 分钟；Workspace 历史预算和 runtime storage 输入边界已补回归。
@@ -20,7 +45,35 @@
 - [x] lower-timeframe cache 只缓存完整有限 OHLCV；混合 malformed 结果不污染 TTL，后续 retry 可恢复。
 - [x] 历史观察器保留本代 completion 边界，迟到 Provider/progressive 错误会撤销假 genesis/no-data；新增两条回归。
 - [x] release manifest 增加显式 `--help`，避免帮助请求误生成 JSON；release-artifacts 回归 9/9。
-- [x] 本轮回归：根测试 473/473、Vela-PineTS 290/290、Provider network/history 专项通过、TypeScript、build、startup、依赖契约、dist 独立性、bundle budget 和 `git diff --check` 通过。
+- [x] fork 构建锁释放竞态：旧 owner 在 token 校验与删除之间不再可能误删新 owner 的同名锁；原子 hand-off 与受控竞态回归已通过。
+- [x] fork 构建锁 owner.json 初始化失败会清理刚 claim 的目录，不再留下无 owner 锁导致后续构建无限等待；失败注入回归已通过。
+- [x] Provider metadata 不可安全克隆时 fail-closed 且不进入 TTL 缓存；progressive abort 即使已获取完整前缀也返回明确错误，避免误发布 ready。
+- [x] Provider 网络层所有 JSON 响应（含不可缓存历史 K 线）均按调用方隔离；并发 transport 仍去重，嵌套数组/行对象 mutation 回归通过。
+- [x] Hyperliquid POST JSON 响应同样按调用方隔离，覆盖 universe/nested payload 的并发 mutation 回归。
+- [x] 不可克隆的非 metadata 历史 JSON 会 fail-closed，并清理 in-flight 状态允许后续重试。
+- [x] 修复开发 E2E Trades Log 表头在实时报告替换期间的交叉读取时序误报；等待完整 sortable header 快照后，开发 E2E 复跑通过。
+- [x] 修复 aborted-history Retry 在 market 缺少 `bars` 时静默降级到 500 根；history observer 与 adapter 现在统一使用 2000 根默认深度，并有回归测试。
+- [x] fork 构建完成清单不再把 npm 调用方的 `npm_config_user_agent` 当作产物输入；直接 Node 调用与 `npm run` 现在复用同一缓存，仍按 Node/platform/arch 和源码 fingerprint 隔离。
+- [x] 本轮工作区回归补齐 Settings、故障隔离、多 Cell、strict performance、visual/a11y、开发/生产 E2E、三浏览器和 Binance/Hyperliquid smoke；未停止外部已存在的 5190 端口进程。
+- [x] 生产离线 smoke：HTTP 200、页面错误 0、无非预期外部资源；Provider 请求按离线策略被阻断并可观测，不伪造行情成功。
+- [x] 本轮回归（历史批次）：根测试 473/473、Vela-PineTS 291/291；旧数字仅保留用于追溯，不代表当前工作树总数。
+- [x] 历史修复批次记录：Workspace 持久化 `bars` 小数预算在迁移边界规范为正整数；`request.security` secondary feed 重新执行时间范围和 newest-tail limit；新增根级 `npm run typecheck` 统一根应用与 Vela-PineTS 类型检查。当时目标回归 30/30、根测试 483/483、Vela-PineTS 292/292，构建/依赖/dist/bundle 门禁通过；当前总计以本节顶部状态为准。
+- [x] secondary feed 边界补强：直接 Worker/in-process 路径拒绝非有限日期、反向区间和 `limit <= 0`，避免宽松第三方 Provider 绕过应用 range 合同；Vela-PineTS 全量 292/292、边界目标 30/30 通过。
+- [x] Provider live 重复生命周期 soak：新增 30 轮 subscribe/unsubscribe、socket 关闭、wrapper 恢复和重复 unsubscribe 幂等回归；该修复批次根测试为 483/483，当前总计以本节顶部状态为准。该本地门禁不替代真实长时网络/断网恢复验收。
+- [x] Provider metadata 缓存隔离：TTL 命中和并发去重均向调用方提供独立嵌套快照，消费者修改 `symbols`/`filters` 不会污染后续请求；Provider network 回归已覆盖。
+- [x] Fork 构建并发保护：`ensure-fork-build` 增加跨进程锁和构建后复查，真实双进程并发执行只重建一次，等待者复用产物；避免测试/构建并行时读到中间 fork 输出。
+- [x] 正式构建入口接入并发保护：`prebuild` 不再绕过 `ensure-fork-build` 直接执行 fork 构建，`npm run build` 与 test/dev 共用同一锁和二次状态检查。
+- [x] 公共 `npm run build:forks` 也统一走锁；真正编译步骤改名为内部 `build:forks:run`，避免维护者从该入口绕过并发保护。
+- [x] Fork 缓存完成清单：使用输入/输出 SHA-256、失败 marker 和 PineTS 类型入口校验，失败/中断后的部分产物不会被下次启动误复用；stale-lock 回收增加二次互斥和 owner 重读。
+- [x] Fork 缓存环境隔离：完成清单记录 Node/platform/arch/npm toolchain fingerprint，跨环境缓存自动失效并重建。
+- [x] Fork 缓存内容身份回归：输入内容变化但 mtime 不变时仍能识别并重建。
+- [x] 显式 provider 路由启动对照：受控 2 秒索引延迟下，`binance:BTCUSDT` 首绘约 1.07s，裸 `BTCUSDT` 约 3.15s；保留裸 ticker 的有限回退，不伪造其已绕过索引等待。
+- [x] Provider smoke 增加真实 Binance spot、Binance futures（`BTCUSDT.P`/1h）和 Hyperliquid（`BTC`/15m）路由；历史、futures symbol-info 和 spot/Hyperliquid live 均通过。长时网络故障仍开放。
+- [x] 固化 `npm run test:providers:long` 十轮真实 Provider soak 入口；该命令用于部署前手工执行，不并入默认门禁，不能替代长时断网/恢复验收。
+- [x] 固化 `npm run verify:startup:deploy` 部署预检入口：串联本地快速门禁和十轮真实 Provider soak；默认完整门禁仍保持可离线运行。
+- [x] 增加 Binance 45m/180m 聚合 golden，验证 15m/1h 子周期选择、3 倍分桶、OHLC 和 newest-tail limit；真实深历史/forming bar 仍需线上验收。
+- [x] Pine Editor/CodeMirror 改为首次打开动态加载；主 chunk 约从 2.28MB/648KB gzip 降到 1.77MB/477KB gzip，动态编辑器 chunk 约 508KB/170KB gzip；主 E2E、类型检查和构建通过。
+- [x] E2E 增加编辑器 chunk 的首屏未加载/打开后加载断言，开发与生产回归均通过。
 
 ## 2026-10-01 R-08～R-11 修复后独立复查（当前状态）
 
@@ -31,7 +84,7 @@
 - [x] R-11：503/429/超时/非法 JSON、Retry 12,500 根、旧请求 supersede、共享 Provider 多 Cell；独立矩阵 18/18，双 Cell 复核通过。
 - [x] R-09 完整焦点生命周期：Tab/Shift+Tab/Escape/busy 及真实 Workbench pointer-open 三浏览器均回到 Settings 触发按钮；主 E2E 通过。
 - [x] D-01 动态历史绑定：本轮修复“idle 且缺少 trades 字段被误判为空账本”的边界；独立历史完成后立即挂载、晚挂载和延迟适配器流程均未再观察到 ready + 空账本。完整参考站逐笔 golden 仍另行开放。
-- [ ] 完整参考站逐笔 golden（仍缺 227 closed）、复杂撮合/Bar Magnifier、真实 WS/长时故障、全量像素对账、VoiceOver/跨设备、bundle threshold、rollback。
+- [ ] 完整参考站逐笔 golden（仍缺 227 closed）、复杂撮合/Bar Magnifier、真实 WS/长时故障、全量像素对账、VoiceOver/跨设备、rollback。
 
 本次文档刷新后再次执行 `npm test`、Vela-PineTS、TypeScript、build、依赖契约、dist 独立性、主 `npm run test:e2e` 和 `git diff --check`，结果通过；新证据目录包含三浏览器 pointer/keyboard、Settings traversal 及结构化门禁 status JSON。R-09 当前契约关闭，但整体 **PARTIAL**；Replay 仍不在当前阶段范围。
 
@@ -40,7 +93,7 @@
 详见 [R-08～R-11 修复记录](docs/backtesting/reports/BACKTEST_R08_R11_REMEDIATION_2026-10-01.md) 与 [新证据](audit-evidence/2026-10-01-r08-r11-remediation/README.md)。
 
 - [x] R-08 Performance 收益口径：MTM 总收益、多空可证明分项、Outperformance 统一公式；对冲缺少逐腿估值时不伪造方向值（后续独立复查继续通过）。
-- [x] R-09 WebKit Settings Tab/Shift+Tab、Escape 与 busy 焦点约束；该历史批次的合成探针通过；后续独立复查发现真实 WebKit pointer-open 后 Escape 的 focus return 边界，当前仍未关闭。
+- [x] R-09 WebKit Settings Tab/Shift+Tab、Escape 与 busy 焦点约束；历史复查曾发现真实 pointer-open 的 focus return 边界，已在 R-09 第三轮真实三浏览器复查中关闭。该行保留为历史过程记录。
 - [x] R-10 市场/副周期竞态与旧 run fence；双引擎六场景及旧 run 注入通过（后续独立复查继续通过）。
 - [x] R-11 Provider 503/429/timeout/invalid JSON、Retry、真实空历史、共享 Provider 多 Cell 隔离；双引擎故障矩阵18/18，真实双 Cell 通过（后续独立复查继续通过）。
 - [x] 同 id Cell 重建、切市场时 Retry Promise 绑定实例/代次/市场，不复用旧请求（后续独立复查继续通过）。
@@ -71,9 +124,9 @@
 - [ ] 默认本地应用改为可对账的 provider/partial policy，并修复真实 500-bar ledger/readiness；不能用固定引擎结果替代 UI 链路。
 - [ ] D-01、移动 KPI 溢出、Settings close 默认样式、宿主壳层、复杂撮合、VoiceOver、rollback 等 Final Gate。
 
-## 2026-10-01 动态深审 D-01 修复
+## 2026-10-01 动态深审 D-01 修复（历史记录；当前状态见 2026-10-02 启动优化复核）
 
-- [ ] D-01：已增加 partial/pending 门控并通过单测，但两种真实引擎动态探针仍观测到首个 status=ready、history.complete=false、trades=0；不能关闭，需继续定位 Controller/adapter 首个快照来源。详见 [BACKTEST_DYNAMIC_DEEP_REMEDIATION_2026-10-01.md](docs/backtesting/reports/BACKTEST_DYNAMIC_DEEP_REMEDIATION_2026-10-01.md)。
+- [x] D-01：该历史探针当时发现首个 `status=ready` / `history.complete=false` 边界；后续已增加 partial/pending、ledger 绑定和新策略首轮门控，并在两种真实引擎的立即挂载、晚挂载、hide/show、市场切换路径复核通过。原始发现详见 [BACKTEST_DYNAMIC_DEEP_REMEDIATION_2026-10-01.md](docs/backtesting/reports/BACKTEST_DYNAMIC_DEEP_REMEDIATION_2026-10-01.md)，当前结论以顶部最新状态为准。
 - [ ] 继续完整参考站逐笔字段（Entry/Exit/Size/P&L/MFE/MAE）对账、复杂撮合/Bar Magnifier、真实 Provider 深历史故障、VoiceOver/跨设备/长时资源、bundle threshold 和实际 rollback。
 
 ## 2026-09-30 动态深审（历史快照）
@@ -82,7 +135,7 @@
 
 - [x] R-05/R-06/R-07 当前适配器独立 probe：9/9 通过；新证据见 [dynamic-deep](audit-evidence/2026-09-30-dynamic-deep/README.md)。
 - [x] 两种真实 Pine 引擎、Viewer 四 Tab、Simulation、Settings 失败恢复、EMPTY/hide/show、重叠市场/周期、多 Cell、重复挂载和销毁资源动态路径已复查。
-- [ ] **D-01**：图表已宣布初始 `history:complete` 后立即新增策略，首个快照可能 `ready` 但 `history.complete=false`、交易数为 0、`canSimulate=false`，而引擎原始 context 已有 closed trade；两种引擎均复现，需修复并补真实浏览器证据。
+- [x] **D-01（历史发现）**：图表已宣布初始 `history:complete` 后立即新增策略的首个快照曾出现 `ready`/空账本边界；后续已修复并由两种真实引擎浏览器流程复核，不再作为当前开放缺陷。
 - [ ] 参考站同数据逐笔/汇总对账、复杂撮合/Bar Magnifier/partial fill/复合订单、真实 Provider 深历史故障链路、跨设备/VoiceOver/长时资源、bundle threshold 和真实制品 rollback。
 
 当前整体回测计划仍为 **PARTIAL，Final Gate 未关闭**；不要用 root/Vela 测试总数或参考站动态截图宣称全部完成。
@@ -392,7 +445,7 @@ TradingView 文档中的 tick 是历史回测使用的“模拟 K 线内价格�
 - [x] 在策略 Properties 中增加“Default precision / High precision”选项；控件直接读写真实 `use_bar_magnifier` boolean 属性，不保存第二份 UI 状态。Cancel/Reset 均只改草稿，precision-only 的 Ok 只发一次 `setProps` 批量更新/重算；秒级数据不受 Provider 支持时继续由结果页现有 precision fallback 明示，不能把“已请求”显示成“已应用”。
 - [x] 显示实际采用的低周期、覆盖率、父/子 K 线计数和回退原因；模拟点数可由映射与四点规则确定。（PARTIAL：尚未提供独立的逐点明细面板。）
 - [x] 当高精度不可用或发生回退时，在 Dock/Viewer 结果页显示可访问的状态、tooltip 和 machine-readable fallback reason，不只写控制台日志。
-- [ ] 回测结果仅在完整历史加载结束后生成，避免将深度回填过程中的中间结果当作最终结果。
+- [x] 回测最终结果门控：深度回填期间可以保留图表进度/部分状态，但最终指标、交易账本、曲线能力和 Simulation 均必须等待完整历史与同 revision ledger；适配器/控制器回归已覆盖。
 - [x] 在执行上下文/结果 envelope 中记录数据源、精度模式、引擎 provenance 和关键策略参数。（PARTIAL：完整可导出复现包仍待。）
 
 ### 验收标准

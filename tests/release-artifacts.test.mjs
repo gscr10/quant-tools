@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { execFile, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -127,6 +127,91 @@ test('release manifest help is explicit and does not emit a JSON artifact', asyn
   const { stdout } = await runNode(script.pathname, ['--help'], process.cwd());
   assert.match(stdout, /Usage: npm run release:manifest/);
   assert.doesNotMatch(stdout, /"schemaVersion"/);
+});
+
+test('release manifest and verifier reject dist symbolic links', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quant-release-symlink-'));
+  await mkdir(join(root, 'dist'), { recursive: true });
+  await writeFile(join(root, 'package-lock.json'), '{"name":"fixture","lockfileVersion":3}\n');
+  await writeFile(join(root, 'outside.js'), 'globalThis.__outside=true;\n');
+  await symlink('../outside.js', join(root, 'dist', 'app.js'));
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  execFileSync('git', ['add', '.'], { cwd: root });
+  execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture'], { cwd: root });
+
+  const manifestScript = new URL('../scripts/release-manifest.mjs', import.meta.url);
+  await assert.rejects(
+    runNode(manifestScript.pathname, ['--root', root, '--require-clean', '--require-dist'], root),
+    (error) => error?.code === 1 && /symbolic link/.test(String(error?.stderr ?? error?.message)),
+  );
+
+  // A verifier must independently reject a symlink even if an older or
+  // externally produced manifest omitted it from the expected file set.
+  const manifestPath = `${root}.manifest.json`;
+  await writeFile(manifestPath, JSON.stringify({
+    schemaVersion: 1,
+    manifestKind: 'release',
+    commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+    branch: execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8' }).trim(),
+    gitStatus: [],
+    node: process.version,
+    npm: null,
+    packageLock: null,
+    dist: { present: true, root: 'dist', files: [], bytes: 0 },
+  }));
+  const verifierScript = new URL('../scripts/verify-release-manifest.mjs', import.meta.url);
+  const verified = await runNode(verifierScript.pathname, ['--root', root, '--manifest', manifestPath, '--require-clean', '--json'], root).catch((error) => error);
+  assert.equal(verified.code, 1);
+  assert.match(String(verified.stdout ?? verified.stderr ?? verified.message), /symbolic link|dist file set differs/i);
+});
+
+test('release manifest rejects a symbolic-link dist root and package lock', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quant-release-root-symlink-'));
+  const outside = await mkdtemp(join(tmpdir(), 'quant-release-root-outside-'));
+  await mkdir(join(outside, 'dist'), { recursive: true });
+  await writeFile(join(outside, 'dist', 'index.html'), '<!doctype html>\n');
+  await symlink(join(outside, 'dist'), join(root, 'dist'));
+  await symlink(join(outside, 'missing-package-lock.json'), join(root, 'package-lock.json'));
+
+  const script = new URL('../scripts/release-manifest.mjs', import.meta.url);
+  await assert.rejects(
+    runNode(script.pathname, ['--root', root, '--require-dist'], root),
+    error => error?.code === 1 && /dist|symbolic link/.test(String(error?.stderr ?? error?.message)),
+  );
+
+  // The dist root is a separate boundary; after replacing it with a regular
+  // directory, the package-lock symlink must still fail rather than being
+  // silently treated as an absent optional lockfile.
+  await (await import('node:fs/promises')).rm(join(root, 'dist'), { recursive: true, force: true });
+  await mkdir(join(root, 'dist'), { recursive: true });
+  await writeFile(join(root, 'dist', 'index.html'), '<!doctype html>\n');
+  await assert.rejects(
+    runNode(script.pathname, ['--root', root, '--require-dist'], root),
+    error => error?.code === 1 && /symbolic link|package-lock/.test(String(error?.stderr ?? error?.message)),
+  );
+});
+
+test('verifier rejects a non-release manifest even when file digests match', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quant-release-kind-'));
+  await mkdir(join(root, 'dist'), { recursive: true });
+  await writeFile(join(root, 'package-lock.json'), '{"name":"fixture","lockfileVersion":3}\n');
+  await writeFile(join(root, 'dist', 'index.html'), '<!doctype html>\n');
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  execFileSync('git', ['add', '.'], { cwd: root });
+  execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture'], { cwd: root });
+
+  const manifestScript = new URL('../scripts/release-manifest.mjs', import.meta.url);
+  const { stdout } = await runNode(manifestScript.pathname, ['--root', root, '--require-clean', '--require-dist'], root);
+  const manifest = JSON.parse(stdout);
+  manifest.manifestKind = 'diagnostic';
+  const manifestPath = `${root}.manifest.json`;
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  const verifierScript = new URL('../scripts/verify-release-manifest.mjs', import.meta.url);
+  const result = await runNode(verifierScript.pathname, ['--root', root, '--manifest', manifestPath, '--require-clean', '--json'], root).catch((error) => error);
+  assert.equal(result.code, 1);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.ok, false);
+  assert.equal(report.checks.find((check) => check.check === 'manifestKind').ok, false);
 });
 
 function httpGet(port, pathname) {

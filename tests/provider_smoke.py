@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import argparse
 from pathlib import Path
 import subprocess
 import sys
@@ -38,7 +39,7 @@ def wait_for_server(process: subprocess.Popen[str]) -> None:
     raise TimeoutError("Timed out waiting for the Vite provider-smoke server")
 
 
-def run_smoke() -> dict[str, object]:
+def run_smoke(rounds: int = 1) -> dict[str, object]:
     executable = os.environ.get("CHROMIUM_EXECUTABLE")
     if not executable:
         mac_chromium = "/Applications/Chromium.app/Contents/MacOS/Chromium"
@@ -57,7 +58,7 @@ def run_smoke() -> dict[str, object]:
         response = page.goto(URL, wait_until="domcontentloaded", timeout=30_000)
         assert response is not None and response.status == 200
         page.wait_for_function("window.providerSmokeReady === true")
-        result = page.evaluate("window.runProviderSmoke()")
+        result = page.evaluate("rounds => window.runProviderSmoke(rounds)", rounds)
         browser.close()
         if page_errors:
             raise AssertionError(page_errors)
@@ -65,6 +66,11 @@ def run_smoke() -> dict[str, object]:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--rounds', type=int, default=int(os.environ.get('QUANT_PROVIDER_SMOKE_ROUNDS', '1')))
+    args = parser.parse_args()
+    if args.rounds < 1:
+        parser.error('--rounds must be positive')
     server = subprocess.Popen(
         [
             "npm",
@@ -84,7 +90,14 @@ def main() -> int:
     )
     try:
         wait_for_server(server)
-        print(json.dumps(run_smoke(), sort_keys=True))
+        result = run_smoke(args.rounds)
+        required = {'binance', 'binanceFutures', 'hyperliquid'}
+        missing = required.difference(result)
+        if missing:
+            raise AssertionError(f'provider smoke omitted routes: {sorted(missing)}')
+        if result.get('roundsCompleted') != args.rounds:
+            raise AssertionError(f"provider smoke completed {result.get('roundsCompleted')} rounds, expected {args.rounds}")
+        print(json.dumps(result, sort_keys=True))
         return 0
     finally:
         server.terminate()
