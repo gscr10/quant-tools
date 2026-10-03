@@ -47,11 +47,23 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check playwright
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: python3 -m playwright install chromium firefox webkit
-      - name: Run local final gates
+      # Keep the same aggregate command semantics, but expose each phase as a
+      # separate step.  A single opaque shell step can appear frozen for many
+      # minutes on a hosted runner while a browser or dependency subprocess is
+      # still alive; named steps make the failing phase and its timeout clear.
+      - name: Verify startup and repository gates
+        run: npm run verify:startup
+      - name: Verify complex matching and Bar Magnifier
+        run: npm run test:pinets:matching
+      - name: Verify strategy reference golden
+        run: npm run test:pinets:golden
+      - name: Verify touch matrix
+        run: npm run test:e2e:touch
+      - name: Verify visual and accessibility gates
         env:
           QUANT_VISUAL_STRICT_PIXELS: '0'
           QUANT_VISUAL_GEOMETRY_TOLERANCE: '24'
-        run: npm run verify:final-gates:local
+        run: npm run test:visual:a11y
 
   deployment-smoke:
     if: ${{ vars.QUANT_DEPLOY_URL != '' }}
