@@ -95,6 +95,46 @@ test('R11 failed initial load is not an empty market; a fresh successful generat
   f.dispose();
 });
 
+test('R11 unguarded providers reject non-array and all-malformed candle payloads', async () => {
+  for (const payload of [
+    { malformed: true },
+    [{ time: 1, open: 'bad', high: 2, low: 0, close: 1 }],
+  ]) {
+    const provider = guardProviderHistory({ getBars: async () => payload });
+    const requests = [];
+    const stop = subscribeProviderHistoryRequests(provider, request => requests.push(request));
+    try {
+      await assert.rejects(
+        provider.getBars('BTCUSDT', '15', { limit: 10 }),
+        /Invalid provider candle response/,
+      );
+      assert.equal(requests.length, 1);
+      assert.match(String((await requests[0].result).error), /Invalid provider candle response/);
+    } finally {
+      stop();
+    }
+  }
+});
+
+test('R11 mixed candle payload keeps valid rows while isolating malformed rows', async () => {
+  const provider = guardProviderHistory({ getBars: async () => [
+    { time: 1_000, open: 1, high: 2, low: 0.5, close: 1.5 },
+    { time: 2_000, open: 'bad', high: 2, low: 0.5, close: 1.5 },
+  ] });
+  const requests = [];
+  const stop = subscribeProviderHistoryRequests(provider, request => requests.push(request));
+  try {
+    assert.deepEqual(
+      await provider.getBars('BTCUSDT', '15', { limit: 10 }),
+      [{ time: 1_000, open: 1, high: 2, low: 0.5, close: 1.5 }],
+    );
+    assert.equal(requests.length, 1);
+    assert.deepEqual(await requests[0].result, { error: null, bars: 1, oldestTime: 1_000 });
+  } finally {
+    stop();
+  }
+});
+
 test('R11 successful HTTP with an invalid candle envelope is an error, never empty history', async () => {
   const original = globalThis.fetch;
   try {

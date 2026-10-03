@@ -11,8 +11,10 @@ class Bus {
 }
 const settle = async () => { for (let n = 0; n < 12; n++) await new Promise(setImmediate); };
 function fixture(market) {
-  const chart = Object.assign(new Bus(), { market, handles: [], historyComplete: () => Promise.resolve(), indicators() { return this.handles; },
-    setMarket(next) { this.market={...this.market,...next}; return Promise.resolve(); } });
+  const setMarketCalls = [];
+  const chart = Object.assign(new Bus(), { market, handles: [], setMarketCalls,
+    historyComplete: () => Promise.resolve(), indicators() { return this.handles; },
+    setMarket(next) { setMarketCalls.push(next); this.market={...this.market,...next}; return Promise.resolve(); } });
   const cell = { id: 'history-cell', chart };
   const workspace = Object.assign(new Bus(), { cells: () => [cell], cell: () => cell });
   const adapter = new VelaBacktestResultsAdapter(workspace);
@@ -22,7 +24,7 @@ function fixture(market) {
     chart.handles.push(handle); chart.emit('indicator:added', { id }); await settle();
     return adapter.getSnapshot({ cellId: cell.id, indicatorId: id });
   };
-  return { chart, adapter, complete, add, workspace };
+  return { chart, adapter, complete, add, workspace, setMarketCalls };
 }
 
 for (const reason of ['depth', 'aborted']) test(`late adapter consumes cached ${reason} without reopening closed history`, async () => {
@@ -54,6 +56,18 @@ test('late adapter cached aborted zero bars is not successful no-data', async ()
   f.chart.emit('history:complete',{reason:'aborted',barsLoaded:0,oldestTime:0});
   await f.adapter.bootstrap(); const s=await f.add('late-aborted-empty');
   assert.equal(s.status,'partial'); assert.equal(s.history.reason,'aborted');
+  f.adapter.destroy(); dispose();
+});
+test('retrying an aborted cell without market bars preserves the 2000-bar startup depth', async () => {
+  const f = fixture({ symbol: 'AAA', timeframe: '60' });
+  const dispose = observeWorkspaceHistory(f.workspace);
+  f.complete('aborted');
+  await f.adapter.bootstrap();
+  const snapshot = await f.add('retry-depth');
+  assert.equal(snapshot.history.reason, 'aborted');
+  await f.adapter.retry(snapshot.key);
+  assert.equal(f.setMarketCalls.at(-1)?.bars, 2000);
+  assert.deepEqual(f.setMarketCalls.at(-1)?.data, []);
   f.adapter.destroy(); dispose();
 });
 test('late adapter invalidates cached depth on bars-only requested change without load:start', async () => {

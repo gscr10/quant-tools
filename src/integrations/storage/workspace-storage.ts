@@ -39,8 +39,14 @@ export function migrateWorkspaceState(raw: string, minimumBars = WORKSPACE_HISTO
       // 2000-bar policy.  Repair the chart/cell field here, while deliberately
       // leaving rendererConfig.bars (a color object) untouched.
       const validBars = typeof bars === 'number' && Number.isFinite(bars) && bars > 0;
-      if (!validBars || bars < targetBars) {
-        entry.bars = targetBars;
+      // Vela's history budget is a row count.  Persisted JSON can contain a
+      // fractional value after a host integration or manual edit; allowing it
+      // through makes the next cold start construct a non-integral provider
+      // limit.  Keep larger user-selected budgets, but normalize them to a
+      // positive integer before they reach the Workspace constructor.
+      const normalizedBars = validBars ? Math.floor(bars) : 0;
+      if (normalizedBars < targetBars || normalizedBars !== bars) {
+        entry.bars = Math.max(targetBars, normalizedBars);
         changed = true;
       }
     };

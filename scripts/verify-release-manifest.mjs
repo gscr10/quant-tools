@@ -9,7 +9,7 @@
  * cleanup is performed here; deployment tooling owns the slot switch.
  */
 import { createHash } from 'node:crypto';
-import { readFile, stat } from 'node:fs/promises';
+import { lstat, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
@@ -86,6 +86,12 @@ async function digest(path) {
   };
 }
 
+async function regularFileDigest(path) {
+  const info = await lstat(path);
+  if (!info.isFile()) throw new Error('path is not a regular file');
+  return digest(path);
+}
+
 function fail(check, message, details = undefined) {
   return { check, ok: false, message, ...(details === undefined ? {} : { details }) };
 }
@@ -103,6 +109,11 @@ async function main() {
     checks.push(fail('schemaVersion', `expected schemaVersion=1, got ${String(manifest?.schemaVersion)}`));
   } else {
     checks.push({ check: 'schemaVersion', ok: true });
+  }
+  if (manifest?.manifestKind !== 'release') {
+    checks.push(fail('manifestKind', `expected manifestKind=release, got ${String(manifest?.manifestKind)}`));
+  } else {
+    checks.push({ check: 'manifestKind', ok: true });
   }
 
   const runtimeChecks = [
@@ -162,7 +173,7 @@ async function main() {
     checks.push(fail('packageLock', 'package-lock path escaped checkout'));
   } else {
     try {
-      const actual = await digest(lockfilePath);
+      const actual = await regularFileDigest(lockfilePath);
       const expected = manifest.packageLock;
       if (actual.bytes !== expected.bytes || actual.sha256 !== expected.sha256) {
         checks.push(fail('packageLock', 'package-lock.json digest differs', { expected, actual }));
@@ -209,6 +220,9 @@ async function main() {
           const out = [];
           for (const entry of await readdir(dir, { withFileTypes: true })) {
             const child = resolve(dir, entry.name);
+            if (entry.isSymbolicLink()) {
+              throw new Error(`dist contains unsupported symbolic link: ${child}`);
+            }
             if (entry.isDirectory()) out.push(...await walk(child));
             else if (entry.isFile()) out.push(child);
           }

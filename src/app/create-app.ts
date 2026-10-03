@@ -7,10 +7,10 @@ import { FavoriteService } from '../features/favorites/favorite-service.ts';
 import {
   registerIndicatorContributions,
 } from '../features/indicators/indicator-contributions.vela.ts';
-import { IndicatorManagerDialog } from '../features/indicators/indicator-manager.vela.ts';
+import { createLazyIndicatorManager, type LazyIndicatorManager } from '../features/indicators/lazy-indicator-manager.ts';
 import { openNativeIndicatorInfo } from '../features/indicators/native-indicator-info.vela.ts';
-import { PineEditorController } from '../features/pine-editor/pine-editor-controller.ts';
-import { registerPineEditorContribution } from '../features/pine-editor/pine-editor-contribution.vela.ts';
+import { registerPineEditorContribution, type PineEditorController } from '../features/pine-editor/pine-editor-contribution.vela.ts';
+import { createLazyPineEditorController } from '../features/pine-editor/lazy-pine-editor.ts';
 import { ScriptService } from '../features/pine-editor/script-service.ts';
 import { registerTemplateContribution } from '../features/workspace-templates/template-contribution.vela.ts';
 import { WorkspaceTemplatesFeature } from '../features/workspace-templates/workspace-templates.ts';
@@ -84,7 +84,7 @@ export function createApp(
   let workspaceRef: QuantWorkspace | null = null;
   let workspaceAdapter: WorkspacePort | null = null;
   let editor: PineEditorController | null = null;
-  let indicatorManager: IndicatorManagerDialog | null = null;
+  let indicatorManager: LazyIndicatorManager | null = null;
   let backtestFeature: BacktestFeature | null = null;
 
   const getWorkspacePort = (): WorkspacePort => {
@@ -155,15 +155,17 @@ export function createApp(
     lifetime.add(registerExternalIndicatorPersistence(() => workspaceRef));
     lifetime.add(registerPineEditorContribution(
       (body, headerSlot) => {
-        const controller = new PineEditorController(
+        const controller = createLazyPineEditorController(
           body,
           headerSlot,
-          scripts,
-          browserEditorRepository,
-          overlays,
           {
+            scripts,
+            editorRepository: browserEditorRepository,
+            overlays,
+            host: {
             runIndicator: (name, source) => {
               getWorkspacePort().addScriptIndicator(name, source);
+            },
             },
           },
         );
@@ -272,17 +274,17 @@ export function createApp(
       }
     }
 
-    indicatorManager = new IndicatorManagerDialog(
-      workspacePort,
+    indicatorManager = createLazyIndicatorManager({
+      workspace: workspacePort,
       scripts,
       favorites,
       overlays,
-      {
+      actions: {
         openScript,
         openNewScript,
         onScriptDeleted: (name) => editor?.detachDeletedScript(name),
       },
-    );
+    });
     lifetime.add(() => {
       indicatorManager?.destroy();
       indicatorManager = null;

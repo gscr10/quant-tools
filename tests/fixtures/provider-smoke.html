@@ -34,9 +34,9 @@
         }
       }
 
-      async function verifyHistory(provider, symbol, label) {
+      async function verifyHistory(provider, symbol, timeframe, label) {
         const bars = await withTimeout(
-          provider.getBars(symbol, '15', { limit: 5 }),
+          provider.getBars(symbol, timeframe, { limit: 5 }),
           `${label} history`,
         );
         if (bars.length < 2) throw new Error(`${label}: expected historical bars`);
@@ -44,7 +44,7 @@
         return bars.length;
       }
 
-      async function verifyLive(provider, symbol, label) {
+      async function verifyLive(provider, symbol, timeframe, label) {
         await withTimeout(new Promise((resolve, reject) => {
           let settled = false;
           let unsubscribe = () => {};
@@ -56,7 +56,7 @@
             else resolve();
           };
           try {
-            unsubscribe = provider.subscribe(symbol, '15', (bar) => {
+            unsubscribe = provider.subscribe(symbol, timeframe, (bar) => {
               try {
                 assertBar(bar, `${label} live`);
                 finish();
@@ -70,22 +70,33 @@
         }), `${label} live update`);
       }
 
-      window.runProviderSmoke = async () => {
+      async function runProviderSmokeRound() {
         const providers = createWorkspaceProviders();
         const binance = providers.binance();
         const hyperliquid = providers.hyperliquid();
-        const [binanceBars, hyperliquidBars] = await Promise.all([
-          verifyHistory(binance, 'BTCUSDT', 'Binance'),
-          verifyHistory(hyperliquid, 'BTC', 'Hyperliquid'),
+        const [binanceBars, binanceFuturesBars, hyperliquidBars, futuresInfo] = await Promise.all([
+          verifyHistory(binance, 'BTCUSDT', '15', 'Binance spot 15m'),
+          verifyHistory(binance, 'BTCUSDT.P', '60', 'Binance futures 1h'),
+          verifyHistory(hyperliquid, 'BTC', '15', 'Hyperliquid 15m'),
+          withTimeout(binance.getSymbolInfo('BTCUSDT.P'), 'Binance futures symbol info'),
         ]);
+        if (futuresInfo?.type !== 'futures') throw new Error('Binance futures symbol did not resolve as futures');
         await Promise.all([
-          verifyLive(binance, 'BTCUSDT', 'Binance'),
-          verifyLive(hyperliquid, 'BTC', 'Hyperliquid'),
+          verifyLive(binance, 'BTCUSDT', '15', 'Binance spot 15m'),
+          verifyLive(hyperliquid, 'BTC', '15', 'Hyperliquid 15m'),
         ]);
         return {
           binance: { historyBars: binanceBars, live: true },
+          binanceFutures: { historyBars: binanceFuturesBars, timeframe: '60', symbol: 'BTCUSDT.P' },
           hyperliquid: { historyBars: hyperliquidBars, live: true },
         };
+      }
+
+      window.runProviderSmoke = async (rounds = 1) => {
+        const count = Number.isInteger(rounds) && rounds > 0 ? rounds : 1;
+        let result;
+        for (let round = 0; round < count; round += 1) result = await runProviderSmokeRound();
+        return { ...result, roundsCompleted: count };
       };
       window.providerSmokeReady = true;
     </script>

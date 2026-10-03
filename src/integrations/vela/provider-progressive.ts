@@ -68,7 +68,11 @@ async function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<
  * ProviderFeed's catch-to-[] behavior. They never imply successful genesis.
  */
 export function enableProviderProgressiveHistory<T extends DataProvider>(provider: T): T {
-  if (provider.getBarsProgressive) return provider;
+  // Treat only a callable capability as already installed.  A malformed
+  // provider object can carry a truthy placeholder (for example a serialized
+  // config value); accepting that value would skip installation and make the
+  // later Vela call fail with "getBarsProgressive is not a function".
+  if (typeof provider.getBarsProgressive === 'function') return provider;
   const getBars = provider.getBars.bind(provider);
   const progressive = async (
     ticker: string,
@@ -81,6 +85,16 @@ export function enableProviderProgressiveHistory<T extends DataProvider>(provide
     // propagate it as "not served". Returning it preserves deep loadRange,
     // aggregation and single-page paths without duplicating upstream logic.
     if (!supportsProgressiveHistory(timeframe, requested) || !listeners.get(provider)?.size) return null;
+    // Vela may invoke a provider after its AbortSignal has already been
+    // cancelled (for example when a cell is destroyed while a queued load is
+    // still being drained).  Do not publish a synthetic request in that case:
+    // observers use the request event to associate history with the current
+    // cell/generation, and an immediately-aborted event can otherwise leave a
+    // stale "history aborted" response in the next load's ledger even though
+    // no transport was started.  Returning an empty prefix is consistent with
+    // the provider feed's cancellation path and, importantly, performs no
+    // network call and creates no observer-visible request.
+    if (opts?.signal?.aborted) return [];
     const range = normalizeProviderRange(requested)!;
     let settle!: (result: ProgressiveHistoryResult) => void;
     const result = new Promise<ProgressiveHistoryResult>((resolve) => { settle = resolve; });
@@ -157,7 +171,13 @@ export function enableProviderProgressiveHistory<T extends DataProvider>(provide
     } catch (caught) {
       error = caught;
     } finally {
-      settle(Object.freeze({ error, aborted: signal?.aborted ?? false,
+      const aborted = signal?.aborted ?? false;
+      // An abort may happen after a valid prefix (or even immediately after
+      // the final page).  Keep the prefix for the renderer, but never expose
+      // that prefix as a successful history result: consumers that only inspect
+      // `error` must not mistake cancellation for genesis/depth completion.
+      if (aborted && error === null) error = new Error('progressive history load aborted');
+      settle(Object.freeze({ error, aborted,
         bars: confirmed.length, oldestTime: confirmed[0]?.time ?? null }));
     }
     return confirmed;

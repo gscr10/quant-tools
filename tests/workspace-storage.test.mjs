@@ -30,13 +30,14 @@ test('history migration repairs malformed chart budgets without touching rendere
       { id: 'negative', bars: -1 },
       { id: 'boolean', bars: false },
       { id: 'fractional', bars: 2000.5 },
+      { id: 'fractional-large', bars: 3000.75 },
       { id: 'large', bars: 3000 },
       { id: 'renderer', rendererConfig: { bars: { upColor: 'red' } } },
     ],
   };
   const migrated = JSON.parse(migrateWorkspaceState(JSON.stringify(state)));
   assert.deepEqual(migrated.charts.map((chart) => chart.bars), [
-    2000, 2000, 2000, 2000, 2000, 2000.5, 3000, 2000,
+    2000, 2000, 2000, 2000, 2000, 2000, 3000, 3000, 2000,
   ]);
   assert.deepEqual(migrated.charts.at(-1).rendererConfig.bars, { upColor: 'red' });
   assert.equal(migrateWorkspaceState(JSON.stringify({ charts: [{ bars: 99 }] }), 2000.9),

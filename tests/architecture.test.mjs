@@ -30,6 +30,38 @@ test('main remains a composition entry without Vela or feature logic', async () 
   assert.ok(source.split('\n').length <= 12);
 });
 
+test('Pine Editor CodeMirror stays behind a first-open dynamic import', async () => {
+  const source = await readFile(new URL('../src/app/create-app.ts', import.meta.url), 'utf8');
+  const lazy = await readFile(new URL('../src/features/pine-editor/lazy-pine-editor.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /from ['"].*pine-editor-controller\.ts['"]/);
+  assert.match(lazy, /import\('\.\/pine-editor-controller\.ts'\)/);
+  assert.match(lazy, /pending/);
+  assert.match(lazy, /disposed/);
+  assert.match(lazy, /let loadStarted = false/);
+  assert.match(lazy, /const visibilityObserver = new MutationObserver/);
+  assert.match(lazy, /enqueue\(controller => controller\.openNewScript\(\), true\)/);
+  assert.match(lazy, /const load = \(\): void => \{[\s\S]*void import\('\.\/pine-editor-controller\.ts'\)/);
+  assert.match(lazy, /role', 'status'/);
+  assert.match(lazy, /role', 'alert'/);
+});
+
+test('indicator manager stays behind a first-open dynamic import', async () => {
+  const source = await readFile(new URL('../src/app/create-app.ts', import.meta.url), 'utf8');
+  const lazy = await readFile(new URL('../src/features/indicators/lazy-indicator-manager.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /from ['"].*indicator-manager\.vela\.ts['"]/);
+  assert.match(source, /createLazyIndicatorManager/);
+  assert.match(lazy, /import\('\.\/indicator-manager\.vela\.ts'\)/);
+  assert.match(lazy, /openRequested/);
+  assert.match(lazy, /disposed/);
+});
+
+test('bundle budget protects the post-editor-split startup baseline', async () => {
+  const source = await readFile(new URL('../scripts/check-bundle-size.mjs', import.meta.url), 'utf8');
+  assert.match(source, /main:\s*\{ raw: 1_950_000, gzip: 520_000 \}/);
+  assert.match(source, /worker:\s*\{ raw: 900_000, gzip: 240_000 \}/);
+  assert.match(source, /highcharts:\s*\{ raw: 450_000, gzip: 160_000 \}/);
+});
+
 test('workspace defaults, toolbar composition, providers, and dependency versions stay frozen', async () => {
   const { WORKSPACE_DEFAULTS, WORKSPACE_TOPBAR } = await import(
     '../src/config/workspace-options.ts'
@@ -87,6 +119,75 @@ test('workspace defaults, toolbar composition, providers, and dependency version
   assert.equal(manifest.dependencies['@luxalgo/vela-pinets'], 'file:./packages/vela-pinets');
   assert.equal(manifest.dependencies.pinets, 'file:./packages/pinets');
   assert.deepEqual(manifest.workspaces, ['packages/pinets', 'packages/vela-pinets']);
+  assert.equal(
+    manifest.scripts.prebuild,
+    'node scripts/ensure-fork-build.mjs',
+    'the main build must share the fork-build lock with test/dev startup',
+  );
+  assert.equal(
+    manifest.scripts['build:forks'],
+    'node scripts/ensure-fork-build.mjs',
+    'the public fork build entry must not bypass the cross-process lock',
+  );
+  assert.equal(
+    manifest.scripts['build:forks:run'],
+    'npm run build:forks:pinets && npm run build:forks:vela-pinets',
+  );
+  assert.equal(
+    manifest.scripts['test:release'],
+    'node --test tests/release-artifacts.test.mjs tests/fork-build-lock.test.mjs tests/fork-build-recovery.test.mjs',
+    'release verification must have one reproducible npm entry point',
+  );
+  assert.equal(
+    manifest.scripts['check:repository-hygiene'],
+    'node scripts/check-repository-hygiene.mjs',
+    'deployment verification must reject tracked audit and generated artifacts',
+  );
+  assert.equal(
+    manifest.scripts['test:startup:matrix'],
+    'python3 tests/startup_loading_matrix.py',
+    'startup ABBA matrix must remain an explicit reproducible entry point',
+  );
+  assert.equal(
+    manifest.scripts['dev:fast'],
+    'node scripts/dev-fast.mjs',
+    'dev:fast must consume --check-only itself instead of forwarding it to Vite',
+  );
+  assert.equal(
+    manifest.scripts['wait:dev'],
+    'node scripts/wait-for-http.mjs',
+    'startup readiness must use the shared HTTP probe',
+  );
+  assert.equal(
+    manifest.scripts['verify:startup'],
+    'npm test && npm run test:vela-pinets && npm run typecheck && npm run build && npm run check:bundle-size && npm run check:dependencies && npm run check:repository-hygiene && npm run check:dist:independence && npm run test:release && npm run dev:fast -- --check-only',
+    'startup local gate must remain a reproducible aggregate command',
+  );
+  assert.equal(
+    manifest.scripts['test:vela-pinets'],
+    'npm --workspace packages/vela-pinets run test -- --run',
+    'the fork package regression suite must remain an explicit reproducible gate',
+  );
+  assert.equal(
+    manifest.scripts['test:providers:soak'],
+    'python3 tests/provider_smoke.py --rounds 3',
+    'real Provider soak must remain an explicit opt-in command',
+  );
+  assert.equal(
+    manifest.scripts['test:providers:long'],
+    'python3 tests/provider_smoke.py --rounds 10',
+    'long real Provider soak must remain a reproducible explicit command',
+  );
+  assert.equal(
+    manifest.scripts['verify:startup:deploy'],
+    'npm run verify:startup && npm run test:providers:long',
+    'deployment preflight must combine local gates with the explicit long Provider soak',
+  );
+  assert.equal(
+    manifest.scripts['verify:startup:full'],
+    'npm run verify:startup && npm run test:startup:matrix -- --samples 3 --max-p95 5000 && npm run test:startup:zero-delay && npm run test:startup -- --samples 1 --storage-fault getter && npm run test:startup -- --samples 1 --storage-fault methods && npm run test:startup -- --samples 1 --storage-fault quota && npm run test:providers:soak && npm run test:e2e && npm run test:e2e:settings && npm run test:e2e:fault-isolation && npm run test:e2e:multicell && npm run test:e2e:prod && npm run test:e2e:cross-browser && npm run test:e2e:offline && npm run test:e2e:performance && npm run test:visual:a11y',
+    'full startup verification must include all local E2E, performance, offline, and accessibility gates',
+  );
 });
 
 test('workspace persistence upgrades old chart history depth without changing other state', async () => {
@@ -99,6 +200,7 @@ test('workspace persistence upgrades old chart history depth without changing ot
   assert.equal(migrated.charts[0].bars, 2000);
   assert.deepEqual(migrated.charts[0].rendererConfig.bars, { upColor: '#fff' });
   assert.equal(migrateWorkspaceState(JSON.stringify({ charts: [{ bars: 2500 }] })), JSON.stringify({ charts: [{ bars: 2500 }] }));
+  assert.equal(migrateWorkspaceState(JSON.stringify({ charts: [{ bars: 2500.75 }] })), JSON.stringify({ charts: [{ bars: 2500 }] }));
 });
 
 test('workspace destroy also terminates the per-cell Pine worker registry', async () => {

@@ -222,7 +222,22 @@ export function guardProviderHistory<T extends DataProvider>(provider: T): T {
     try {
       let bars = await upstreamGetBars.call(receiver, ticker, timeframe, range);
       if (transportError !== null) throw transportError;
+      // The upstream Vela feed normally returns an array, but custom and
+      // test providers can bypass the guarded json/post seam entirely. Do
+      // not let an invalid payload become `[]`: the workspace treats a
+      // successful empty array as a valid genesis/no-data result, which would
+      // make a malformed response look like an empty market.
+      if (!Array.isArray(bars)) {
+        throw new Error('Invalid provider candle response: expected an array');
+      }
       let normalized = normalizeProviderBars(bars, range);
+      // A non-empty response with no usable OHLC rows is likewise malformed.
+      // Keep the existing tolerant behavior for mixed pages (valid rows are
+      // retained and isolated from bad rows), but fail closed when every row
+      // is unusable so retry/error handling remains visible to the workspace.
+      if (bars.length > 0 && normalized.length === 0) {
+        throw new Error('Invalid provider candle response: malformed OHLC row');
+      }
 
     // Binance's forward paginator uses `while (cursor < to)`, so a point
     // range (`from === to`) can incorrectly return no row.  Retry once with a
@@ -242,7 +257,13 @@ export function guardProviderHistory<T extends DataProvider>(provider: T): T {
           const pointRetry = { ...range, to: pointEnd, limit: 1 };
           bars = await upstreamGetBars.call(receiver, ticker, timeframe, pointRetry);
           if (transportError !== null) throw transportError;
+          if (!Array.isArray(bars)) {
+            throw new Error('Invalid provider candle response: expected an array');
+          }
           normalized = normalizeProviderBars(bars, range);
+          if (bars.length > 0 && normalized.length === 0) {
+            throw new Error('Invalid provider candle response: malformed OHLC row');
+          }
         }
       }
       settle({ error: null, bars: normalized.length, oldestTime: normalized[0]?.time ?? null });

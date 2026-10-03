@@ -42,6 +42,48 @@ test('workspace defaults bound provider network and symbol-index paths', () => {
   assert.equal(hyperliquid.__quantToolsNetworkGuard, true);
 });
 
+test('Binance aggregates 45m and 180m from aligned native candles with exact newest-tail limits', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  const makeRows = (step, count) => {
+    const bucket = step * 3;
+    const start = POINT - (POINT % bucket);
+    return Array.from({ length: count }, (_, index) => {
+      const time = start + index * step;
+      const open = index + 1;
+      return [time, String(open), String(open + 10), String(open - 1), String(open + 5), String(100 + index), time + step - 1];
+    });
+  };
+  try {
+    globalThis.fetch = async (input) => {
+      const url = new URL(String(input));
+      calls.push(url.toString());
+      const interval = url.searchParams.get('interval');
+      if (interval === '15m') return jsonResponse(makeRows(15 * 60_000, 18));
+      if (interval === '1h') return jsonResponse(makeRows(60 * 60_000, 18));
+      throw new Error(`unexpected interval: ${interval}`);
+    };
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 100 }).binance();
+    const fortyFive = await provider.getBars('BTCUSDT', '45', { limit: 5 });
+    const oneEighty = await provider.getBars('BTCUSDT', '180', { limit: 5 });
+
+    assert.equal(fortyFive.length, 5);
+    assert.equal(oneEighty.length, 5);
+    // 18 native candles form 6 buckets; limit=5 must retain the newest five,
+    // rather than returning the first five or leaking the extra source row.
+    assert.equal(fortyFive[0].open, 4);
+    assert.equal(fortyFive.at(-1).close, 23);
+    assert.equal(oneEighty[0].open, 4);
+    assert.equal(oneEighty.at(-1).close, 23);
+    assert.deepEqual(calls.map((value) => new URL(value).searchParams.get('interval')), ['15m', '1h']);
+    assert.equal(new URL(calls[0]).searchParams.get('limit'), '18');
+    assert.equal(new URL(calls[1]).searchParams.get('limit'), '18');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Binance shares one in-flight JSON request but does not cache the settled response', async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
@@ -98,6 +140,57 @@ test('Binance metadata responses use a bounded TTL cache and expire cleanly', as
   }
 });
 
+test('metadata TTL cache isolates callers from mutable nested symbol snapshots', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  try {
+    globalThis.fetch = async (input) => {
+      calls.push(String(input));
+      return jsonResponse({ symbols: [{ symbol: 'BTCUSDT', filters: [{ minQty: '0.001' }] }] });
+    };
+    const provider = createWorkspaceProviders({ metadataCacheTtlMs: 10_000 }).binance();
+    const url = 'https://api.binance.com/api/v3/exchangeInfo';
+    const first = provider.json(url);
+    const second = provider.json(url);
+    const [a, b] = await Promise.all([first, second]);
+    assert.equal(calls.length, 1, 'concurrent metadata reads should share one transport');
+    a.symbols[0].filters[0].minQty = '999';
+    a.symbols.push({ symbol: 'INJECTED' });
+    assert.equal(b.symbols[0].filters[0].minQty, '0.001');
+    assert.equal(b.symbols.length, 1);
+
+    const cached = await provider.json(url);
+    assert.equal(cached.symbols[0].filters[0].minQty, '0.001');
+    assert.equal(cached.symbols.length, 1);
+    assert.equal(calls.length, 1, 'the unmodified cached snapshot should still be reusable');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('metadata cache fails closed when a response cannot be cloned', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalClone = globalThis.structuredClone;
+  let calls = 0;
+  try {
+    // Force both clone paths to fail: JSON cannot serialize BigInt and the
+    // host clone seam is deliberately unavailable/broken.
+    globalThis.structuredClone = () => { throw new Error('clone unavailable'); };
+    globalThis.fetch = async () => {
+      calls += 1;
+      return jsonResponse({ symbols: [{ symbol: 'BTCUSDT', opaque: 1n }] });
+    };
+    const provider = createWorkspaceProviders({ metadataCacheTtlMs: 10_000 }).binance();
+    const url = 'https://api.binance.com/api/v3/exchangeInfo';
+    await assert.rejects(provider.json(url), /Provider JSON payload could not be safely cloned/);
+    await assert.rejects(provider.json(url), /Provider JSON payload could not be safely cloned/);
+    assert.equal(calls, 2, 'uncloneable metadata must not enter the TTL cache');
+  } finally {
+    globalThis.structuredClone = originalClone;
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('metadata cache can be disabled without changing request semantics', async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
@@ -112,6 +205,77 @@ test('metadata cache can be disabled without changing request semantics', async 
     await provider.json(url);
     assert.equal(calls.length, 2);
   } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('disabling metadata TTL still isolates concurrent consumers', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  let release;
+  try {
+    globalThis.fetch = async () => {
+      calls.push(true);
+      await new Promise((resolve) => { release = resolve; });
+      return jsonResponse({ symbols: [{ symbol: 'BTCUSDT', filters: [{ minQty: '0.001' }] }] });
+    };
+    const provider = createWorkspaceProviders({ metadataCacheTtlMs: 0 }).binance();
+    const url = 'https://api.binance.com/api/v3/exchangeInfo';
+    const first = provider.json(url);
+    const second = provider.json(url);
+    assert.equal(calls.length, 1, 'concurrent metadata reads should still deduplicate transport');
+    release();
+    const [a, b] = await Promise.all([first, second]);
+    a.symbols[0].filters[0].minQty = '999';
+    assert.equal(b.symbols[0].filters[0].minQty, '0.001');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('concurrent non-metadata JSON responses are isolated per consumer', async () => {
+  const originalFetch = globalThis.fetch;
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  try {
+    globalThis.fetch = async () => {
+      await pending;
+      return jsonResponse([[1_700_000_000_000, '1', '2', '0', '1.5', '10']]);
+    };
+    const provider = createWorkspaceProviders({ metadataCacheTtlMs: 0 }).binance();
+    const url = 'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=1';
+    const first = provider.json(url);
+    const second = provider.json(url);
+    release();
+    const [a, b] = await Promise.all([first, second]);
+    assert.notStrictEqual(a, b);
+    assert.notStrictEqual(a[0], b[0]);
+    a[0][1] = 'mutated';
+    a.push(['extra']);
+    assert.equal(b[0][1], '1');
+    assert.equal(b.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('uncloneable non-metadata JSON fails closed and can retry', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalClone = globalThis.structuredClone;
+  let calls = 0;
+  try {
+    globalThis.structuredClone = () => { throw new Error('clone unavailable'); };
+    globalThis.fetch = async () => {
+      calls += 1;
+      return jsonResponse([[POINT, 1n, 2, 0, 1, 10]]);
+    };
+    const provider = createWorkspaceProviders({ metadataCacheTtlMs: 0 }).binance();
+    const url = 'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=1';
+    await assert.rejects(provider.json(url), /Provider JSON payload could not be safely cloned/);
+    await assert.rejects(provider.json(url), /Provider JSON payload could not be safely cloned/);
+    assert.equal(calls, 2, 'a failed payload clone must clear in-flight state for retry');
+  } finally {
+    globalThis.structuredClone = originalClone;
     globalThis.fetch = originalFetch;
   }
 });
@@ -170,6 +334,29 @@ test('Hyperliquid shares semantically identical concurrent POST bodies', async (
     assert.equal(calls.length, 1, 'equivalent bodies should share one Hyperliquid POST');
     release();
     assert.deepEqual(await Promise.all([first, second]), [[{ ok: true }], [{ ok: true }]]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('concurrent Hyperliquid JSON responses are isolated per consumer', async () => {
+  const originalFetch = globalThis.fetch;
+  let release;
+  try {
+    globalThis.fetch = async () => {
+      await new Promise((resolve) => { release = resolve; });
+      return jsonResponse({ universe: [{ name: 'BTC', szDecimals: 5 }], nested: { active: true } });
+    };
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 100 }).hyperliquid();
+    const first = provider.post({ type: 'meta' });
+    const second = provider.post({ type: 'meta' });
+    release();
+    const [a, b] = await Promise.all([first, second]);
+    assert.notStrictEqual(a, b);
+    a.universe[0].name = 'MUTATED';
+    a.nested.active = false;
+    assert.equal(b.universe[0].name, 'BTC');
+    assert.equal(b.nested.active, true);
   } finally {
     globalThis.fetch = originalFetch;
   }

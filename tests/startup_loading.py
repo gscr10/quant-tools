@@ -77,6 +77,8 @@ async def sample(browser, args, url, number):
         await context.add_init_script("Object.defineProperty(window,'localStorage',{get(){throw new DOMException('test restriction','SecurityError')}})")
     elif args.storage_fault=='methods':
         await context.add_init_script("for(const name of ['getItem','setItem','removeItem'])Storage.prototype[name]=()=>{throw new DOMException('test restriction','SecurityError')}")
+    elif args.storage_fault=='quota':
+        await context.add_init_script("Storage.prototype.setItem=function(){throw new DOMException('quota exceeded','QuotaExceededError')}")
     network=[]; errors=[]; resources=[]; started=time.perf_counter()
     async def route_handler(route):
         request=route.request; parsed=urlparse(request.url)
@@ -153,7 +155,7 @@ def main():
     parser.add_argument('--symbol',default='');parser.add_argument('--bars',type=int,default=2000)
     parser.add_argument('--index-delay',type=float,default=0.2);parser.add_argument('--bar-delay',type=float,default=0.3)
     parser.add_argument('--browser',choices=['chromium','firefox','webkit'],default='chromium')
-    parser.add_argument('--storage-fault',choices=['none','getter','methods'],default='none')
+    parser.add_argument('--storage-fault',choices=['none','getter','methods','quota'],default='none')
     parser.add_argument('--preview',action='store_true');parser.add_argument('--url')
     parser.add_argument('--output',type=Path,default=ROOT/'audit-evidence/startup-loading')
     args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)

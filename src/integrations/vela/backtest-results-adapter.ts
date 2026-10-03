@@ -14,6 +14,7 @@ import type {
   WorkspaceScriptRun,
 } from '@luxalgo/vela/workspace';
 import { validateAuditLedgerSnapshot } from '@luxalgo/vela-pinets/audit';
+import { WORKSPACE_HISTORY_BARS } from '../../config/workspace-options.ts';
 import { observedWorkspaceHistory, requestedHistoryMarketKey, subscribeWorkspaceHistoryRequests } from './workspace-history-observer.ts';
 import {
   BACKTEST_CONTEXT_SELECT,
@@ -268,7 +269,14 @@ export class VelaBacktestResultsAdapter {
           // never the truncated ledger's loaded count. Load events own reset.
           const token = {};
           const promise = (async () => {
-            await binding.chart.setMarket({ bars: binding.chart.market.bars ?? entry.historyTarget ?? 500, data: [] });
+            // A retry must preserve the workspace's configured history depth.
+            // Some Vela cells omit `market.bars` while an aborted initial load
+            // is being rebound; falling back to Vela's generic 500-bar default
+            // would silently downgrade the 2000-bar startup contract.
+            await binding.chart.setMarket({
+              bars: binding.chart.market.bars ?? entry.historyTarget ?? WORKSPACE_HISTORY_BARS,
+              data: [],
+            });
             if (this.isBindingCurrent(binding) && this.historyRetries.get(binding)?.token === token) {
               await binding.chart.historyComplete();
             }

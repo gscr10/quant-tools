@@ -17,7 +17,11 @@ const json = process.argv.includes('--json');
 // Budgets are deliberately only ~7–10% above the current verified output:
 // they catch accidental eager imports without blocking harmless hash changes.
 const budgets = {
-  main: { raw: 2_450_000, gzip: 720_000 },
+  // Current production output is ~1.768 MB raw / 477 KB gzip after Pine
+  // Editor became a first-open chunk. Keep roughly 10% headroom so a future
+  // optional import cannot silently pull CodeMirror or another large feature
+  // back into the initial graph.
+  main: { raw: 1_950_000, gzip: 520_000 },
   worker: { raw: 900_000, gzip: 240_000 },
   highcharts: { raw: 450_000, gzip: 160_000 },
 };

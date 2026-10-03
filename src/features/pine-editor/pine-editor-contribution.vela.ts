@@ -1,5 +1,16 @@
 import { registerSidePanel } from '@luxalgo/vela/plugin';
-import type { PineEditorController } from './pine-editor-controller.ts';
+
+/** The side-panel contract kept deliberately structural so CodeMirror can be
+ * loaded only when the user opens Pine Editor. */
+export interface PineEditorController {
+  destroy(): void;
+  openSavedScript(name: string, source: string): void;
+  openIndicatorSource(name: string, source: string): void;
+  openNewScript(): void;
+  detachDeletedScript(name: string): void;
+  log(level: 'info' | 'ok' | 'error', message: string): void;
+  reportError(error: Error, source?: string): void;
+}
 
 export function registerPineEditorContribution(
   mount: (body: HTMLElement, headerSlot: HTMLElement) => PineEditorController,
