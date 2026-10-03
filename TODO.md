@@ -12,6 +12,7 @@
 - [ ] GitHub Actions `37134927725` 的 120 秒尝试在三次有限重试后仍无法访问 Binance；测试已正确 fail-closed，需更换可访问交易所 API 的 runner/网络。
 - [x] 本机真实网络 120 秒连续订阅与恢复：Binance 61 callbacks/最大间隔 2,091ms，Hyperliquid 98 callbacks/最大间隔 6,022ms，offline→online 均恢复；仅作为单机短时证据，小时级和跨区域 Final Gate 仍开放。
 - [x] 本机真实网络 10 轮连续历史/live 与恢复（2026-10-03）：Binance Spot/Futures、Hyperliquid 每轮均成功，10/10 轮 offline→online 恢复；仅作为增强的单机证据，小时级和跨区域 Final Gate 仍开放。
+- [ ] 远端 workflow `37144883619` 的 local-gates 已通过，但 provider-soak 在首次 Binance 请求处 `Failed to fetch`，未形成连续订阅证据；需可访问交易所 API 的 runner/网络后重试。
 - [x] 断网恢复 smoke 增加 `offlineBars=0` 断言，确保 offline 窗口不接受旧/迟到行情；新增恢复合同回归测试。
 
 ## 2026-10-02 首次加载优化分支复核（当前状态）
