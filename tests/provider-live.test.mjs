@@ -551,3 +551,170 @@ test('repeated live subscription cycles do not retain wrappers or sockets', () =
     globalThis.WebSocket = originalWebSocket;
   }
 });
+
+test('offline/online tears down half-open sockets and resumes without stale bars', () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const originalAdd = globalThis.addEventListener;
+  const originalRemove = globalThis.removeEventListener;
+  const sockets = [];
+  const listeners = new Map();
+  const bars = [];
+  class FakeWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.sent = [];
+      this.closed = false;
+      sockets.push(this);
+    }
+    send(message) { this.sent.push(message); }
+    close() { this.closed = true; }
+  }
+  const emit = (type) => listeners.get(type)?.();
+  try {
+    globalThis.WebSocket = FakeWebSocket;
+    globalThis.addEventListener = (type, listener) => listeners.set(type, listener);
+    globalThis.removeEventListener = (type, listener) => {
+      if (listeners.get(type) === listener) listeners.delete(type);
+    };
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 1_000 }).hyperliquid();
+    const unsubscribe = provider.subscribe('BTC', '15', (bar) => bars.push(bar));
+    assert.equal(sockets.length, 1);
+    for (let cycle = 0; cycle < 50; cycle += 1) {
+      const stale = sockets.at(-1);
+      emit('offline');
+      assert.equal(stale.closed, true);
+
+      // A delayed message from the old, half-open connection must be ignored.
+      stale.onmessage?.({ data: JSON.stringify({
+        channel: 'candle', data: { s: 'BTC', t: cycle + 1, o: '1', h: '2', l: '1', c: '2', v: '1' },
+      }) });
+      assert.equal(bars.length, cycle === 0 ? 0 : cycle);
+
+      emit('online');
+      assert.equal(sockets.length, cycle + 2);
+      const resumed = sockets.at(-1);
+      resumed.onmessage?.({ data: JSON.stringify({
+        channel: 'candle', data: { s: 'BTC', t: cycle + 100, o: '2', h: '3', l: '2', c: '3', v: '4' },
+      }) });
+      assert.equal(bars.length, cycle + 1);
+      assert.equal(bars.at(-1).time, cycle + 100);
+    }
+    unsubscribe();
+    assert.equal(sockets.at(-1).closed, true);
+    emit('online');
+    assert.equal(sockets.length, 51);
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+    if (originalAdd) globalThis.addEventListener = originalAdd;
+    else delete globalThis.addEventListener;
+    if (originalRemove) globalThis.removeEventListener = originalRemove;
+    else delete globalThis.removeEventListener;
+  }
+});
+
+test('100 offline/online cycles never revive a stale socket or leak the lease', () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const originalAdd = globalThis.addEventListener;
+  const originalRemove = globalThis.removeEventListener;
+  const sockets = [];
+  const listeners = new Map();
+  const bars = [];
+  class FakeWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.closed = false;
+      sockets.push(this);
+    }
+    send() {}
+    close() { this.closed = true; }
+  }
+  const emit = (type) => listeners.get(type)?.();
+  try {
+    globalThis.WebSocket = FakeWebSocket;
+    globalThis.addEventListener = (type, listener) => listeners.set(type, listener);
+    globalThis.removeEventListener = (type, listener) => {
+      if (listeners.get(type) === listener) listeners.delete(type);
+    };
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 1_000 }).hyperliquid();
+    const unsubscribe = provider.subscribe('BTC', '15', (bar) => bars.push(bar));
+    sockets[0].onopen?.({ type: 'open' });
+    for (let cycle = 0; cycle < 100; cycle += 1) {
+      const previous = sockets.at(-1);
+      emit('offline');
+      assert.equal(previous.closed, true);
+      previous.onmessage?.({ data: JSON.stringify({
+        channel: 'candle', data: { s: 'BTC', t: cycle, o: '1', h: '2', l: '1', c: '2', v: '1' },
+      }) });
+      emit('online');
+      const current = sockets.at(-1);
+      assert.notEqual(current, previous);
+      current.onopen?.({ type: 'open' });
+      current.onmessage?.({ data: JSON.stringify({
+        channel: 'candle', data: { s: 'BTC', t: cycle + 1000, o: '2', h: '3', l: '2', c: '3', v: '1' },
+      }) });
+    }
+    assert.equal(sockets.length, 101);
+    assert.equal(bars.length, 100);
+    assert.equal(bars.at(-1).time, 1099);
+    unsubscribe();
+    assert.equal(sockets.at(-1).closed, true);
+    emit('online');
+    assert.equal(sockets.length, 101);
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+    if (originalAdd) globalThis.addEventListener = originalAdd;
+    else delete globalThis.addEventListener;
+    if (originalRemove) globalThis.removeEventListener = originalRemove;
+    else delete globalThis.removeEventListener;
+  }
+});
+
+test('online recovery retries after a failed socket constructor', () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const originalAdd = globalThis.addEventListener;
+  const originalRemove = globalThis.removeEventListener;
+  const sockets = [];
+  const listeners = new Map();
+  let attempts = 0;
+  class FakeWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.closed = false;
+      attempts += 1;
+      if (attempts === 2) throw new Error('synthetic reconnect failure');
+      sockets.push(this);
+    }
+    send() {}
+    close() { this.closed = true; }
+  }
+  const emit = (type) => listeners.get(type)?.();
+  try {
+    globalThis.WebSocket = FakeWebSocket;
+    globalThis.addEventListener = (type, listener) => listeners.set(type, listener);
+    globalThis.removeEventListener = (type, listener) => {
+      if (listeners.get(type) === listener) listeners.delete(type);
+    };
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 1_000 }).hyperliquid();
+    const unsubscribe = provider.subscribe('BTC', '15', () => {});
+    assert.equal(sockets.length, 1);
+    emit('offline');
+    assert.equal(sockets[0].closed, true);
+
+    // First online attempt fails synchronously; the guard must retain the
+    // paused state and permit a later online event to retry.
+    emit('online');
+    assert.equal(attempts, 2);
+    assert.equal(sockets.length, 1);
+    emit('online');
+    assert.equal(attempts, 3);
+    assert.equal(sockets.length, 2);
+    unsubscribe();
+    assert.equal(sockets[1].closed, true);
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+    if (originalAdd) globalThis.addEventListener = originalAdd;
+    else delete globalThis.addEventListener;
+    if (originalRemove) globalThis.removeEventListener = originalRemove;
+    else delete globalThis.removeEventListener;
+  }
+});

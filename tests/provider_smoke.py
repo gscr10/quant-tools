@@ -82,6 +82,8 @@ def main() -> int:
             "--port",
             str(PORT),
             "--strictPort",
+            "--config",
+            "tests/vite-provider.config.ts",
         ],
         cwd=ROOT,
         stdout=subprocess.PIPE,

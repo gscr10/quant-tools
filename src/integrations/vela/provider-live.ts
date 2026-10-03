@@ -79,49 +79,122 @@ export function guardProviderSubscription<T extends DataProvider>(
       let active = true;
       let stopped = false;
 
-      const guardedCallback = (bar: OHLCV): void => {
-        if (!active) return;
-        onBar(bar);
+      // A browser can go offline while a WebSocket remains OPEN (or while a
+      // proxy silently blackholes it).  The upstream providers reconnect on
+      // `close`, but cannot observe that half-open state.  Tear down the
+      // current lease on `offline` and create a fresh upstream subscription
+      // on `online`.  Each start receives a generation token so a late event
+      // from the old socket cannot publish into the newly resumed stream.
+      let generation = 0;
+      let currentUnsubscribe: (() => void) | undefined;
+      let currentRelease: (() => void) | undefined;
+      let pausedOffline = false;
+
+      const stopCurrent = (): void => {
+        generation += 1;
+        const unsubscribe = currentUnsubscribe;
+        const release = currentRelease;
+        currentUnsubscribe = undefined;
+        currentRelease = undefined;
+        try {
+          unsubscribe?.();
+        } catch {
+          // Provider teardown is best effort; generation invalidation above
+          // still makes any late callback harmless.
+        } finally {
+          release?.();
+        }
       };
 
-      let upstreamUnsubscribe: (() => void) | undefined;
-      let releaseWebSocketGuard: (() => void) | undefined;
-      try {
-        // Hyperliquid creates its WebSocket synchronously.  A short-lived
-        // constructor seam lets us wrap `onopen` before the upstream method
-        // assigns it, so an onopen event racing unsubscribe cannot recreate
-        // the provider's ping interval. Binance futures has the same shape;
-        // spot's async endpoint resolution is covered by guardedCallback and
-        // its own `closed` check after the await.
+      const startCurrent = (): void => {
+        if (!active || stopped || pausedOffline) return;
+        const token = ++generation;
+        const guardedCallback = (bar: OHLCV): void => {
+          if (!active || stopped || token !== generation) return;
+          onBar(bar);
+        };
         const invoke = () => upstreamSubscribe(
           ticker,
           timeframe,
           guardedCallback,
           options,
         );
-        if (kind === 'hyperliquid' || kind === 'binance') {
-          const guardedSubscription = withWebSocketOpenGuard(invoke, () => active);
-          upstreamUnsubscribe = guardedSubscription.value;
-          let releaseRequested = false;
-          let released = false;
-          const releaseNow = (): void => {
-            if (released) return;
-            released = true;
-            pendingSpotWsReleases.delete(releaseNow);
-            guardedSubscription.release();
-          };
-          releaseWebSocketGuard = () => {
-            if (releaseRequested) return;
-            releaseRequested = true;
-            if (pendingSpotWs === 0) releaseNow();
-            else pendingSpotWsReleases.add(releaseNow);
-          };
-        } else {
-          upstreamUnsubscribe = invoke();
+        let upstreamUnsubscribe: (() => void) | undefined;
+        let releaseWebSocketGuard: (() => void) | undefined;
+        try {
+          // Hyperliquid creates its WebSocket synchronously. A short-lived
+          // constructor seam lets us wrap `onopen` before the upstream method
+          // assigns it; Binance spot's awaited endpoint remains covered by
+          // the pending constructor lease below.
+          if (kind === 'hyperliquid' || kind === 'binance') {
+            const guardedSubscription = withWebSocketOpenGuard(invoke, () => (
+              active && !stopped && token === generation && !pausedOffline
+            ));
+            upstreamUnsubscribe = guardedSubscription.value;
+            let releaseRequested = false;
+            let released = false;
+            const releaseNow = (): void => {
+              if (released) return;
+              released = true;
+              pendingSpotWsReleases.delete(releaseNow);
+              guardedSubscription.release();
+            };
+            releaseWebSocketGuard = () => {
+              if (releaseRequested) return;
+              releaseRequested = true;
+              if (pendingSpotWs === 0) releaseNow();
+              else pendingSpotWsReleases.add(releaseNow);
+            };
+          } else {
+            upstreamUnsubscribe = invoke();
+          }
+        } catch (error) {
+          releaseWebSocketGuard?.();
+          if (token === generation) generation += 1;
+          throw error;
         }
+        // A synchronous offline event may have raced the provider call. Do
+        // not retain a just-created socket in that case.
+        if (!active || stopped || token !== generation || pausedOffline) {
+          try { upstreamUnsubscribe?.(); } catch { /* best effort */ }
+          releaseWebSocketGuard?.();
+          return;
+        }
+        currentUnsubscribe = upstreamUnsubscribe;
+        currentRelease = releaseWebSocketGuard;
+      };
+
+      const eventTarget = globalThis as typeof globalThis & {
+        addEventListener?: (type: string, listener: () => void) => void;
+        removeEventListener?: (type: string, listener: () => void) => void;
+      };
+      const onOffline = (): void => {
+        if (!active || stopped || pausedOffline) return;
+        pausedOffline = true;
+        stopCurrent();
+      };
+      const onOnline = (): void => {
+        if (!active || stopped || !pausedOffline) return;
+        // startCurrent intentionally refuses to create a lease while paused;
+        // clear the gate for this attempt and restore it only if construction
+        // fails, allowing a later online event to retry.
+        pausedOffline = false;
+        try {
+          startCurrent();
+        } catch {
+          // Retain pausedOffline=true so a subsequent online notification can
+          // retry. No error escapes the browser event handler.
+          pausedOffline = true;
+        }
+      };
+      eventTarget.addEventListener?.('offline', onOffline);
+      eventTarget.addEventListener?.('online', onOnline);
+      try {
+        startCurrent();
       } catch (error) {
         active = false;
-        releaseWebSocketGuard?.();
+        eventTarget.removeEventListener?.('offline', onOffline);
+        eventTarget.removeEventListener?.('online', onOnline);
         throw error;
       }
 
@@ -132,20 +205,9 @@ export function guardProviderSubscription<T extends DataProvider>(
         // provider is already resolving a REST request, its late callback is
         // then harmless even if its own stopped check is incomplete.
         active = false;
-        try {
-          upstreamUnsubscribe?.();
-        } catch {
-          // Unsubscribe is a best-effort lifecycle operation.  Do not let a
-          // provider teardown error escape and break the workspace destroy
-          // stack; the callback guard remains effective either way.
-        } finally {
-          // Keep the constructor guard installed until the provider's own
-          // unsubscribe has cancelled asynchronous first-connect/reconnect
-          // work.  Releasing it at the end of subscribe() misses Binance's
-          // awaited spot endpoint and every later Vela reconnect socket.
-          releaseWebSocketGuard?.();
-          releaseWebSocketGuard = undefined;
-        }
+        eventTarget.removeEventListener?.('offline', onOffline);
+        eventTarget.removeEventListener?.('online', onOnline);
+        stopCurrent();
       };
     },
     writable: true,
