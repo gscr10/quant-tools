@@ -525,7 +525,31 @@ def run_gate(update: bool) -> dict[str, object]:
                 page = context.new_page()
                 response = page.goto(BASE_URL, wait_until="domcontentloaded", timeout=30_000)
                 assert response is not None and response.status == 200
-                page.wait_for_function("window.__btcFixture?.ready === true", timeout=60_000)
+                try:
+                    # CI runners can spend a full minute compiling the first
+                    # Vela/PineTS worker after a clean checkout. Keep the
+                    # visual contract deterministic, but allow that cold
+                    # startup without turning a transient readiness delay
+                    # into a misleading pixel failure.
+                    page.wait_for_function(
+                        "window.__btcFixture?.ready === true",
+                        timeout=int(os.environ.get("QUANT_VISUAL_READY_TIMEOUT", "120000")),
+                    )
+                except Exception as error:
+                    diagnostics = page.evaluate(
+                        """() => ({
+                          href: location.href,
+                          title: document.title,
+                          bodyText: document.body?.innerText?.slice(0, 1000) ?? '',
+                          fixture: window.__btcFixture ? {
+                            ready: window.__btcFixture.ready,
+                            metadata: window.__btcFixture.metadata,
+                          } : null,
+                        })"""
+                    )
+                    raise AssertionError(
+                        f"BTC fixture did not become ready: {diagnostics}"
+                    ) from error
                 # The reference keeps the Dock at 1024px, but replaces it
                 # with one compact chart-area Backtest entry at 1023px and
                 # below. Exercise the same public entry point in the compact
