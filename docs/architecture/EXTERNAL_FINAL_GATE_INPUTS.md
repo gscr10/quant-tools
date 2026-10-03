@@ -28,6 +28,7 @@ npm run test:e2e:deployment
 需要提供：
 
 - 可持续运行至少 2 小时的浏览器/服务器环境
+- GitHub Actions 手动触发 `Final gates` workflow 的 `provider-soak` job 可作为 10 轮真实网络采样入口（它仍不是 2 小时断网证明）
 - 可控断网、代理黑洞或网络策略注入
 - Binance Spot/Futures 与 Hyperliquid 的实际连接日志
 
