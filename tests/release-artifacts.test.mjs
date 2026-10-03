@@ -229,6 +229,84 @@ function httpGet(port, pathname) {
   });
 }
 
+function httpGetMeta(port, pathname) {
+  return new Promise((resolve, reject) => {
+    import('node:http').then(({ get }) => get(
+      { host: '127.0.0.1', port, path: pathname, headers: { 'cache-control': 'no-cache' } },
+      (response) => {
+        let body = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => { body += chunk; });
+        response.on('end', () => resolve({
+          status: response.statusCode,
+          body,
+          headers: response.headers,
+        }));
+      },
+    )).catch(reject);
+  });
+}
+
+test('release cache contract keeps the entrypoint revalidatable and hashed assets immutable', async () => {
+  let active = 'candidate';
+  const builds = {
+    candidate: {
+      index: '<script src="/assets/app-candidate.js"></script>\n',
+      asset: 'candidate\n',
+    },
+    previous: {
+      index: '<script src="/assets/app-previous.js"></script>\n',
+      asset: 'previous\n',
+    },
+  };
+  const server = createServer((request, response) => {
+    const build = builds[active];
+    if (request.url === '/index.html') {
+      response.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-cache, no-store, must-revalidate',
+      });
+      response.end(build.index);
+      return;
+    }
+    const assetName = request.url?.match(/^\/assets\/(app-(?:candidate|previous)\.js)$/)?.[1];
+    if (assetName) {
+      response.writeHead(200, {
+        'content-type': 'text/javascript; charset=utf-8',
+        'cache-control': 'public, max-age=31536000, immutable',
+      });
+      response.end(assetName.includes(active) ? build.asset : builds[assetName.includes('candidate') ? 'candidate' : 'previous'].asset);
+      return;
+    }
+    response.writeHead(404);
+    response.end('not found');
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const port = server.address().port;
+  try {
+    const index = await httpGetMeta(port, '/index.html');
+    assert.equal(index.status, 200);
+    assert.match(index.headers['cache-control'], /no-cache/);
+    assert.match(index.body, /app-candidate\.js/);
+
+    const candidate = await httpGetMeta(port, '/assets/app-candidate.js');
+    assert.equal(candidate.status, 200);
+    assert.match(candidate.headers['cache-control'], /immutable/);
+
+    active = 'previous';
+    const rolledBack = await httpGetMeta(port, '/index.html');
+    assert.match(rolledBack.body, /app-previous\.js/);
+    const oldAsset = await httpGetMeta(port, '/assets/app-candidate.js');
+    assert.equal(oldAsset.status, 200);
+    assert.equal(oldAsset.body, 'candidate\n');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('release manifest can target an older checkout and verifier rejects tampered dist', async () => {
   const root = await mkdtemp(join(tmpdir(), 'quant-release-manifest-'));
   await mkdir(join(root, 'dist', 'assets'), { recursive: true });

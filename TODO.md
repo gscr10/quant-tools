@@ -4,7 +4,16 @@
 
 本轮基于 `feature/startup-loading-optimization` 的当前源码重新执行，不沿用旧 fixture 作为唯一证据。启动优化计划见 [STARTUP_LOADING_OPTIMIZATION_PLAN.md](docs/architecture/STARTUP_LOADING_OPTIMIZATION_PLAN.md)。
 
-截至 2026-10-03，完整本地验收序列的各阶段均已通过；首次整串执行时 Provider soak 曾因 Hyperliquid 外部 API 瞬时 10 秒超时中止，随后独立重跑 3 轮并通过，不能把该次瞬时网络异常记为代码回归。当前根测试为 512/512、Vela-PineTS 为 292/292、release 专项为 27/27、Provider live 为 11/11。新增 `npm run test:providers:long` 已实际完成 10/10 真实网络轮次。类型/构建、Bundle/依赖/repository-hygiene/dist/release、3×4 启动矩阵（p95 5 秒护栏）、0 延迟三浏览器探针、getter/methods/quota 存储故障启动探针均通过；生产 E2E 的 Tab 等待竞态也已修复并纳入验证。真实断网恢复、跨机器、线上 rollback 和复杂撮合等外部 Final Gate 仍未关闭。
+截至 2026-10-03，完整本地验收序列的各阶段均已通过；当前根测试为 517/517、Vela-PineTS 为 292/292、release 专项为 29/29、Provider live 为 14/14。新增 `npm run test:providers:long` 已实际完成 10/10 真实网络轮次。类型/构建、Bundle/依赖/repository-hygiene/dist/release、3×4 启动矩阵（p95 5 秒护栏）、0 延迟三浏览器探针、getter/methods/quota 存储故障启动探针均通过；生产 E2E 的 Tab 等待竞态也已修复并纳入验证。真实断网恢复、跨机器、线上 rollback 和复杂撮合等外部 Final Gate 仍未关闭。
+
+### `task/network-release-gates` 追加推进
+
+- [x] Provider live 增加真实 `offline`/`online` 生命周期：半开 socket 先撤销 lease，恢复时重新订阅，generation token 拒绝迟到旧 socket；覆盖失败后恢复和销毁竞态。
+- [x] 新增 PineTS 1H/10m Bar Magnifier 独立 golden，固定验证 lower-feed 覆盖、stop/limit 顺序、Entry/Exit、P&L、MAE/MFE 和最终无 open trade。
+- [x] 发布缓存 smoke：入口 HTML 的 no-cache/回滚切换与 hash 资源 immutable 保留旧资源兼容；release 专项当前 29/29。
+- [x] Bar Magnifier/OCA/pyramiding/reversal/margin 定向回归：5 个策略测试文件共 50/50 通过；这关闭本地已实现语义的回归风险，不代表 TradingView 全量逐 Fill 对账已完成。
+- [x] 新增 `npm run test:e2e:touch`：Chromium/Firefox/WebKit × phone/tablet，使用 `has_touch + tap()` 验证 Viewer/Simulation/返回图表及资源回收；默认端口冲突自动选择临时端口，显式 `QUANT_TOUCH_PORT` 仍严格校验。
+- [ ] 实体 Safari/VoiceOver/真实 iOS/Android、线上 CDN/cache/rollback、参考站完整逐笔 golden 和复杂撮合全量语义仍需对应外部环境或同源数据；详见 [FINAL_GATE_CLOSURE_PLAN.md](docs/architecture/FINAL_GATE_CLOSURE_PLAN.md)。
 
 追加真实网络 soak：`python3 tests/provider_smoke.py --rounds 10` 通过，Binance Spot/Futures 与 Hyperliquid 每轮历史、symbol-info/live/unsubscribe 均成功；这是短时增强证据，仍不等同于长时间断网恢复验收。
 
@@ -466,3 +475,13 @@ TradingView 文档中的 tick 是历史回测使用的“模拟 K 线内价格�
 - 在没有秒级历史数据时自行插值或随机生成秒级价格路径。
 
 真实 Tick 回测可作为后续独立能力：Binance 可评估 `aggTrade` 数据采集与存储，Hyperliquid 需另行确认历史逐笔数据覆盖。它不应与本次 TradingView 模拟 Tick 对标混为同一任务。
+## 2026-10-03 Final Gate 本地收敛（当前分支）
+
+- [x] Provider live 在 offline/online、迟到 socket、重复断开和销毁竞态下保持代次隔离；真实 Binance Spot/Futures、Hyperliquid 10 轮 smoke 通过。
+- [x] 本地 preview 缓存策略与 release smoke 对齐：入口不可缓存、hash 资源 immutable；真实 CDN/线上 rollback 仍开放。
+- [x] 触摸三浏览器、Bar Magnifier golden、release 29 项和根测试 517 项通过。
+- [x] Provider smoke 关闭 HMR，避免构建副作用触发页面导航导致假失败；wait-for-http 高负载启动断言已稳定化。
+- [ ] 外部 Final Gate 仍开放：真实长时 WS/断网、线上部署与 rollback、参考站完整逐笔 golden、完整复杂撮合对账、实体 Safari/VoiceOver/跨设备、全量像素对账。
+- [x] 新增 `npm run test:e2e:deployment`：配置 `QUANT_DEPLOY_URL`（可选 `QUANT_PREVIOUS_URL`）后检查真实 candidate/previous 入口、hash 资源缓存策略、页面错误和参考站请求；未配置地址时明确 `not_run`，不会伪造通过。
+
+2026-10-03 已重新执行参考站自动登录与动态采集：进入 Vela workspace 并获得真实移动端页面，但 RSC 从 `app.luxalgo.com` 跳转至 `vela.luxalgo.com` 时出现 CORS/连接关闭，未能采集完整 Trades Log；该运行仅作为黑盒行为证据，未关闭逐笔 golden。

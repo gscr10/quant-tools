@@ -4,6 +4,12 @@
 
 状态：执行中。默认历史、渐进加载、Worker 懒加载、存储降级、Provider 去重/短 TTL 和主要回归门禁已落地；D-01 本地动态边界已完成复核，但长时 Provider、真实制品 rollback 及完整线上验收仍未关闭。本文件同时记录执行状态，不替代独立性能报告。
 
+后续 Final Gate 收敛工作在 `task/network-release-gates` 分支推进，细分证据见
+[FINAL_GATE_CLOSURE_PLAN.md](FINAL_GATE_CLOSURE_PLAN.md)。本轮已新增 offline/online
+WebSocket lease 恢复、1H/10m Bar Magnifier golden 和触摸语义门禁；实体 Safari、VoiceOver、真实
+设备、线上 CDN/cache/rollback、参考站完整逐笔 golden 仍必须等待对应外部环境或同源数据，不以本地
+模拟结果代替。
+
 ### 2026-10-02 当前工作树追加修复
 
 - 启动矩阵新增可选 `--max-p95` 与 `--max-failures` 失败护栏；`verify:startup:full` 现在执行三样本、每个单元首绘 p95 5 秒上限，并纳入离线 smoke、严格性能和视觉/a11y 回归，避免“只绘制成功但性能已回退”仍返回绿色。

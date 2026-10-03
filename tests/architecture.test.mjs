@@ -135,7 +135,7 @@ test('workspace defaults, toolbar composition, providers, and dependency version
   );
   assert.equal(
     manifest.scripts['test:release'],
-    'node --test tests/release-artifacts.test.mjs tests/fork-build-lock.test.mjs tests/fork-build-recovery.test.mjs',
+    'node --test tests/release-artifacts.test.mjs tests/release-cache-rollback.test.mjs tests/fork-build-lock.test.mjs tests/fork-build-recovery.test.mjs',
     'release verification must have one reproducible npm entry point',
   );
   assert.equal(
