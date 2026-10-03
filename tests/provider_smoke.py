@@ -53,7 +53,7 @@ def wait_for_recovery_bar(page, minimum: int, timeout_ms: int = 90_000) -> list[
     raise TimeoutError(f"provider recovery did not deliver bar {minimum} within {timeout_ms}ms")
 
 
-def run_smoke(rounds: int = 1, recovery: bool = False) -> dict[str, object]:
+def run_smoke(rounds: int = 1, recovery: bool = False, duration_seconds: float = 0) -> dict[str, object]:
     executable = os.environ.get("CHROMIUM_EXECUTABLE")
     if not executable:
         mac_chromium = "/Applications/Chromium.app/Contents/MacOS/Chromium"
@@ -72,7 +72,15 @@ def run_smoke(rounds: int = 1, recovery: bool = False) -> dict[str, object]:
         response = page.goto(URL, wait_until="domcontentloaded", timeout=30_000)
         assert response is not None and response.status == 200
         page.wait_for_function("window.providerSmokeReady === true")
-        result = page.evaluate("rounds => window.runProviderSmoke(rounds)", rounds)
+        if duration_seconds:
+            result = page.evaluate(
+                "durationMs => window.runProviderSoak(durationMs)",
+                round(duration_seconds * 1000),
+            )
+            result["roundsCompleted"] = 1
+            result["durationSeconds"] = duration_seconds
+        else:
+            result = page.evaluate("rounds => window.runProviderSmoke(rounds)", rounds)
         if recovery:
             recovery_results = {}
             for provider_name in ("binance", "hyperliquid"):
@@ -142,14 +150,12 @@ def main() -> int:
     try:
         wait_for_server(server)
         if args.duration_seconds:
+            # A duration gate is one continuous browser/page lease. Repeating
+            # short smoke processes would only test cold-start connections and
+            # could never prove that a mounted subscription survives the soak.
             started = time.monotonic()
-            completed = 0
-            result = None
-            while completed == 0 or time.monotonic() - started < args.duration_seconds:
-                result = run_smoke(1)
-                completed += 1
-            assert result is not None
-            result["roundsCompleted"] = completed
+            result = run_smoke(1, duration_seconds=args.duration_seconds)
+            result["roundsCompleted"] = 1
             result["durationSeconds"] = round(time.monotonic() - started, 3)
         else:
             result = run_smoke(args.rounds, args.recovery)
