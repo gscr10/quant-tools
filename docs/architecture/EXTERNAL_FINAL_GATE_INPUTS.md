@@ -54,11 +54,12 @@ npm run test:reference:golden
 
 Comparator 还会在输入阶段拒绝以下不完整证据：缺少或重复的 Trade #、双方都省略的字段、非有限数值，以及无法归一化的数字。未平仓交易的 Exit 字段可以显式为 `null`，但不能省略；方向大小写和数字字符串会按规范归一化。这样可以避免把截断导出或字段缺失误报为 parity。
 
-## 4. Safari / VoiceOver / 真实触摸设备
+## 4. VoiceOver / 真实触摸设备
+
+Safari 专项按用户要求移出本阶段验收范围，不标为通过。VoiceOver 和真实设备触摸仍保留。
 
 需要提供：
 
-- 实体 macOS Safari + safaridriver 授权
 - VoiceOver 开启的 macOS/iOS 设备
 - 至少一台真实 iOS 或 Android 触摸设备
 
@@ -83,4 +84,10 @@ Comparator 还会在输入阶段拒绝以下不完整证据：缺少或重复的
 - 手动 workflow `37133498353`（600 秒）和 `37134927725`（120 秒）：在 Binance 初始请求处收到 `TypeError: Failed to fetch`；有限重试后仍失败，未进入连续订阅阶段，因此不能计为长时通过。
 - 这些结果证明门禁能正确暴露上游网络不可用，也证明短时恢复路径可运行；不证明小时级 WebSocket 稳定性、跨区域代理黑洞或持续断网恢复。后续长时验证应在可访问交易所 API 的 runner/网络条件下执行并保留完整输出。
 - 手动 workflow `37150267544`（2026-10-03，`provider_duration_seconds=7200`）的 local-gates 通过，但 provider-soak 在 Binance 初始请求处经 3 次重试仍为 `Failed to fetch`，deployment 因未配置 `QUANT_DEPLOY_URL` 保持 `not_run`；该运行不能关闭任何外部 Final Gate。
-- 本机随后尝试 7200 秒连续 lease soak，因上游没有 live callback 按探针失败关闭；该结果也不计为通过，避免把无行情运行误报为长时稳定性证据。
+- 先前本机记录不足以证明 7200 秒连续 lease soak 已完整执行；短时探针的无 callback 结果不能归因为两小时运行失败。小时级验证仍未完成。
+
+## 7. 本机重新验证（2026-10-05）
+
+- `python3 tests/provider_smoke.py --duration-seconds 120 --recovery` 实际退出码为 0，总耗时 141.703 秒；同一页面连续订阅 120 秒。Binance 收到 61 次回调，最大间隔 7,566ms；Hyperliquid 收到 135 次回调，最大间隔 8,469ms。两者断网期间回调数为 0，恢复后均收到新行情。Futures 历史与 metadata 检查通过；此结果不证明 Futures 连续 WebSocket 稳定性。
+- 已再次启动 `--duration-seconds 7200 --recovery`，运行结果尚未产生，不能计为通过。该脚本的断网恢复阶段位于连续订阅之后，不能替代两小时内多次网络黑洞及资源泄漏验收。
+- 本机真实 `safaridriver` 创建 Safari session 返回 `session not created`：必须在 Safari Settings 的 Developer 部分启用 `Allow remote automation`。Safari 已安装，但此次真实浏览器自动化尚未执行；没有更改用户系统授权设置。
