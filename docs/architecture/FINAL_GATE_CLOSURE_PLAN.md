@@ -44,7 +44,7 @@ npm run test:e2e:deployment
 - 实际部署槽位、CDN/browser cache、真实 rollback 与缓存清理；
 - 参考站同一行情和策略的完整逐笔 Entry/Exit/Size/P&L/MFE/MAE golden；
 - TradingView 完整复杂撮合语义（partial fill、pyramiding、reversal、OCA、margin/FIFO 等）；
-- 实体 Safari、VoiceOver、真实 iOS/Android 和跨设备触摸；
+- VoiceOver、真实 iOS/Android 和跨设备触摸（Safari 专项按用户要求移出本阶段，不算验收通过）；
 - 参考站全量像素级对账。
 
 这些项目在没有对应环境和同源数据时保持 `PARTIAL`，不得用“测试通过”替代缺失证据。
@@ -75,4 +75,4 @@ npm run test:e2e:deployment
 
 > 2026-10-03 workflow `37150267544`（手动触发，`QUANT_PROVIDER_SMOKE_DURATION_SECONDS=7200`）：local-gates 通过；deployment 因未配置 `QUANT_DEPLOY_URL` 明确 `not_run`；provider-soak 在首次真实请求阶段经 3 次重试后仍为 `Failed to fetch`，未进入 WebSocket/断网恢复阶段。该运行不计入长时 Final Gate 通过证据。
 
-> 2026-10-03 本机尝试启动 7200 秒连续 lease soak 时，上游行情未产生 live callback，探针按设计失败关闭并清理服务；没有把这次失败计入通过证据。此前 10 分钟连续运行和 10 轮 recovery 仍是当前最强本机证据。
+> 更正：此前本机后台启动未形成持续运行证据；随后失败的是 5 秒探针，不能据此声称两小时测试失败。7200 秒验收仍需完整运行结果。
