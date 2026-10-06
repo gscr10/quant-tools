@@ -568,6 +568,11 @@ export class VelaBacktestResultsAdapter {
     }));
     binding.disposers.push(chart.on('load:end', (market) => {
       if (!this.isBindingCurrent(binding)) return;
+      // A live chart can replay its cached bars when the browser goes offline
+      // (Vela currently emits a synthetic history/tick sequence while tearing
+      // down the provider lease).  Once a settled report exists, that replay
+      // is not new market data and must not replace the last-good report.
+      if (this.shouldHoldOfflineReplay(binding)) return;
       const eventMarket = historyMarketKey(market);
       const requestedMarket = historyMarketKey(chart.market ?? {});
       // A superseded load may finish after the winning market. Do not let its
@@ -622,6 +627,7 @@ export class VelaBacktestResultsAdapter {
     }));
     binding.disposers.push(chart.on('history:progress', ({ loaded, target }) => {
       if (!this.isBindingCurrent(binding)) return;
+      if (this.shouldHoldOfflineReplay(binding)) return;
       this.reconcileRequestedMarket(binding);
       const requestedMarket = requestedHistoryMarketKey(chart.market ?? {});
       if (requestedMarket !== null && binding.loadingMarket !== requestedMarket) return;
@@ -664,6 +670,7 @@ export class VelaBacktestResultsAdapter {
     }));
     binding.disposers.push(chart.on('history:complete', ({ reason, oldestTime, barsLoaded }) => {
       if (!this.isBindingCurrent(binding)) return;
+      if (this.shouldHoldOfflineReplay(binding)) return;
       this.reconcileRequestedMarket(binding);
       const requestedMarket = requestedHistoryMarketKey(chart.market ?? {});
       if (requestedMarket !== null && binding.loadingMarket !== requestedMarket) return;
@@ -781,6 +788,7 @@ export class VelaBacktestResultsAdapter {
       if (!entry) {
         this.startBootstrapHandle(cell.id, handle, binding);
       } else if (entry.run) {
+        if (this.shouldHoldOfflineReplay(binding, entry, entry.run.cause)) return;
         void this.pullHandleContext(
           entry,
           handle,
@@ -1000,6 +1008,13 @@ export class VelaBacktestResultsAdapter {
     this.reconcileRequestedMarket(binding);
     const entry = this.ensureEntry(key, handle, binding);
     if (!entry || !this.isHandleCurrent(binding, handle)) return;
+    // Do not let cached Vela bars masquerade as fresh market data while the
+    // browser is offline.  An entry without a settled report is still allowed
+    // to execute so initial offline/fixture loads can reach their real state.
+    if (this.shouldHoldOfflineReplay(binding, entry, run.cause)) {
+      this.emitStale(entry.key, entry.revision, entry.epoch, 'offline cached replay');
+      return;
+    }
     // A zero-bar load is authoritative for the current market. Engines may
     // still flush a queued run from the previous market after load:end; never
     // let that event clear noData or reintroduce its ledger.
@@ -1120,6 +1135,10 @@ export class VelaBacktestResultsAdapter {
           desired.handle,
         ) || !this.ownsContextRead(entry, desired.read)) {
           this.emitStale(entry.key, desired.revision, desired.epoch, 'report context resolved after a newer revision');
+          continue;
+        }
+        if (this.shouldHoldOfflineReplay(desired.binding, entry, desired.run.cause)) {
+          this.emitStale(entry.key, desired.revision, desired.epoch, 'offline cached report read');
           continue;
         }
         if (!canReplaceReportContext(entry, reportContext)) {
@@ -1257,7 +1276,37 @@ export class VelaBacktestResultsAdapter {
       this.emitStale(entry.key, revision, epoch, `${reason}: context resolved late`);
       return;
     }
+    if (this.shouldHoldOfflineReplay(binding, entry, entry.run?.cause)) {
+      this.emitStale(entry.key, revision, epoch, 'offline cached context read');
+      return;
+    }
     this.acceptContextRead(entry, context, handle, revision, reason, binding, select);
+  }
+
+  /**
+   * Vela may synchronously replay cached bars while an online provider lease is
+   * being torn down.  Such a replay is useful for an initial offline fixture,
+   * but once this entry has published a settled ledger it is stale by definition
+   * and must not advance report/revision or overwrite the last-good snapshot.
+   */
+  private shouldHoldOfflineReplay(
+    binding: CellBinding,
+    entry?: Entry,
+    cause?: ScriptRun['cause'],
+  ): boolean {
+    if (!isBrowserOffline()) return false;
+    if (entry) {
+      // Use the adapter's authoritative ledger state rather than the last
+      // rendered status: a queued event may have emitted a transient snapshot
+      // before this guard runs, while the accepted ledger is still intact.
+      const settled = entry.trades !== null && entry.ledgerState === 'ready';
+      if (!settled) return false;
+      return cause === undefined || cause === 'tick' || cause === 'bar' || cause === 'history';
+    }
+    return this.entriesForCell(binding.cell.id).some((candidate) =>
+      candidate.lastPublishedSnapshot?.capabilities.tradeLedger === true
+      && candidate.lastPublishedSnapshot.status !== 'error'
+      && candidate.lastPublishedSnapshot.status !== 'partial');
   }
 
   /** Shared acceptance for restored/bootstrap and normal report reads. */
@@ -1272,6 +1321,7 @@ export class VelaBacktestResultsAdapter {
   ): void {
     const epoch = entry.epoch;
     const readsLedger = (select as readonly string[]).includes('trades');
+    if (this.shouldHoldOfflineReplay(binding, entry, entry.run?.cause)) return;
     // A zero-bar market is authoritative even for indicators added after the
     // load. Never let a cached engine context recreate a report from the prior
     // market while the cell remains in no-data state.
@@ -2448,6 +2498,10 @@ function statusOf(entry: Entry): BacktestAdapterStatus {
   if (closed.length === 0 && open.length > 0) return 'open-only';
   if (closed.length === 0) return 'no-trades';
   return 'ready';
+}
+
+function isBrowserOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
 
 function finalityOf(entry: Entry): BacktestAdapterFinality {

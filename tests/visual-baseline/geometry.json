@@ -25,10 +25,10 @@
     "desktop": {
       "activeTab": "quant-backtest-tab-performance",
       "contentPage": {
-        "bottom": 1675,
-        "height": 1584,
+        "bottom": 1682,
+        "height": 1591,
         "left": 0,
-        "right": 1440,
+        "right": 1429,
         "style": {
           "borderLeftWidth": "0px",
           "borderRadius": "0px",
@@ -39,10 +39,10 @@
           "maxWidth": "none",
           "paddingLeft": "16px",
           "paddingRight": "16px",
-          "width": "1440px"
+          "width": "1429px"
         },
         "top": 91,
-        "width": 1440
+        "width": 1429
       },
       "dock": {
         "bottom": 0,
@@ -67,8 +67,8 @@
         "top": 91,
         "width": 1440
       },
-      "panelClientWidth": 1440,
-      "panelScrollWidth": 1440,
+      "panelClientWidth": 1429,
+      "panelScrollWidth": 1429,
       "simulationToolbar": null,
       "tabScrollWidth": 1440,
       "tabs": {
@@ -82,10 +82,10 @@
       "variants": {
         "analysis": {
           "contentPage": {
-            "bottom": 1927,
-            "height": 1836,
+            "bottom": 1556,
+            "height": 1465,
             "left": 0,
-            "right": 1440,
+            "right": 1429,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -96,10 +96,10 @@
               "maxWidth": "none",
               "paddingLeft": "32px",
               "paddingRight": "32px",
-              "width": "1440px"
+              "width": "1429px"
             },
             "top": 91,
-            "width": 1440
+            "width": 1429
           },
           "logCard": null,
           "simulationToolbar": null
@@ -109,7 +109,7 @@
             "bottom": 463,
             "height": 372,
             "left": 0,
-            "right": 1440,
+            "right": 1429,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -120,16 +120,16 @@
               "maxWidth": "none",
               "paddingLeft": "16px",
               "paddingRight": "16px",
-              "width": "1440px"
+              "width": "1429px"
             },
             "top": 91,
-            "width": 1440
+            "width": 1429
           },
           "logCard": {
             "bottom": 403,
             "height": 288,
             "left": 16,
-            "right": 1424,
+            "right": 1413,
             "style": {
               "borderLeftWidth": "1px",
               "borderRadius": "8px",
@@ -140,19 +140,19 @@
               "maxWidth": "none",
               "paddingLeft": "16px",
               "paddingRight": "16px",
-              "width": "1408px"
+              "width": "1397px"
             },
             "top": 115,
-            "width": 1408
+            "width": 1397
           },
           "simulationToolbar": null
         },
         "simulation": {
           "contentPage": {
-            "bottom": 1292.5,
-            "height": 1201.5,
+            "bottom": 1300.5,
+            "height": 1209.5,
             "left": 0,
-            "right": 1440,
+            "right": 1429,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -163,17 +163,17 @@
               "maxWidth": "none",
               "paddingLeft": "32px",
               "paddingRight": "32px",
-              "width": "1440px"
+              "width": "1429px"
             },
             "top": 91,
-            "width": 1440
+            "width": 1429
           },
           "logCard": null,
           "simulationToolbar": {
-            "bottom": 139,
+            "bottom": 147,
             "height": 48,
             "left": 32,
-            "right": 1408,
+            "right": 1397,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -184,10 +184,10 @@
               "maxWidth": "none",
               "paddingLeft": "16px",
               "paddingRight": "16px",
-              "width": "1344px"
+              "width": "1333px"
             },
-            "top": 91,
-            "width": 1376
+            "top": 99,
+            "width": 1365
           }
         }
       },
@@ -216,10 +216,10 @@
     "laptop": {
       "activeTab": "quant-backtest-tab-performance",
       "contentPage": {
-        "bottom": 1675,
-        "height": 1584,
+        "bottom": 1682,
+        "height": 1591,
         "left": 0,
-        "right": 1024,
+        "right": 1013,
         "style": {
           "borderLeftWidth": "0px",
           "borderRadius": "0px",
@@ -230,10 +230,10 @@
           "maxWidth": "none",
           "paddingLeft": "16px",
           "paddingRight": "16px",
-          "width": "1024px"
+          "width": "1013px"
         },
         "top": 91,
-        "width": 1024
+        "width": 1013
       },
       "dock": {
         "bottom": 0,
@@ -258,8 +258,8 @@
         "top": 91,
         "width": 1024
       },
-      "panelClientWidth": 1024,
-      "panelScrollWidth": 1024,
+      "panelClientWidth": 1013,
+      "panelScrollWidth": 1013,
       "simulationToolbar": null,
       "tabScrollWidth": 1024,
       "tabs": {
@@ -273,10 +273,10 @@
       "variants": {
         "analysis": {
           "contentPage": {
-            "bottom": 1927,
-            "height": 1836,
+            "bottom": 1556,
+            "height": 1465,
             "left": 0,
-            "right": 1024,
+            "right": 1013,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -287,10 +287,10 @@
               "maxWidth": "none",
               "paddingLeft": "32px",
               "paddingRight": "32px",
-              "width": "1024px"
+              "width": "1013px"
             },
             "top": 91,
-            "width": 1024
+            "width": 1013
           },
           "logCard": null,
           "simulationToolbar": null
@@ -300,7 +300,7 @@
             "bottom": 463,
             "height": 372,
             "left": 0,
-            "right": 1024,
+            "right": 1013,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -311,16 +311,16 @@
               "maxWidth": "none",
               "paddingLeft": "16px",
               "paddingRight": "16px",
-              "width": "1024px"
+              "width": "1013px"
             },
             "top": 91,
-            "width": 1024
+            "width": 1013
           },
           "logCard": {
             "bottom": 403,
             "height": 288,
             "left": 16,
-            "right": 1008,
+            "right": 997,
             "style": {
               "borderLeftWidth": "1px",
               "borderRadius": "8px",
@@ -331,19 +331,19 @@
               "maxWidth": "none",
               "paddingLeft": "16px",
               "paddingRight": "16px",
-              "width": "992px"
+              "width": "981px"
             },
             "top": 115,
-            "width": 992
+            "width": 981
           },
           "simulationToolbar": null
         },
         "simulation": {
           "contentPage": {
-            "bottom": 1309,
-            "height": 1218,
+            "bottom": 1333.5,
+            "height": 1242.5,
             "left": 0,
-            "right": 1024,
+            "right": 1013,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -354,17 +354,17 @@
               "maxWidth": "none",
               "paddingLeft": "32px",
               "paddingRight": "32px",
-              "width": "1024px"
+              "width": "1013px"
             },
             "top": 91,
-            "width": 1024
+            "width": 1013
           },
           "logCard": null,
           "simulationToolbar": {
-            "bottom": 139,
+            "bottom": 147,
             "height": 48,
             "left": 32,
-            "right": 992,
+            "right": 981,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -375,10 +375,10 @@
               "maxWidth": "none",
               "paddingLeft": "16px",
               "paddingRight": "16px",
-              "width": "928px"
+              "width": "917px"
             },
-            "top": 91,
-            "width": 960
+            "top": 99,
+            "width": 949
           }
         }
       },
@@ -407,10 +407,10 @@
     "mobile": {
       "activeTab": "quant-backtest-tab-performance",
       "contentPage": {
-        "bottom": 2006,
-        "height": 1914,
+        "bottom": 2015,
+        "height": 1903,
         "left": 0,
-        "right": 390,
+        "right": 379,
         "style": {
           "borderLeftWidth": "0px",
           "borderRadius": "0px",
@@ -421,10 +421,10 @@
           "maxWidth": "none",
           "paddingLeft": "16px",
           "paddingRight": "16px",
-          "width": "390px"
+          "width": "379px"
         },
-        "top": 92,
-        "width": 390
+        "top": 112,
+        "width": 379
       },
       "dock": {
         "bottom": 0,
@@ -443,19 +443,19 @@
       },
       "panel": {
         "bottom": 844,
-        "height": 752,
+        "height": 732,
         "left": 0,
         "right": 390,
-        "top": 92,
+        "top": 112,
         "width": 390
       },
-      "panelClientWidth": 390,
+      "panelClientWidth": 379,
       "panelScrollWidth": 575,
       "simulationToolbar": null,
-      "tabScrollWidth": 407,
+      "tabScrollWidth": 398,
       "tabs": {
-        "bottom": 92,
-        "height": 30,
+        "bottom": 112,
+        "height": 50,
         "left": 0,
         "right": 390,
         "top": 62,
@@ -464,10 +464,10 @@
       "variants": {
         "analysis": {
           "contentPage": {
-            "bottom": 2172,
-            "height": 2080,
+            "bottom": 2067,
+            "height": 1955,
             "left": 0,
-            "right": 390,
+            "right": 379,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -476,22 +476,22 @@
               "marginLeft": "0px",
               "marginRight": "0px",
               "maxWidth": "none",
-              "paddingLeft": "12px",
-              "paddingRight": "12px",
-              "width": "390px"
+              "paddingLeft": "40px",
+              "paddingRight": "40px",
+              "width": "379px"
             },
-            "top": 92,
-            "width": 390
+            "top": 112,
+            "width": 379
           },
           "logCard": null,
           "simulationToolbar": null
         },
         "log": {
           "contentPage": {
-            "bottom": 442,
+            "bottom": 462,
             "height": 350,
             "left": 0,
-            "right": 390,
+            "right": 379,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -500,18 +500,18 @@
               "marginLeft": "0px",
               "marginRight": "0px",
               "maxWidth": "none",
-              "paddingLeft": "16px",
-              "paddingRight": "16px",
-              "width": "390px"
+              "paddingLeft": "24px",
+              "paddingRight": "24px",
+              "width": "379px"
             },
-            "top": 92,
-            "width": 390
+            "top": 112,
+            "width": 379
           },
           "logCard": {
-            "bottom": 398,
+            "bottom": 418,
             "height": 288,
-            "left": 16,
-            "right": 374,
+            "left": 24,
+            "right": 355,
             "style": {
               "borderLeftWidth": "1px",
               "borderRadius": "8px",
@@ -522,19 +522,19 @@
               "maxWidth": "none",
               "paddingLeft": "16px",
               "paddingRight": "16px",
-              "width": "358px"
+              "width": "331px"
             },
-            "top": 110,
-            "width": 358
+            "top": 130,
+            "width": 331
           },
           "simulationToolbar": null
         },
         "simulation": {
           "contentPage": {
-            "bottom": 1694,
-            "height": 1602,
+            "bottom": 1690,
+            "height": 1578,
             "left": 0,
-            "right": 390,
+            "right": 379,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -545,10 +545,10 @@
               "maxWidth": "none",
               "paddingLeft": "16px",
               "paddingRight": "16px",
-              "width": "390px"
+              "width": "379px"
             },
-            "top": 92,
-            "width": 390
+            "top": 112,
+            "width": 379
           },
           "logCard": null,
           "simulationToolbar": {
@@ -598,10 +598,10 @@
     "tablet": {
       "activeTab": "quant-backtest-tab-performance",
       "contentPage": {
-        "bottom": 2028,
-        "height": 1936,
+        "bottom": 2017,
+        "height": 1925,
         "left": 0,
-        "right": 768,
+        "right": 757,
         "style": {
           "borderLeftWidth": "0px",
           "borderRadius": "0px",
@@ -612,10 +612,10 @@
           "maxWidth": "none",
           "paddingLeft": "16px",
           "paddingRight": "16px",
-          "width": "768px"
+          "width": "757px"
         },
         "top": 92,
-        "width": 768
+        "width": 757
       },
       "dock": {
         "bottom": 0,
@@ -640,8 +640,8 @@
         "top": 92,
         "width": 768
       },
-      "panelClientWidth": 768,
-      "panelScrollWidth": 768,
+      "panelClientWidth": 757,
+      "panelScrollWidth": 757,
       "simulationToolbar": null,
       "tabScrollWidth": 768,
       "tabs": {
@@ -655,10 +655,10 @@
       "variants": {
         "analysis": {
           "contentPage": {
-            "bottom": 2162,
-            "height": 2070,
+            "bottom": 1797,
+            "height": 1705,
             "left": 0,
-            "right": 768,
+            "right": 757,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -669,10 +669,10 @@
               "maxWidth": "none",
               "paddingLeft": "32px",
               "paddingRight": "32px",
-              "width": "768px"
+              "width": "757px"
             },
             "top": 92,
-            "width": 768
+            "width": 757
           },
           "logCard": null,
           "simulationToolbar": null
@@ -682,7 +682,7 @@
             "bottom": 464,
             "height": 372,
             "left": 0,
-            "right": 768,
+            "right": 757,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -693,16 +693,16 @@
               "maxWidth": "none",
               "paddingLeft": "16px",
               "paddingRight": "16px",
-              "width": "768px"
+              "width": "757px"
             },
             "top": 92,
-            "width": 768
+            "width": 757
           },
           "logCard": {
             "bottom": 404,
             "height": 288,
             "left": 16,
-            "right": 752,
+            "right": 741,
             "style": {
               "borderLeftWidth": "1px",
               "borderRadius": "8px",
@@ -713,19 +713,19 @@
               "maxWidth": "none",
               "paddingLeft": "16px",
               "paddingRight": "16px",
-              "width": "736px"
+              "width": "725px"
             },
             "top": 116,
-            "width": 736
+            "width": 725
           },
           "simulationToolbar": null
         },
         "simulation": {
           "contentPage": {
-            "bottom": 1548.5,
-            "height": 1456.5,
+            "bottom": 1549.5,
+            "height": 1457.5,
             "left": 0,
-            "right": 768,
+            "right": 757,
             "style": {
               "borderLeftWidth": "0px",
               "borderRadius": "0px",
@@ -736,10 +736,10 @@
               "maxWidth": "none",
               "paddingLeft": "32px",
               "paddingRight": "32px",
-              "width": "768px"
+              "width": "757px"
             },
             "top": 92,
-            "width": 768
+            "width": 757
           },
           "logCard": null,
           "simulationToolbar": {

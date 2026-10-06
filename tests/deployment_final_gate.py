@@ -36,7 +36,7 @@ def check_slot(page, url: str, label: str) -> dict[str, object]:
 
     def route_request(route) -> None:
         host = urlparse(route.request.url).hostname or ""
-        if host in {"app.luxalgo.com", "vela.luxalgo.com"}:
+        if host == "luxalgo.com" or host.endswith(".luxalgo.com"):
             blocked.append(route.request.url)
             route.abort()
             return
@@ -56,8 +56,12 @@ def check_slot(page, url: str, label: str) -> dict[str, object]:
     # Read the response body rather than the live DOM: Vite removes the
     # original module tags after execution in some browser versions.
     entry_http = page.request.get(url, timeout=30_000)
+    if entry_http.status != 200:
+        raise RuntimeError(f"{label}: entry revalidation returned HTTP {entry_http.status}")
     html = entry_http.text()
     assets = sorted(set(re.findall(r"(?:src|href)=['\"]([^'\"]*/assets/[^'\"]+)['\"]", html)))
+    if not assets:
+        raise RuntimeError(f"{label}: no bundled assets in entry HTML")
     asset_results = []
     for asset in assets:
         # Resolve relative assets against the deployed entry path.  Using only
@@ -86,7 +90,14 @@ def check_slot(page, url: str, label: str) -> dict[str, object]:
         raise RuntimeError(f"{label}: page errors: {errors}")
     if blocked:
         raise RuntimeError(f"{label}: reference-site requests detected: {blocked}")
-    return {"label": label, "url": url, "entryCacheControl": cache_control, "assets": asset_results, "origin": origin}
+    page.wait_for_selector("#vela-action-quant-favorites", state="visible")
+    page.get_by_role("button", name="Indicators", exact=True).wait_for(state="visible")
+    page.wait_for_selector(".vela-cell canvas", state="visible")
+    if errors:
+        raise RuntimeError(f"{label}: page errors: {errors}")
+    if blocked:
+        raise RuntimeError(f"{label}: reference-site requests detected: {blocked}")
+    return {"label": label, "url": url, "entryCacheControl": cache_control, "assets": asset_results, "origin": origin, "workspaceReady": True}
 
 
 def main() -> int:
@@ -118,7 +129,7 @@ def main() -> int:
                     page.close()
         finally:
             browser.close()
-    print(json.dumps({"status": "passed", "slots": results}, ensure_ascii=False))
+    print(json.dumps({"status": "passed", "scope": "deployment-smoke", "rollbackVerified": False, "slots": results}, ensure_ascii=False))
     return 0
 
 

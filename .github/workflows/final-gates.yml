@@ -3,11 +3,11 @@ name: Final gates
 on:
   push:
     branches:
-      - task/network-release-gates
+      - master
+      - task/p1-final-gates
   pull_request:
     branches:
       - master
-      - task/network-release-gates
   workflow_dispatch:
     inputs:
       provider_duration_seconds:
@@ -55,8 +55,14 @@ jobs:
         run: npm run verify:startup
       - name: Verify complex matching and Bar Magnifier
         run: npm run test:pinets:matching
-      - name: Verify strategy reference golden
+      - name: Verify local strategy golden
         run: npm run test:pinets:golden
+      - name: Verify development workspace regression
+        run: npm run test:e2e
+      - name: Verify production workspace regression
+        run: python3 tests/e2e_app.py --preview
+      - name: Verify deployment smoke failure detection locally
+        run: npm run test:e2e:deployment:contract
       - name: Verify touch matrix
         run: npm run test:e2e:touch
       - name: Verify visual and accessibility gates
@@ -123,6 +129,17 @@ jobs:
       - name: Run real-provider soak
         env:
           QUANT_PROVIDER_SMOKE_DURATION_SECONDS: ${{ inputs.provider_duration_seconds || '0' }}
-        run: npm run test:providers:long
-      - name: Exercise real browser offline/online recovery
-        run: npm run test:providers:recovery
+        run: |
+          args=(--rounds 10 --recovery --output-dir audit-evidence/ci-provider-soak)
+          if [[ "$QUANT_PROVIDER_SMOKE_DURATION_SECONDS" != "0" ]]; then
+            args+=(--require-websocket)
+          fi
+          python3 tests/provider_smoke.py "${args[@]}"
+      - name: Preserve provider heartbeat and terminal evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-soak-${{ github.run_id }}
+          path: audit-evidence/ci-provider-soak/
+          if-no-files-found: ignore
+          retention-days: 7

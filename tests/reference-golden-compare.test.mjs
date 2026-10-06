@@ -171,3 +171,48 @@ test('reference golden comparator rejects boolean and fractional Trade # values'
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('reference golden comparator rejects identical invalid evidence on both sides', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quant-reference-golden-'));
+  try {
+    const reference = join(root, 'reference.json');
+    const local = join(root, 'local.json');
+    for (const patch of [
+      { entryPrice: null }, { entryTime: null }, { qty: null }, { pnl: null },
+      { mfe: null }, { mae: null }, { qty: true }, { side: null },
+      { side: 'unknown' }, { entryTime: 1.5 }, { mfe: 'Infinity' },
+      { open: true }, { exitTime: null },
+    ]) {
+      const payload = JSON.stringify({ trades: [{ ...rows[0], ...patch }] });
+      await writeFile(reference, payload);
+      await writeFile(local, payload);
+      await assert.rejects(invoke(reference, local), error => {
+        assert.equal(error.code, 1, JSON.stringify(patch));
+        assert.equal(JSON.parse(error.stdout).pass, false);
+        return true;
+      });
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('reference golden comparator accepts explicit null exit and realized P&L for an open trade', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quant-reference-golden-'));
+  try {
+    const reference = join(root, 'reference.json');
+    const local = join(root, 'local.json');
+    const payload = JSON.stringify({ trades: [{ ...rows[0], open: true, exitTime: null, exitPrice: null, pnl: null }] });
+    await writeFile(reference, payload);
+    await writeFile(local, payload);
+    assert.equal(JSON.parse((await invoke(reference, local)).stdout).pass, true);
+    for (const tolerance of ['NaN', 'Infinity', '-1']) {
+      await assert.rejects(run('python3', [
+        'tests/reference_golden_compare.py', '--reference', reference,
+        '--local', local, '--tolerance', tolerance,
+      ]), error => error.code === 1 && /finite and non-negative/.test(error.stderr));
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

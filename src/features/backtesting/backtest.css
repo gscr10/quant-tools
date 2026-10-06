@@ -22,9 +22,12 @@
   --quant-backtest-bg: var(--vela-surface, #151619);
   --quant-backtest-surface: var(--vela-surface-elev, #1c1d20);
   --quant-backtest-surface-soft: color-mix(in srgb, var(--quant-backtest-surface) 78%, #000);
-  --quant-backtest-fg: var(--vela-fg, #d1d4dc);
-  --quant-backtest-fg-muted: var(--vela-fg-muted, #868a96);
-  --quant-backtest-fg-bright: var(--vela-fg-bright, #f0f3fa);
+  /* Report typography follows the native Vela report neutral tokens.  Do
+   * not inherit the chart shell's bluish muted text: reference labels use
+   * neutral #a1a1aa and foreground #f5f5f5 on every tab. */
+  --quant-backtest-fg: #f5f5f5;
+  --quant-backtest-fg-muted: #a1a1aa;
+  --quant-backtest-fg-bright: #f5f5f5;
   --quant-backtest-border: var(--vela-border, #2a2b30);
   --quant-backtest-border-strong: var(--vela-border-strong, #34353b);
   --quant-backtest-hover: var(--vela-hover, rgba(255, 255, 255, 0.06));
@@ -484,6 +487,7 @@
 .quant-backtest-viewer-heading {
   flex-direction: row;
   align-items: center;
+  min-height: 28px;
   gap: 8px;
 }
 
@@ -498,6 +502,7 @@
 
 .quant-backtest-viewer-market-badge {
   display: inline-flex;
+  box-sizing: border-box;
   width: 20px;
   height: 20px;
   flex: 0 0 20px;
@@ -515,8 +520,8 @@
 
 .quant-backtest-viewer-market-badge > svg {
   display: block;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .quant-backtest-viewer-market-badge:not([data-asset='₿']):not([data-asset='Ξ']) {
@@ -542,7 +547,8 @@
   overflow: hidden;
   color: var(--quant-backtest-fg-bright);
   font-size: 12px;
-  font-weight: 550;
+  font-weight: 500;
+  line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -964,8 +970,29 @@
   min-height: 0;
   flex: 1;
   overflow: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   scrollbar-color: var(--vela-scroll, rgba(178, 181, 190, 0.3)) transparent;
+}
+
+.quant-backtest-viewer-panel::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+.quant-backtest-viewer-panel::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 6px;
+  background: var(--vela-scroll, rgba(178, 181, 190, 0.3));
+  background-clip: padding-box;
+}
+
+@supports selector(::-webkit-scrollbar) {
+  .quant-backtest-viewer-panel {
+    /* Chromium's scrollbar-color override disables the measured custom
+     * scrollbar width; use the thumb rule above on WebKit-style scrollbars. */
+    scrollbar-color: auto;
+  }
 }
 
 .quant-backtest-page {
@@ -1013,18 +1040,30 @@
   gap: 16px;
 }
 
-/* Measured reference desktop geometry: tabs begin at viewer +60px and
- * occupy 30px of content plus their 1px rule. The scroll viewport follows
- * the tab rule directly; the reference's 16px spacing is already supplied
- * by the header-to-tabs shell gap. */
+/* Live reference at 1440px: the tab rail has a 16px inline gutter and
+ * the first Performance card starts 16px below its bottom rule. */
 @media (min-width: 1024px) {
   .quant-backtest-tabs {
     min-height: 31px;
     height: 31px;
+    padding-inline: 16px;
   }
 
   .quant-backtest-page.quant-backtest-performance {
-    padding-top: 0;
+    padding-top: 16px;
+  }
+
+  /* The native Analysis page starts its first title on the page top while
+   * the shared page shell reserves 24px.  Keep the measured 16px report
+   * inset and use the tighter native chart title spacing. */
+  .quant-backtest-page.quant-backtest-analysis {
+    padding-top: 16px;
+  }
+
+  /* Simulation's toolbar begins eight pixels below the tab rail in the
+   * native workspace. */
+  .quant-backtest-page.quant-backtest-simulation {
+    padding-top: 8px;
   }
 }
 
@@ -1088,8 +1127,8 @@
 .quant-backtest-performance-card {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding: 24px 16px;
+  gap: 0;
+  padding: 32px 16px;
   border: 1px solid var(--quant-backtest-border);
   border-radius: 8px;
   background: transparent;
@@ -1119,15 +1158,39 @@
 }
 
 .quant-backtest-performance-kpi-bar .quant-backtest-kpi {
-  /* Preserve equal desktop columns, but never squeeze a label/value below
-   * its intrinsic width: the existing bar scrolls on narrow viewports. */
+  /* Reference KPIs use their content width with space-between. Keep the
+   * existing horizontal scrolling when their combined width exceeds mobile. */
   min-width: max-content;
   min-height: 40px;
-  flex: 1 0 0;
+  flex: 0 0 auto;
+  gap: 4px;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
+}
+
+.quant-backtest-performance-kpi-bar .quant-backtest-kpi-label {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: 0.05em;
+}
+
+.quant-backtest-performance-kpi-bar .quant-backtest-kpi-value,
+.quant-backtest-performance-kpi-bar .quant-backtest-kpi-secondary {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.quant-backtest-performance-kpi-bar .quant-backtest-kpi-value-row {
+  gap: 4px;
+}
+
+.quant-backtest-performance-kpi-bar .quant-backtest-kpi-currency {
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .quant-backtest-kpi-value-row {
@@ -1209,7 +1272,16 @@
 }
 
 .quant-backtest-performance > .quant-backtest-section-heading {
-  margin-bottom: -6px;
+  margin-bottom: -4px;
+}
+
+.quant-backtest-performance > .quant-backtest-section-heading h3 {
+  line-height: 28px;
+}
+
+.quant-backtest-performance-card .quant-backtest-chart-label {
+  font-size: 14px;
+  line-height: 20px;
 }
 
 .quant-backtest-performance-card .quant-backtest-metric-table {
@@ -1249,9 +1321,9 @@
 .quant-backtest-chart-legend {
   display: flex;
   align-items: center;
-  gap: 16px;
-  min-height: 24px;
-  margin-top: 2px;
+  gap: 24px;
+  min-height: 16px;
+  margin-top: 8px;
 }
 
 .quant-backtest-chart-legend-item {
@@ -1260,12 +1332,14 @@
   gap: 8px;
   color: var(--quant-backtest-fg-muted);
   font-size: 12px;
+  line-height: 16px;
 }
 
 .quant-backtest-chart-legend-swatch {
   width: 8px;
   height: 8px;
   border-radius: 2px;
+  margin: 3px;
 }
 
 .quant-backtest-performance
@@ -1386,15 +1460,8 @@
   fill: transparent;
 }
 
-.quant-backtest-chart-host .highcharts-grid-line,
-.quant-backtest-chart-host .highcharts-axis-line,
-.quant-backtest-chart-host .highcharts-tick {
-  stroke: var(--quant-backtest-border);
-}
-
 .quant-backtest-chart-host .highcharts-axis-labels text,
 .quant-backtest-chart-host .highcharts-data-label text {
-  fill: var(--quant-backtest-fg-muted) !important;
   font-family: inherit;
 }
 
@@ -1635,7 +1702,7 @@
 }
 
 .quant-backtest-analysis-chart-title {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   color: var(--quant-backtest-fg-bright);
   font-size: 14px;
   font-weight: 700;
@@ -1859,7 +1926,10 @@
 
 .quant-backtest-analysis-table th,
 .quant-backtest-analysis-table td {
-  height: 37px;
+  /* Let the 20px line-height and 8px vertical padding produce the
+   * reference's 36.5px header / 37px body rows.  An explicit content-box
+   * height adds the padding a second time and stretches rows to 53.5px. */
+  height: auto;
   padding: 8px 16px;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--quant-backtest-border) 72%, transparent);
@@ -1898,7 +1968,7 @@
 }
 
 .quant-backtest-analysis-duration-chart {
-  margin-top: 24px;
+  margin-top: 22px;
 }
 
 .quant-backtest-analysis-duration-host {
@@ -3296,10 +3366,19 @@
 
   .quant-backtest-tabs {
     gap: 16px;
-    min-height: 30px;
-    height: 30px;
+    min-height: 50px;
+    height: 50px;
     margin-top: 8px;
     padding-inline: 24px;
+    align-items: stretch;
+  }
+
+  .quant-backtest-tab {
+    max-width: 88px;
+    align-items: center;
+    padding-bottom: 8px;
+    text-align: center;
+    white-space: normal;
   }
 
   .quant-backtest-page {
@@ -3313,8 +3392,52 @@
   }
 
   .quant-backtest-analysis {
-    padding-right: 12px;
-    padding-left: 12px;
+    padding: 9px 40px 44px;
+  }
+
+  .quant-backtest-trades-log {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+
+  /* The reference keeps the first direction table wider than the phone so
+   * its narrow metric column wraps labels (the table itself scrolls).  The
+   * duration table remains viewport-width. */
+  .quant-backtest-analysis-overview + .quant-backtest-analysis-table {
+    width: 429.53px;
+    table-layout: fixed;
+  }
+
+  .quant-backtest-analysis-overview + .quant-backtest-analysis-table th:first-child,
+  .quant-backtest-analysis-overview + .quant-backtest-analysis-table td:first-child {
+    /* Width includes the 16px cell padding on both sides. */
+    width: 64.77px;
+    white-space: normal;
+  }
+
+  .quant-backtest-analysis-duration-chart + .quant-backtest-analysis-table {
+    width: 299px;
+    table-layout: fixed;
+  }
+
+  .quant-backtest-analysis-reference-legend {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    column-gap: 12px;
+  }
+
+  .quant-backtest-analysis-reference-legend .quant-backtest-analysis-legend-item {
+    min-width: 0;
+    align-items: flex-start;
+  }
+
+  .quant-backtest-analysis-reference-legend {
+    padding-bottom: 12px;
+  }
+
+  .quant-backtest-analysis-scatter-legend {
+    padding-bottom: 11px;
   }
 
   .quant-backtest-section-heading {
@@ -3358,8 +3481,21 @@
   }
 
   .quant-backtest-simulation {
-    padding-top: 0;
+    padding-top: 10px;
     padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .quant-backtest-simulation-content {
+    gap: 28px;
+  }
+
+  .quant-backtest-simulation-metrics {
+    width: 310px;
+    height: 74px;
+    min-height: 74px;
+    margin-inline: 24px;
+    padding: 16px;
+    overflow: hidden;
   }
 
   .quant-backtest-simulation-toolbar {
@@ -3380,6 +3516,30 @@
     gap: 20px;
   }
 
+  .quant-backtest-simulation-chart-legend {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    column-gap: 10px;
+  }
+
+  .quant-backtest-simulation-chart-legend span {
+    min-width: 0;
+    align-items: flex-start;
+  }
+
+  /* Native mobile Simulation keeps the two distribution panels closer to
+   * the path chart than desktop's 24px grid gap.  The panels themselves
+   * retain their intrinsic charts; these offsets only remove the extra
+   * stacked legend line introduced by the narrow viewport. */
+  .quant-backtest-simulation-distributions {
+    transform: translateY(-10px);
+  }
+
+  .quant-backtest-simulation-distributions > .quant-backtest-simulation-chart-panel:nth-child(2) {
+    transform: translateY(-12px);
+  }
+
   .quant-backtest-simulation-distributions {
     grid-template-columns: 1fr;
   }
@@ -3397,9 +3557,11 @@
     height: 36px;
     margin: 20px 0 -44px auto;
     border-radius: 50%;
-    background: var(--quant-backtest-accent);
+    /* Reference uses a neutral floating control; the chart accent remains
+     * reserved for data series and active states. */
+    background: #f4f4f5;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    color: #fff;
+    color: #18181b;
   }
 
   .quant-backtest-simulation-settings {
@@ -3522,9 +3684,32 @@
   }
 
   .quant-backtest-simulation-metrics {
-    min-height: 88px;
+    box-sizing: border-box;
+    height: 74px;
+    min-height: 74px;
     gap: 20px;
-    padding: 14px;
+    padding: 16px;
+  }
+
+  .quant-backtest-analysis-winrate-body {
+    position: relative;
+    display: block;
+    height: 180px;
+  }
+
+  .quant-backtest-analysis-donut {
+    width: 215px;
+    min-width: 215px;
+  }
+
+  .quant-backtest-analysis-winrate-legend {
+    position: absolute;
+    top: 18px;
+    right: 0;
+  }
+
+  .quant-backtest-analysis-duration-chart {
+    transform: translateY(13px);
   }
 
   .quant-backtest-simulation-chart-actions {

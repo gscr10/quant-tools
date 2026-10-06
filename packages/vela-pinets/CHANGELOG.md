@@ -2,6 +2,14 @@
 
 All notable changes to Vela-pinets, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **Open trade rows retain the remaining entry after a partial exit.** Strategy
+  reports and chart markers now show the correct entry price, quantity, and
+  favorable and adverse excursion when an exit is paired with an older entry.
+
 ## [v0.2.13]
 
 ### Added

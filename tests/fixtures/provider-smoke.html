@@ -25,6 +25,8 @@
       const SOAK_POLL_MS = 250;
       const SOAK_FIRST_CALLBACK_TIMEOUT_MS = 20_000;
       const SOAK_MAX_CALLBACK_GAP_MS = 20_000;
+      const SOAK_RECOVERY_TIMEOUT_MS = 90_000;
+      const SOAK_MAX_BAR_AGE_MS = 15 * 60_000 + SOAK_MAX_CALLBACK_GAP_MS;
 
       class SoakContinuityError extends Error {
         constructor(message) {
@@ -61,7 +63,9 @@
 
       async function withRoundRetry(operation, label) {
         let lastError;
+        let attempts = 0;
         for (let attempt = 0; attempt < ROUND_RETRY_ATTEMPTS; attempt += 1) {
+          attempts += 1;
           try {
             return await operation(attempt);
           } catch (error) {
@@ -71,14 +75,16 @@
             await new Promise(resolve => setTimeout(resolve, ROUND_RETRY_DELAYS_MS[attempt] ?? 1_500));
           }
         }
-        throw new Error(`${label} failed after ${ROUND_RETRY_ATTEMPTS} attempts: ${String(lastError?.message ?? lastError)}`);
+        throw new Error(`${label} failed after ${attempts} attempts: ${String(lastError?.message ?? lastError)}`);
       }
 
       async function verifyHistory(provider, symbol, timeframe, label) {
-        const bars = await withTimeout(
-          provider.getBars(symbol, timeframe, { limit: 5 }),
-          `${label} history`,
-        );
+        let bars;
+        try {
+          bars = await withTimeout(provider.getBars(symbol, timeframe, { limit: 5 }), `${label} history`);
+        } catch (error) {
+          throw new Error(`${label} history failed: ${String(error?.message ?? error)}`);
+        }
         if (bars.length < 2) throw new Error(`${label}: expected historical bars`);
         bars.forEach((bar) => assertBar(bar, `${label} history`));
         return bars.length;
@@ -183,47 +189,121 @@
       // fresh socket can open; it does not exercise the lease across a long
       // lived connection (or expose a late callback after the page remains
       // mounted).
-      async function runProviderSoakAttempt(durationMs = 60_000) {
+      let currentSoak;
+      let soakRun;
+
+      function soakSnapshot(state = currentSoak) {
+        if (!state) return { status: 'idle' };
+        return {
+          status: state.status,
+          durationMs: state.duration,
+          scope: state.scope,
+          elapsedMs: state.startedAt === null ? 0 : Date.now() - state.startedAt,
+          startedAt: state.startedAt,
+          online: state.online,
+          activeSubscriptions: state.unsubscriptions.size,
+          callbacksAfterCleanup: state.callbacksAfterCleanup,
+          cleanupErrors: state.cleanupErrors.slice(),
+          recoveryCycles: state.recoveryCycles.map(cycle => ({ ...cycle, resumed: { ...cycle.resumed } })),
+          subscriptions: Object.fromEntries(state.providers.map(provider => [provider.name, {
+            historyBars: provider.historyBars,
+            liveCallbacks: provider.liveCallbacks,
+            firstLiveAt: provider.firstLiveAt,
+            lastLiveAt: provider.lastLiveAt,
+            latestBarTime: provider.latestBarTime,
+            maxGapMs: provider.maxGapMs,
+            offlineBars: provider.offlineBars,
+          }])),
+        };
+      }
+
+      window.providerSoakState = () => ({
+        ...soakSnapshot(),
+        status: soakRun?.status ?? currentSoak?.status ?? 'idle',
+        error: soakRun?.error ?? null,
+        result: soakRun?.result ?? null,
+      });
+
+      window.setProviderSoakOnline = online => {
+        const state = currentSoak;
+        if (!state?.active || state.status !== 'running') throw new Error('provider soak is not running');
+        if (state.online === Boolean(online)) return;
+        const now = Date.now();
+        state.online = Boolean(online);
+        if (!state.online) {
+          state.recoveryCycles.push({ offlineAt: now, onlineAt: null, resumed: {} });
+        } else {
+          state.onlineSince = now;
+          state.recoveryCycles.at(-1).onlineAt = now;
+        }
+      };
+
+      window.stopProviderSoak = () => {
+        if (currentSoak?.active) currentSoak.cancelled = true;
+      };
+
+      async function runProviderSoakAttempt(durationMs = 60_000, scope = 'all') {
         const duration = Number.isFinite(durationMs) && durationMs > 0
           ? durationMs
           : 60_000;
         const providers = createWorkspaceProviders();
         const states = [
-          { name: 'binance', provider: providers.binance(), symbol: 'BTCUSDT', bars: [], error: null, firstLiveAt: null, lastLiveAt: null, maxGapMs: 0 },
-          { name: 'hyperliquid', provider: providers.hyperliquid(), symbol: 'BTC', bars: [], error: null, firstLiveAt: null, lastLiveAt: null, maxGapMs: 0 },
-        ];
-        let active = true;
+          { name: 'binance', provider: providers.binance(), symbol: 'BTCUSDT' },
+          { name: 'hyperliquid', provider: providers.hyperliquid(), symbol: 'BTC' },
+        ].filter(provider => scope === 'all' || provider.name === scope).map(provider => ({
+          ...provider, error: null, liveCallbacks: 0, firstLiveAt: null, lastLiveAt: null,
+          latestBarTime: null, maxGapMs: 0, offlineBars: 0,
+        }));
         const unsubscriptions = new Set();
+        const session = {
+          status: 'setup', active: true, cancelled: false, duration, scope, startedAt: null,
+          online: true, onlineSince: Date.now(), callbacksAfterCleanup: 0,
+          cleanupErrors: [], recoveryCycles: [], providers: states, unsubscriptions,
+        };
+        currentSoak = session;
         const addSubscription = (unsubscribe) => {
-          if (typeof unsubscribe !== 'function') return;
-          if (!active) {
-            try { unsubscribe(); } catch { /* teardown is best effort */ }
+          if (typeof unsubscribe !== 'function') throw new Error('provider subscription omitted cleanup');
+          if (!session.active) {
+            try { unsubscribe(); } catch (error) { session.cleanupErrors.push(String(error)); }
             return;
           }
           unsubscriptions.add(unsubscribe);
         };
         const cleanup = () => {
-          active = false;
+          session.active = false;
           for (const unsubscribe of unsubscriptions) {
-            try { unsubscribe?.(); } catch { /* teardown is best effort */ }
+            try { unsubscribe(); } catch (error) { session.cleanupErrors.push(String(error)); }
           }
           unsubscriptions.clear();
         };
         try {
           await Promise.all(states.map(async state => {
             const history = await verifyHistory(state.provider, state.symbol, '15', `${state.name} soak`);
-            if (!active) return;
+            if (!session.active) return;
             state.historyBars = history;
             const callback = bar => {
+              if (!session.active) {
+                session.callbacksAfterCleanup += 1;
+                return;
+              }
               try {
                 assertBar(bar, `${state.name} soak live`);
+                if (!session.online) {
+                  state.offlineBars += 1;
+                  throw new SoakContinuityError(`${state.name} delivered a callback while offline`);
+                }
                 const now = Date.now();
                 if (state.lastLiveAt !== null) {
-                  state.maxGapMs = Math.max(state.maxGapMs, now - state.lastLiveAt);
+                  state.maxGapMs = Math.max(state.maxGapMs, now - Math.max(state.lastLiveAt, session.onlineSince));
                 }
                 state.firstLiveAt ??= now;
                 state.lastLiveAt = now;
-                state.bars.push({ time: bar.time, close: bar.close });
+                state.latestBarTime = Math.max(state.latestBarTime ?? bar.time, bar.time);
+                state.liveCallbacks += 1;
+                const cycle = session.recoveryCycles.at(-1);
+                if (cycle?.onlineAt !== null && cycle?.onlineAt !== undefined) {
+                  cycle.resumed[state.name] ??= now;
+                }
               } catch (error) {
                 state.error = new SoakContinuityError(String(error?.message ?? error));
               }
@@ -231,67 +311,92 @@
             const unsubscribe = state.provider.subscribe(state.symbol, '15', callback);
             addSubscription(unsubscribe);
           }));
-          if (!active) throw new Error('provider soak setup was superseded');
-          const futuresMetadata = await probeFuturesInfo(
-            providers.binance(),
-            'BTCUSDT.P',
-            'Binance futures soak',
-          );
-          const futuresBars = await verifyHistory(
-            providers.binance(),
-            'BTCUSDT.P',
-            '60',
-            'Binance futures soak',
-          );
+          if (!session.active) throw new Error('provider soak setup was superseded');
+          const futuresMetadata = scope === 'all' ? await probeFuturesInfo(
+            providers.binance(), 'BTCUSDT.P', 'Binance futures soak',
+          ) : 'out_of_scope';
+          const futuresBars = scope === 'all' ? await verifyHistory(
+            providers.binance(), 'BTCUSDT.P', '60', 'Binance futures soak',
+          ) : null;
           const startedAt = Date.now();
+          session.startedAt = startedAt;
+          session.onlineSince = startedAt;
+          session.status = 'running';
           while (Date.now() - startedAt < duration) {
             await new Promise(resolve => setTimeout(resolve, Math.min(SOAK_POLL_MS, duration)));
+            if (session.cancelled) throw new SoakContinuityError('provider soak was cancelled');
             const elapsed = Date.now() - startedAt;
             for (const state of states) {
               if (state.error) throw state.error;
+              if (!session.online) continue;
               if (state.firstLiveAt === null && elapsed >= Math.min(duration, SOAK_FIRST_CALLBACK_TIMEOUT_MS)) {
                 throw new SoakContinuityError(`${state.name} soak produced no live callbacks`);
               }
-              if (state.lastLiveAt !== null && Date.now() - state.lastLiveAt > SOAK_MAX_CALLBACK_GAP_MS) {
-                throw new SoakContinuityError(`${state.name} soak live callback gap exceeded ${SOAK_MAX_CALLBACK_GAP_MS}ms`);
+              const cycle = session.recoveryCycles.at(-1);
+              const waitingForRecovery = cycle?.onlineAt != null && !cycle.resumed[state.name];
+              const maximumGap = waitingForRecovery ? SOAK_RECOVERY_TIMEOUT_MS : SOAK_MAX_CALLBACK_GAP_MS;
+              if (state.lastLiveAt !== null && Date.now() - Math.max(state.lastLiveAt, session.onlineSince) > maximumGap) {
+                throw new SoakContinuityError(`${state.name} soak live callback gap exceeded ${maximumGap}ms`);
+              }
+              if (!waitingForRecovery && state.latestBarTime !== null && Date.now() - state.latestBarTime > SOAK_MAX_BAR_AGE_MS) {
+                throw new SoakContinuityError(`${state.name} soak callbacks contained stale candles`);
               }
             }
           }
+          if (!session.online) throw new SoakContinuityError('provider soak ended while offline');
           for (const state of states) {
             if (state.error) throw state.error;
-            if (state.bars.length === 0) {
+            if (state.liveCallbacks === 0) {
               throw new SoakContinuityError(`${state.name} soak produced no live callbacks`);
             }
             if (state.lastLiveAt === null || Date.now() - state.lastLiveAt > SOAK_MAX_CALLBACK_GAP_MS) {
               throw new SoakContinuityError(`${state.name} soak ended without fresh live evidence`);
             }
+            for (const cycle of session.recoveryCycles) {
+              if (!cycle.resumed[state.name]) throw new SoakContinuityError(`${state.name} did not recover after an offline cycle`);
+            }
           }
-          const subscriptions = Object.fromEntries(states.map(state => [state.name, {
-            historyBars: state.historyBars,
-            liveCallbacks: state.bars.length,
-            firstLiveAt: state.firstLiveAt,
-            lastLiveAt: state.lastLiveAt,
-            maxGapMs: state.maxGapMs,
-          }]));
+          session.status = 'passed';
+          const subscriptions = soakSnapshot(session).subscriptions;
           return {
             durationMs: duration,
+            scope,
+            observedDurationMs: Date.now() - startedAt,
             subscriptions,
+            recoveryCycles: soakSnapshot(session).recoveryCycles,
             futuresMetadata,
             // Keep the same route keys as the short smoke contract so the
             // command-line gate validates both modes uniformly.
-            binance: { historyBars: subscriptions.binance.historyBars, live: true },
-            binanceFutures: { historyBars: futuresBars, timeframe: '60', symbol: 'BTCUSDT.P' },
-            hyperliquid: { historyBars: subscriptions.hyperliquid.historyBars, live: true },
+            ...(subscriptions.binance ? { binance: { historyBars: subscriptions.binance.historyBars, live: true } } : {}),
+            ...(futuresBars !== null ? { binanceFutures: { historyBars: futuresBars, timeframe: '60', symbol: 'BTCUSDT.P' } } : {}),
+            ...(subscriptions.hyperliquid ? { hyperliquid: { historyBars: subscriptions.hyperliquid.historyBars, live: true } } : {}),
           };
+        } catch (error) {
+          session.status = 'failed';
+          throw error;
         } finally {
           cleanup();
         }
       }
 
-      window.runProviderSoak = async (durationMs = 60_000) => withRoundRetry(
-        () => runProviderSoakAttempt(durationMs),
-        'provider soak',
-      );
+      window.runProviderSoak = async (durationMs = 60_000, scope = 'all') => {
+        if (!['all', 'binance', 'hyperliquid'].includes(scope)) throw new Error('unknown provider soak scope');
+        return withRoundRetry(() => runProviderSoakAttempt(durationMs, scope), 'provider soak');
+      };
+
+      window.startProviderSoak = (durationMs = 60_000, scope = 'all') => {
+        if (soakRun?.status === 'running') throw new Error('provider soak is already running');
+        soakRun = { status: 'running', error: null, result: null };
+        const run = soakRun;
+        void window.runProviderSoak(durationMs, scope).then(result => {
+          run.result = result;
+          run.status = 'passed';
+        }, error => {
+          run.error = String(error?.message ?? error);
+          run.status = 'failed';
+        });
+        return true;
+      };
 
       // This is intentionally separate from the short smoke above.  The
       // caller toggles the real browser network state between the two polls;

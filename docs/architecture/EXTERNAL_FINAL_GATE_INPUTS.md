@@ -4,6 +4,8 @@
 
 ## 1. 线上部署 / rollback / CDN
 
+用户已要求本阶段先忽略这一项；不再作为当前 P1 的阻塞条件，也不标为通过。以下输入留给后续恢复验收时使用。
+
 需要提供：
 
 - candidate HTTPS 地址：`QUANT_DEPLOY_URL`
@@ -86,8 +88,9 @@ Safari 专项按用户要求移出本阶段验收范围，不标为通过。Voic
 - 手动 workflow `37150267544`（2026-10-03，`provider_duration_seconds=7200`）的 local-gates 通过，但 provider-soak 在 Binance 初始请求处经 3 次重试仍为 `Failed to fetch`，deployment 因未配置 `QUANT_DEPLOY_URL` 保持 `not_run`；该运行不能关闭任何外部 Final Gate。
 - 先前本机记录不足以证明 7200 秒连续 lease soak 已完整执行；短时探针的无 callback 结果不能归因为两小时运行失败。小时级验证仍未完成。
 
-## 7. 本机重新验证（2026-10-05）
+## 7. 本机重新验证（2026-10-06）
 
 - `python3 tests/provider_smoke.py --duration-seconds 120 --recovery` 实际退出码为 0，总耗时 141.703 秒；同一页面连续订阅 120 秒。Binance 收到 61 次回调，最大间隔 7,566ms；Hyperliquid 收到 135 次回调，最大间隔 8,469ms。两者断网期间回调数为 0，恢复后均收到新行情。Futures 历史与 metadata 检查通过；此结果不证明 Futures 连续 WebSocket 稳定性。
-- 已再次启动 `--duration-seconds 7200 --recovery`，运行结果尚未产生，不能计为通过。该脚本的断网恢复阶段位于连续订阅之后，不能替代两小时内多次网络黑洞及资源泄漏验收。
+- Provider wrapper 已增加首次 live callback 后 12 秒静默 watchdog；静默时会替换 lease、拒绝旧代次回调，并在构造器瞬时失败后以 2 秒延迟重试。定向 provider-live/soak/CLI 测试 31/31 通过。
+- watchdog 版本 Hyperliquid 90 秒真实 soak 通过：84 candle callbacks、最大间隔 3,974ms、2 次 offline→online 恢复、3 个 socket 创建/关闭平衡、offline/late callback/cleanup error 均为 0。随后两小时 Hyperliquid scope 已通过：7200.133 秒、8617 callbacks、23 次恢复、24/24 socket 创建/关闭、最终 active=0、offlineBars=0、cleanup 三项为 0，终态 SHA-256 已核对。Binance Spot/Futures 长时仍受网络/HTTP 451 限制，不能扩展为 all-provider 通过。
 - 本机真实 `safaridriver` 创建 Safari session 返回 `session not created`：必须在 Safari Settings 的 Developer 部分启用 `Allow remote automation`。Safari 已安装，但此次真实浏览器自动化尚未执行；没有更改用户系统授权设置。

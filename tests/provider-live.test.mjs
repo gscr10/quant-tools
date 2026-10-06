@@ -169,6 +169,214 @@ test('Hyperliquid active onopen still subscribes and is cleaned up once', () => 
   }
 });
 
+test('silent open Hyperliquid streams are replaced without accepting old callbacks', () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  const timers = [];
+  const sockets = [];
+  const bars = [];
+
+  class FakeWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.sent = [];
+      this.closed = false;
+      sockets.push(this);
+    }
+    send(message) { this.sent.push(message); }
+    close() { this.closed = true; }
+  }
+
+  try {
+    globalThis.WebSocket = FakeWebSocket;
+    globalThis.setTimeout = (callback, timeout, ...args) => {
+      const handle = { callback, timeout, args, cancelled: false };
+      timers.push(handle);
+      return handle;
+    };
+    globalThis.clearTimeout = (handle) => {
+      if (handle && typeof handle === 'object') handle.cancelled = true;
+    };
+    globalThis.setInterval = () => ({ interval: true });
+    globalThis.clearInterval = () => {};
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 1_000 }).hyperliquid();
+    const unsubscribe = provider.subscribe('BTC', '15', (bar) => bars.push(bar));
+    const first = sockets[0];
+    first.onopen?.({ type: 'open' });
+    first.onmessage?.({ data: JSON.stringify({
+      channel: 'candle', data: { s: 'BTC', t: 1, o: '1', h: '2', l: '1', c: '2', v: '1' },
+    }) });
+    assert.equal(bars.length, 1);
+
+    const watchdog = timers.find((timer) => timer.timeout === 12_000 && !timer.cancelled);
+    assert.ok(watchdog, 'live silence watchdog was not armed');
+    watchdog.cancelled = true;
+    watchdog.callback(...watchdog.args);
+    assert.equal(first.closed, true);
+    assert.equal(sockets.length, 2, 'silent stream did not start a fresh socket');
+
+    // A queued frame from the replaced socket must not reach the chart.
+    first.onmessage?.({ data: JSON.stringify({
+      channel: 'candle', data: { s: 'BTC', t: 2, o: '2', h: '3', l: '2', c: '3', v: '1' },
+    }) });
+    assert.equal(bars.length, 1);
+
+    const second = sockets[1];
+    second.onopen?.({ type: 'open' });
+    second.onmessage?.({ data: JSON.stringify({
+      channel: 'candle', data: { s: 'BTC', t: 3, o: '3', h: '4', l: '3', c: '4', v: '1' },
+    }) });
+    assert.equal(bars.length, 2);
+    assert.equal(bars.at(-1).time, 3);
+
+    unsubscribe();
+    assert.equal(second.closed, true);
+    assert.equal(timers.every((timer) => timer.cancelled), true);
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+  }
+});
+
+test('a stream that never emits its first candle is restarted by the watchdog', () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  const timers = [];
+  const sockets = [];
+  const bars = [];
+
+  class FakeWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.sent = [];
+      this.closed = false;
+      sockets.push(this);
+    }
+    send(message) { this.sent.push(message); }
+    close() { this.closed = true; }
+  }
+
+  try {
+    globalThis.WebSocket = FakeWebSocket;
+    globalThis.setTimeout = (callback, timeout, ...args) => {
+      const handle = { callback, timeout, args, cancelled: false };
+      timers.push(handle);
+      return handle;
+    };
+    globalThis.clearTimeout = (handle) => {
+      if (handle && typeof handle === 'object') handle.cancelled = true;
+    };
+    globalThis.setInterval = () => ({ interval: true });
+    globalThis.clearInterval = () => {};
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 1_000 }).hyperliquid();
+    const unsubscribe = provider.subscribe('BTC', '15', (bar) => bars.push(bar));
+    const first = sockets[0];
+    const watchdog = timers.find((timer) => timer.timeout === 12_000 && !timer.cancelled);
+    assert.ok(watchdog, 'first-candle watchdog was not armed');
+
+    watchdog.cancelled = true;
+    watchdog.callback(...watchdog.args);
+    assert.equal(first.closed, true);
+    assert.equal(sockets.length, 2, 'silent first stream did not start a fresh socket');
+
+    // The replaced socket remains unable to publish into the active lease.
+    first.onmessage?.({ data: JSON.stringify({
+      channel: 'candle', data: { s: 'BTC', t: 1, o: '1', h: '2', l: '1', c: '2', v: '1' },
+    }) });
+    assert.equal(bars.length, 0);
+
+    unsubscribe();
+    assert.equal(sockets[1].closed, true);
+    assert.equal(timers.every((timer) => timer.cancelled), true);
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+  }
+});
+
+test('silent-stream watchdog retries after a transient socket constructor failure', () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  const timers = [];
+  const sockets = [];
+  let attempts = 0;
+
+  class FakeWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.sent = [];
+      this.closed = false;
+      attempts += 1;
+      if (attempts === 2) throw new Error('transient constructor failure');
+      sockets.push(this);
+    }
+    send(message) { this.sent.push(message); }
+    close() { this.closed = true; }
+  }
+
+  try {
+    globalThis.WebSocket = FakeWebSocket;
+    globalThis.setTimeout = (callback, timeout, ...args) => {
+      const handle = { callback, timeout, args, cancelled: false };
+      timers.push(handle);
+      return handle;
+    };
+    globalThis.clearTimeout = (handle) => {
+      if (handle && typeof handle === 'object') handle.cancelled = true;
+    };
+    globalThis.setInterval = () => ({ interval: true });
+    globalThis.clearInterval = () => {};
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 1_000 }).hyperliquid();
+    const unsubscribe = provider.subscribe('BTC', '15', () => {});
+    const first = sockets[0];
+    first.onopen?.({ type: 'open' });
+    first.onmessage?.({ data: JSON.stringify({
+      channel: 'candle', data: { s: 'BTC', t: 1, o: '1', h: '2', l: '1', c: '2', v: '1' },
+    }) });
+
+    const watchdog = timers.find((timer) => timer.timeout === 12_000 && !timer.cancelled);
+    assert.ok(watchdog, 'live silence watchdog was not armed');
+    watchdog.cancelled = true;
+    watchdog.callback(...watchdog.args);
+    assert.equal(first.closed, true);
+    assert.equal(sockets.length, 1, 'failed constructor unexpectedly created a socket');
+
+    const retry = timers.find((timer) => timer.timeout === 2_000 && !timer.cancelled);
+    assert.ok(retry, 'watchdog did not schedule a bounded retry');
+    retry.cancelled = true;
+    retry.callback(...retry.args);
+    assert.equal(sockets.length, 2, 'watchdog retry did not recover the subscription');
+    assert.equal(attempts, 3);
+
+    unsubscribe();
+    assert.equal(sockets.at(-1).closed, true);
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+  }
+});
+
 test('Binance async first socket remains guarded until unsubscribe', async () => {
   const originalWebSocket = globalThis.WebSocket;
   const originalSetTimeout = globalThis.setTimeout;

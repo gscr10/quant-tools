@@ -1,12 +1,26 @@
 # TODO
 
+## 2026-10-06 P1 Final Gate 续跑（当前）
+
+- [x] 修复浏览器 offline 期间 Vela/PineEngine 对缓存 K 线的 `tick/history` 重发布：已有 settled ledger 的 revision、status、trades、曲线和 Simulation 能力保持不变；联网后只接受新的 Provider tick。PineEngine/PineWorkerEngine 真实 Hyperliquid Workspace 3 周期共 6/6 通过，offline 无 callback/迟到数据，恢复后 socket 与账本均连续。
+- [x] 交易账本 FIFO/ANY、部分平仓 MFE/MAE、剩余持仓投影和 closed Trade ID 回归；根测试 549/549、Vela-PineTS 303/303、matching 65/65。
+- [x] Performance/Analysis/Simulation 桌面与移动布局按最新参考 DOM 校准；视觉/a11y、开发/生产 E2E、Chromium/Firefox/WebKit fixture 和 touch 矩阵通过。
+- [x] 静默 WebSocket watchdog：live lease 安装后立即启动，首次 live callback 后每根 K 线重新计时；12 秒无新 candle 会撤销旧 lease、重建订阅并拒绝旧代次回调；销毁会清理 watchdog。首帧永不到达、静默重连、旧消息隔离和 timer cleanup 均有回归覆盖。
+- [x] Hyperliquid 两小时真实 WebSocket/断网恢复已通过 watchdog 版本：7200.133ms 连续订阅、8,617 candle callbacks、最大间隔 8,649ms、23 次 offline→online 全部恢复；24 sockets 创建/关闭平衡，active=0，offlineBars/late callbacks/cleanup errors 均为 0。证据在被忽略的 `audit-evidence/2026-10-06-p1-hyperliquid-watchdog12-two-hour/`。GitHub runner 对 Binance 的 `Failed to fetch` 仍不能计为通过。
+- [x] Provider 重连资源复核：真实 PineEngine/PineWorkerEngine 各 3 个断网恢复周期均在每周期强制 CDP GC 后保持稳定（JSEventListeners 987/990、Nodes 1698，无随 socket 数增长的残留）；destroy 后 listener 降至 721。非 GC soak 采样中的 listener 上升属于 Chromium/DevTools 延迟统计，当前没有确认的 provider handler 泄漏。证据在被忽略的 `audit-evidence/2026-10-06-p1-provider-workspace-resource-recheck-watchdog12/`，不替代长时 Final Gate。
+- [x] 2026-10-06 新参考窗口完整 golden：`reference_golden_compare.py` 逐字段比较 280/280 rows、2,520 fields，差异为 0；完整输入和结果留在被忽略的 `audit-evidence/`，更换行情/脚本/参数时必须重新生成。
+- [x] bundle raw/gzip 当前预算门禁通过：main `1,762,844/470,887`、worker `828,480/207,197`、Highcharts `376,416/134,100`；Vite 大 chunk warning 仍保留为优化提示，不以强拆包消除 warning。
+- [ ] 实体 Safari（按用户要求暂不考虑）、VoiceOver/真机、全量像素、TradingView 全复杂撮合，以及参考站其它行情/脚本窗口的重复 golden 仍保持外部/后续 Final Gate，不能用单一输入窗口的局部绿灯替代。
+
+> 线上部署/CDN/rollback 已按当前用户决定移出本阶段验收范围；没有服务器地址、部署方式或 previous 入口，不将其列为当前阻塞，也不把本地 preview 当作线上通过证据。
+
 ## 2026-10-03 Final Gate 门禁加固（当前）
 
 - [x] 部署 smoke 对 HTML 引用的每个静态资源强制检查 HTTP 200；非 hash 资源不再可能以 404 被误报通过。
 - [x] 部署 smoke 拒绝 candidate 与 previous/rollback 使用同一 URL，避免同槽配置伪造回滚证据。
-- [x] 修复 `wait-for-http` 失败路径测试在全量并发下的 Node 子进程启动抖动；当前根测试 532/532 通过。
+- [x] 修复 `wait-for-http` 失败路径测试在全量并发下的 Node 子进程启动抖动；当前根测试 549/549 通过。
 - [x] TypeScript、生产构建、release 29/29、`git diff --check` 通过。
-- [ ] 线上部署地址、完整参考站 Trades Log、实体 Safari/VoiceOver/真实设备及可访问交易所的长时断网恢复仍需外部输入；不得以本地 fixture 或 preview 标记为 Final Gate 已关闭。
+- [ ] 完整参考站 Trades Log、实体 Safari/VoiceOver/真实设备及可访问交易所的长时断网恢复仍需外部输入；线上部署/CDN/rollback 已按当前范围暂不处理，不计入本阶段 Final Gate。
 - [x] GitHub Actions `37132010789` 完成 60 秒真实 Binance/Hyperliquid 连续订阅与 offline→online recovery；仅作为短时真实网络证据，小时级 soak、跨区域代理黑洞和线上部署仍开放。
 - [ ] GitHub Actions `37133498353` 的 600 秒尝试在 Binance 初始请求处 `Failed to fetch`，未形成小时级证据；需在可访问交易所 API 的 runner 上重试，不能将网络失败标记为通过。
 - [ ] GitHub Actions `37134927725` 的 120 秒尝试在三次有限重试后仍无法访问 Binance；测试已正确 fail-closed，需更换可访问交易所 API 的 runner/网络。
@@ -104,7 +118,7 @@
 - [x] Pine Editor/CodeMirror 改为首次打开动态加载；主 chunk 约从 2.28MB/648KB gzip 降到 1.77MB/477KB gzip，动态编辑器 chunk 约 508KB/170KB gzip；主 E2E、类型检查和构建通过。
 - [x] E2E 增加编辑器 chunk 的首屏未加载/打开后加载断言，开发与生产回归均通过。
 
-## 2026-10-01 R-08～R-11 修复后独立复查（当前状态）
+## 2026-10-01 R-08～R-11 修复后独立复查（历史记录；当前状态见 2026-10-06 顶部）
 
 详见 [BACKTEST_R09_RECHECK_3_2026-10-01.md](docs/backtesting/reports/BACKTEST_R09_RECHECK_3_2026-10-01.md)、[R-09 新证据](audit-evidence/2026-10-01-r09-recheck-3/README.md) 与 [BACKTEST_R08_R11_RECHECK_2026-10-01.md](docs/backtesting/reports/BACKTEST_R08_R11_RECHECK_2026-10-01.md)。本轮不继承修复记录 PASS；本轮重新执行真实页面、三浏览器 pointer/keyboard 探针和完整项目门禁。
 
@@ -113,7 +127,7 @@
 - [x] R-11：503/429/超时/非法 JSON、Retry 12,500 根、旧请求 supersede、共享 Provider 多 Cell；独立矩阵 18/18，双 Cell 复核通过。
 - [x] R-09 完整焦点生命周期：Tab/Shift+Tab/Escape/busy 及真实 Workbench pointer-open 三浏览器均回到 Settings 触发按钮；主 E2E 通过。
 - [x] D-01 动态历史绑定：本轮修复“idle 且缺少 trades 字段被误判为空账本”的边界；独立历史完成后立即挂载、晚挂载和延迟适配器流程均未再观察到 ready + 空账本。完整参考站逐笔 golden 仍另行开放。
-- [ ] 完整参考站逐笔 golden（仍缺 227 closed）、复杂撮合/Bar Magnifier、真实 WS/长时故障、全量像素对账、VoiceOver/跨设备、rollback。
+- [ ] 当时尚缺完整参考站逐笔 golden（227 closed）、复杂撮合/Bar Magnifier、真实 WS/长时故障、全量像素对账、VoiceOver/跨设备、rollback；后续状态以 2026-10-06 顶部记录为准。
 
 本次文档刷新后再次执行 `npm test`、Vela-PineTS、TypeScript、build、依赖契约、dist 独立性、主 `npm run test:e2e` 和 `git diff --check`，结果通过；新证据目录包含三浏览器 pointer/keyboard、Settings traversal 及结构化门禁 status JSON。R-09 当前契约关闭，但整体 **PARTIAL**；Replay 仍不在当前阶段范围。
 

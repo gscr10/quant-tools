@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 LuxAlgo
 
-import { Order, StrategyReportPoint, StrategyState, Trade } from './types';
+import { Order, StrategyLedgerEntry, StrategyReportPoint, StrategyState, Trade } from './types';
 import { Series } from '../../Series';
 import { getDatePartsInTimezone } from '../Time';
 import {
@@ -259,9 +259,17 @@ export function processStrategyOrders(
     // per point on the ES E-mini. Multiplied into every priceChange × qty
     // computation throughout this file so excursions and P&L are in $.
     const pointValue = context.pine?.syminfo?.pointvalue ?? 1;
-    for (const trade of strategy.opentrades) {
-        const tradeQty = Math.abs(trade.size);
-        const isLongTrade = trade.size > 0;
+    // `_ledger_entries` is the accounting projection of the physical lots.
+    // When it exists, walking both collections would apply every intrabar
+    // excursion twice (and inflate MFE/MAE after FIFO crosses entry IDs).
+    // Hand-built legacy states have no ledger and continue to use opentrades.
+    const ledger = strategy._ledger_entries ?? [];
+    const excursionLots = ledger.length > 0
+        ? ledger.map((trade) => ({ trade, size: trade.qty * trade.direction }))
+        : strategy.opentrades.map((trade) => ({ trade, size: trade.size }));
+    for (const { trade, size } of excursionLots) {
+        const tradeQty = Math.abs(size);
+        const isLongTrade = size > 0;
         const entryComm = trade.commission ?? 0;
         const advPrice = isLongTrade
             ? (trade.entry_price - lowPrice) * tradeQty * pointValue
@@ -990,7 +998,16 @@ export function openTrade(
     fillExecutionRange?: FillExecutionRange,
 ): void {
     const strategy: StrategyState = context.strategy;
-    const tradeNum = strategy.opentrades.length + strategy.closedtrades.length;
+    // Physical lot IDs are scoped to the currently materialized trade book.
+    // Closed accounting slices use their own monotonic counter below: a FIFO
+    // fill can emit multiple closed rows for one physical lot, so sharing one
+    // counter would introduce gaps into the published closed-trade sequence
+    // and break the registry fixture contract.  The Vela projection prefixes
+    // an open row if its physical ID happens to match a closed row.
+    const tradeNum = Math.max(
+        strategy.opentrades.length + strategy.closedtrades.length,
+        strategy._next_closed_trade_id ?? 0,
+    );
 
     // Charge entry-leg commission up front; trade.commission will be increased
     // by the exit leg when it closes (or proportional share on partial close).
@@ -1032,15 +1049,18 @@ export function openTrade(
     // FIFO ledger-entry record for TV-style exit pairing (see
     // consumeLedger / closePartialPosition): TV's xlsx pairs exit fills
     // with entry records oldest-first, splitting at record boundaries.
-    ((strategy as any)._ledger_entries ??= []).push({
+    const ledgerEntry: StrategyLedgerEntry = {
+        id: trade.id,
         entry_id: entryId,
         entry_price: price,
         entry_time: time,
         entry_bar_index: context.idx,
         entry_comment: trade.entry_comment,
         qty,
+        direction,
         commission: entryCommission,
-    });
+    };
+    (strategy._ledger_entries ??= []).push(ledgerEntry);
 
     // Realize the entry commission immediately as a cash outflow. TV reports
     // strategy.netprofit and strategy.grossloss net of entry commission the
@@ -1117,6 +1137,8 @@ export function openTrade(
     // before showing any runup). TV reports both metrics commission-netted.
     trade.max_drawdown = Math.max(0, adv) + entryCommission;
     trade.max_runup = Math.max(0, fav - entryCommission);
+    ledgerEntry.max_drawdown = trade.max_drawdown;
+    ledgerEntry.max_runup = trade.max_runup;
 
     // Update flat position scalars
     const oldSize = strategy.position_size;
@@ -1227,8 +1249,8 @@ export interface CloseInfo {
 }
 
 /**
- * Consume `qty` from the strategy's FIFO ledger-entry queue (records with
- * the closing lot's entry_id), splitting records at boundaries. Returns
+ * Consume `qty` from the strategy's FIFO ledger-entry queue, restricting
+ * records to the closing entry ID only for ANY. Splits at boundaries and returns
  * the consumed slices (entry attributes + pro-rata entry commission).
  * Falls back to the physical lot's own attributes for any quantity the
  * queue cannot supply (hand-built test states have no queue records).
@@ -1237,38 +1259,47 @@ function consumeLedger(
     strategy: StrategyState,
     physical: Trade,
     qty: number,
-): Array<{ qty: number; entry_price: number; entry_time: number; entry_bar_index: number; entry_comment?: string; commission: number }> {
-    const out: Array<{ qty: number; entry_price: number; entry_time: number; entry_bar_index: number; entry_comment?: string; commission: number }> =
-        [];
+): Array<Omit<StrategyLedgerEntry, 'id' | 'direction'>> {
+    const out: Array<Omit<StrategyLedgerEntry, 'id' | 'direction'>> = [];
     let need = qty;
-    const queue: any[] = (strategy as any)._ledger_entries ?? [];
+    const queue = strategy._ledger_entries ?? [];
     for (const rec of queue) {
         if (need <= 1e-9) break;
-        if (rec.entry_id !== physical.entry_id || rec.qty <= 1e-9) continue;
+        if (rec.qty <= 1e-9) continue;
+        if (strategy.config.close_entries_rule === 'ANY' && rec.entry_id !== physical.entry_id) continue;
         const take = Math.min(rec.qty, need);
-        const commShare = rec.qty > 0 ? rec.commission * (take / rec.qty) : 0;
+        const fraction = take / rec.qty;
+        const commShare = rec.commission * fraction;
         out.push({
             qty: take,
+            entry_id: rec.entry_id,
             entry_price: rec.entry_price,
             entry_time: rec.entry_time,
             entry_bar_index: rec.entry_bar_index,
             entry_comment: rec.entry_comment,
             commission: commShare,
+            max_drawdown: (rec.max_drawdown ?? 0) * fraction,
+            max_runup: (rec.max_runup ?? 0) * fraction,
         });
         rec.qty -= take;
         rec.commission -= commShare;
+        rec.max_drawdown = (rec.max_drawdown ?? 0) * (1 - fraction);
+        rec.max_runup = (rec.max_runup ?? 0) * (1 - fraction);
         need -= take;
     }
-    (strategy as any)._ledger_entries = queue.filter((r) => r.qty > 1e-9);
+    strategy._ledger_entries = queue.filter((record) => record.qty > 1e-9);
     if (need > 1e-9) {
         const physQty = Math.abs(physical.size);
         out.push({
             qty: need,
+            entry_id: physical.entry_id,
             entry_price: physical.entry_price,
             entry_time: physical.entry_time,
             entry_bar_index: physical.entry_bar_index,
             entry_comment: physical.entry_comment,
             commission: physQty > 0 ? (physical.commission ?? 0) * (need / physQty) : 0,
+            max_drawdown: physQty > 0 ? (physical.max_drawdown ?? 0) * (need / physQty) : 0,
+            max_runup: physQty > 0 ? (physical.max_runup ?? 0) * (need / physQty) : 0,
         });
     }
     return out;
@@ -1312,7 +1343,7 @@ export function closePartialPosition(context: any, qtyToClose: number, exitPrice
         const tradeDirection = Math.sign(trade.size);
 
         // TV LEDGER PAIRING: exit fills pair against a FIFO queue of ENTRY
-        // RECORDS (per entry_id), SPLITTING at record boundaries — a fill
+        // RECORDS (entry-ID restricted only for ANY), SPLITTING at record boundaries — a fill
         // of 5 contracts can consume 4.74018 of the oldest unpaired entry
         // plus 0.25982 of the next, producing TWO ledger rows (TV xlsx
         // 2021-11-16). Physical lots (this loop) only drive position,
@@ -1339,10 +1370,13 @@ export function closePartialPosition(context: any, qtyToClose: number, exitPrice
                 const exitCommShare = exitCommTotal * (s.qty / qtyClosed);
                 const priceChange = tradeDirection === 1 ? exitPrice - s.entry_price : s.entry_price - exitPrice;
                 const gross = priceChange * s.qty * pointValue;
+                const closedTradeId = strategy._next_closed_trade_id
+                    ?? strategy.closedtrades.length + 1;
+                strategy._next_closed_trade_id = closedTradeId + 1;
 
                 const row: Trade = {
-                    id: `trade_${strategy.opentrades.length + strategy.closedtrades.length + tradesToClose.length}`,
-                    entry_id: trade.entry_id,
+                    id: `trade_${closedTradeId}`,
+                    entry_id: s.entry_id,
                     entry_comment: s.entry_comment,
                     entry_price: s.entry_price,
                     _bracket_entry: trade._bracket_entry,
@@ -1350,8 +1384,8 @@ export function closePartialPosition(context: any, qtyToClose: number, exitPrice
                     entry_time: s.entry_time,
                     size: tradeDirection * s.qty,
                     commission: s.commission + exitCommShare,
-                    max_drawdown: trade.max_drawdown,
-                    max_runup: trade.max_runup,
+                    max_drawdown: s.max_drawdown,
+                    max_runup: s.max_runup,
                     status: 'closed',
                     exit_price: exitPrice,
                     exit_bar_index: context.idx,
