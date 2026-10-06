@@ -3,7 +3,7 @@
 ## 2026-10-06 P1 Final Gate 续跑（当前）
 
 - [x] 修复浏览器 offline 期间 Vela/PineEngine 对缓存 K 线的 `tick/history` 重发布：已有 settled ledger 的 revision、status、trades、曲线和 Simulation 能力保持不变；联网后只接受新的 Provider tick。PineEngine/PineWorkerEngine 真实 Hyperliquid Workspace 3 周期共 6/6 通过，offline 无 callback/迟到数据，恢复后 socket 与账本均连续。
-- [x] 交易账本 FIFO/ANY、部分平仓 MFE/MAE、剩余持仓投影和 closed Trade ID 回归；根测试 549/549、Vela-PineTS 303/303、matching 65/65。
+- [x] 交易账本 FIFO/ANY、部分平仓 MFE/MAE、剩余持仓投影和 closed Trade ID 回归；根测试 550/550、Vela-PineTS 303/303、matching 65/65。
 - [x] Performance/Analysis/Simulation 桌面与移动布局按最新参考 DOM 校准；视觉/a11y、开发/生产 E2E、Chromium/Firefox/WebKit fixture 和 touch 矩阵通过。
 - [x] 静默 WebSocket watchdog：live lease 安装后立即启动，首次 live callback 后每根 K 线重新计时；12 秒无新 candle 会撤销旧 lease、重建订阅并拒绝旧代次回调；销毁会清理 watchdog。首帧永不到达、静默重连、旧消息隔离和 timer cleanup 均有回归覆盖。
 - [x] Hyperliquid 两小时真实 WebSocket/断网恢复已通过 watchdog 版本：7200.133ms 连续订阅、8,617 candle callbacks、最大间隔 8,649ms、23 次 offline→online 全部恢复；24 sockets 创建/关闭平衡，active=0，offlineBars/late callbacks/cleanup errors 均为 0。证据在被忽略的 `audit-evidence/2026-10-06-p1-hyperliquid-watchdog12-two-hour/`。GitHub runner 对 Binance 的 `Failed to fetch` 仍不能计为通过。
@@ -18,7 +18,7 @@
 
 - [x] 部署 smoke 对 HTML 引用的每个静态资源强制检查 HTTP 200；非 hash 资源不再可能以 404 被误报通过。
 - [x] 部署 smoke 拒绝 candidate 与 previous/rollback 使用同一 URL，避免同槽配置伪造回滚证据。
-- [x] 修复 `wait-for-http` 失败路径测试在全量并发下的 Node 子进程启动抖动；当前根测试 549/549 通过。
+- [x] 修复 `wait-for-http` 失败路径测试在全量并发下的 Node 子进程启动抖动；当前根测试 550/550 通过。
 - [x] TypeScript、生产构建、release 29/29、`git diff --check` 通过。
 - [ ] 完整参考站 Trades Log、实体 Safari/VoiceOver/真实设备及可访问交易所的长时断网恢复仍需外部输入；线上部署/CDN/rollback 已按当前范围暂不处理，不计入本阶段 Final Gate。
 - [x] GitHub Actions `37132010789` 完成 60 秒真实 Binance/Hyperliquid 连续订阅与 offline→online recovery；仅作为短时真实网络证据，小时级 soak、跨区域代理黑洞和线上部署仍开放。
