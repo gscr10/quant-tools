@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 import socket
+import tempfile
 from urllib.request import urlopen
 
 from playwright.sync_api import sync_playwright
@@ -137,6 +138,7 @@ def main() -> int:
     global PORT, URL
     PORT = choose_port()
     URL = f"http://{HOST}:{PORT}/tests/fixtures/provider-smoke.html"
+    server_log = tempfile.TemporaryFile(mode="w+")
     server = subprocess.Popen(
         [
             "npm",
@@ -152,7 +154,7 @@ def main() -> int:
             "tests/vite-provider.config.ts",
         ],
         cwd=ROOT,
-        stdout=subprocess.PIPE,
+        stdout=server_log,
         stderr=subprocess.STDOUT,
         text=True,
     )
@@ -177,6 +179,11 @@ def main() -> int:
             raise AssertionError(f"provider smoke completed {result.get('roundsCompleted')} rounds, expected {args.rounds}")
         print(json.dumps(result, sort_keys=True))
         return 0
+    except Exception:
+        server_log.flush()
+        server_log.seek(0)
+        print(server_log.read()[-8000:], file=sys.stderr)
+        raise
     finally:
         server.terminate()
         try:
@@ -184,6 +191,7 @@ def main() -> int:
         except subprocess.TimeoutExpired:
             server.kill()
             server.wait(timeout=5)
+        server_log.close()
 
 
 if __name__ == "__main__":
