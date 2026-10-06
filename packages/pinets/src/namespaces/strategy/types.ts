@@ -111,6 +111,11 @@ export interface Trade {
     _bracket_entry?: number;
 }
 
+export type StrategyLedgerEntry = Pick<Trade,
+    'id' | 'entry_id' | 'entry_price' | 'entry_time' | 'entry_bar_index'
+    | 'entry_comment' | 'max_drawdown' | 'max_runup'
+> & { qty: number; direction: number; commission: number };
+
 /**
  * A pending or filled order tracked internally by the engine.
  *
@@ -316,6 +321,8 @@ export interface StrategyState {
     opentrades: Trade[];
     closedtrades: Trade[];
     pending_orders: Order[];
+    _ledger_entries?: StrategyLedgerEntry[];
+    _next_closed_trade_id?: number;
 
     /** Internal append-only order lifecycle history. Optional for backwards
      * compatibility with hand-built StrategyState fixtures. */

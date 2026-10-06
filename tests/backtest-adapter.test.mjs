@@ -261,6 +261,66 @@ async function bootstrapContext(context, id = 'strategy-provenance') {
   return snapshot;
 }
 
+test('keeps a settled report stable when Vela replays cached bars offline', async () => {
+  const initial = reportContext('offline-run', 1, [reportPoint({ equity: 1_000 })]);
+  const next = reportContext('offline-run', 2, [reportPoint({ equity: 1_250, realizedPnl: 250 })]);
+  const history = new Deferred();
+  const handle = new RoutedContextHandle('offline-replay', 'Offline replay strategy', {
+    full: initial,
+    summary: initial,
+  });
+  const chart = new FakeChart(handle, history);
+  const workspace = new FakeWorkspace({ id: 'cell-1', chart });
+  const adapter = new VelaBacktestResultsAdapter(workspace);
+  const boot = adapter.bootstrap();
+  history.resolve();
+  await boot;
+  await flush();
+  chart.emit('history:complete', { reason: 'depth', oldestTime: 1_000, barsLoaded: 10 });
+  await flush();
+  workspace.emit('script:run', {
+    cell: 'cell-1', id: handle.id, title: 'Offline replay strategy', kind: 'strategy',
+    cause: 'history', first: true, bar: 0, time: 1_000, forming: false, complete: true,
+    strategy: initial.strategy, warnings: [], trades: async () => [],
+  });
+  await flush();
+
+  const before = adapter.getSnapshot({ cellId: 'cell-1', indicatorId: handle.id });
+  assert.deepEqual(before?.trades, []);
+  const navigatorObject = globalThis.navigator;
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(navigatorObject, 'onLine');
+  Object.defineProperty(navigatorObject, 'onLine', { configurable: true, value: false });
+  try {
+    handle.full = next;
+    handle.summary = next;
+    workspace.emit('script:run', {
+      cell: 'cell-1', id: handle.id, title: 'Offline replay strategy', kind: 'strategy',
+      cause: 'history', first: false, bar: 1, time: 2_000, forming: false, complete: true,
+      strategy: next.strategy, warnings: [], trades: async () => [],
+    });
+    chart.emit('context:changed', { id: handle.id });
+    await flush();
+    const offline = adapter.getSnapshot({ cellId: 'cell-1', indicatorId: handle.id });
+    assert.equal(offline?.revision, before?.revision);
+    assert.equal(offline?.reportSeries?.snapshotRevision, before?.reportSeries?.snapshotRevision);
+    assert.equal(offline?.context?.strategy?.netPnl, before?.context?.strategy?.netPnl);
+  } finally {
+    if (navigatorDescriptor) Object.defineProperty(navigatorObject, 'onLine', navigatorDescriptor);
+    else delete navigatorObject.onLine;
+  }
+
+  workspace.emit('script:run', {
+    cell: 'cell-1', id: handle.id, title: 'Offline replay strategy', kind: 'strategy',
+    cause: 'history', first: false, bar: 1, time: 2_000, forming: false, complete: true,
+    strategy: next.strategy, warnings: [], trades: async () => [],
+  });
+  await flush();
+  const recovered = adapter.getSnapshot({ cellId: 'cell-1', indicatorId: handle.id });
+  assert.equal(recovered?.reportSeries?.points.at(-1)?.equity, 1_250);
+  assert.equal(recovered?.reportSeries?.snapshotRevision, 2);
+  adapter.destroy();
+});
+
 test('extracts a validated Worker build provenance from the engine context', async () => {
   const provenance = workerProvenance();
   const snapshot = await bootstrapContext({

@@ -1,5 +1,13 @@
 # Change Log
 
+## [Unreleased]
+
+### Fixed
+
+- Strategy accounting now applies TradingView FIFO/ANY close-entry pairing to the
+  ledger projection, preserves remaining open lots, scales partial-close MFE/MAE,
+  and assigns stable closed-trade IDs without consuming an open-row ID.
+
 ## [v0.9.34]
 
 ### Added

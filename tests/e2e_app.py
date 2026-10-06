@@ -2676,6 +2676,8 @@ def verify_backtest_workspace(
                     && row.querySelector('.quant-backtest-trade-number-value')
                     && row.querySelector('.quant-backtest-direction-badge')
                     && row.querySelectorAll('td.quant-backtest-trade-time').length === 2
+                    && row.querySelectorAll('.quant-backtest-trade-datetime').length === 2
+                    && row.querySelectorAll('.quant-backtest-trade-price').length === 2
                     && row.querySelector('td.quant-backtest-trade-time button[aria-label="Show entry on chart"] svg'));
                 }"""
             )

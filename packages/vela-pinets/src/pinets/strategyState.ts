@@ -8,6 +8,7 @@
 import type { StrategyState, StrategyTrade } from '@luxalgo/vela/plugin';
 import { asString, asNumber } from './PineRun';
 import type { PineReportIdentity } from './reportSeries';
+import { openTradeLedger } from './openTradeLedger';
 
 /**
  * Report-only fields produced by the local PineTS broker at the end of a
@@ -146,7 +147,7 @@ const optNum = <K extends string>(key: K, v: unknown): { [P in K]?: number } => 
 };
 
 /**
- * The ledger as round trips, closed first then open — the order PineTS keeps. `size` is
+ * The ledger as round trips, closed first then the remaining accounting entries. `size` is
  * SIGNED there and carries the direction; Vela splits that into `side` + a magnitude, so
  * host code never has to know the sign convention. Malformed entries are dropped.
  *
@@ -159,7 +160,7 @@ export function toStrategyTrades(raw: unknown): StrategyTrade[] {
     if (raw == null || typeof raw !== 'object') return [];
     const s = raw as RawStrategy;
     const out: StrategyTrade[] = [];
-    for (const entry of [...(Array.isArray(s.closedtrades) ? s.closedtrades : []), ...(Array.isArray(s.opentrades) ? s.opentrades : [])]) {
+    for (const entry of [...(Array.isArray(s.closedtrades) ? s.closedtrades : []), ...openTradeLedger(s)]) {
         const t = (entry ?? {}) as Record<string, unknown>;
         const entryPrice = asNumber(t.entry_price);
         const entryTime = asNumber(t.entry_time);

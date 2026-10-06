@@ -16,6 +16,16 @@ type ProviderRuntime = DataProvider & {
 const releasedWebSocketWrappers = new WeakSet<object>();
 const webSocketWrapperParents = new WeakMap<object, unknown>();
 
+// The bundled providers detect a stream that never emits its first candle,
+// and reconnect after `close`, but an already-open socket can still become
+// silent without firing either signal.  Once a live callback has established
+// the stream, bound the silence window so a half-open connection is replaced
+// before the workspace consumes stale market data.  Twelve seconds is shorter
+// than the upstream stream-stall watchdog and leaves enough margin below the
+// provider soak continuity gate for a fresh socket handshake.
+const LIVE_SILENCE_TIMEOUT_MS = 12_000;
+const LIVE_RECONNECT_RETRY_MS = 2_000;
+
 /**
  * Keep provider callbacks inside the lifetime of the chart subscription.
  *
@@ -89,9 +99,30 @@ export function guardProviderSubscription<T extends DataProvider>(
       let currentUnsubscribe: (() => void) | undefined;
       let currentRelease: (() => void) | undefined;
       let pausedOffline = false;
+      let silenceTimer: ReturnType<typeof setTimeout> | undefined;
+
+      const clearSilenceWatchdog = (): void => {
+        if (silenceTimer === undefined) return;
+        clearTimeout(silenceTimer);
+        silenceTimer = undefined;
+      };
+
+      const armSilenceWatchdog = (token: number): void => {
+        clearSilenceWatchdog();
+        silenceTimer = setTimeout(() => {
+          silenceTimer = undefined;
+          if (!active || stopped || pausedOffline || token !== generation) return;
+          // Invalidate the old generation before asking the provider to open a
+          // new lease.  Any callback queued by the silent socket is therefore
+          // ignored even when its close event is delivered later.
+          stopCurrent();
+          retryCurrentStart();
+        }, LIVE_SILENCE_TIMEOUT_MS);
+      };
 
       const stopCurrent = (): void => {
         generation += 1;
+        clearSilenceWatchdog();
         const unsubscribe = currentUnsubscribe;
         const release = currentRelease;
         currentUnsubscribe = undefined;
@@ -112,6 +143,9 @@ export function guardProviderSubscription<T extends DataProvider>(
         const guardedCallback = (bar: OHLCV): void => {
           if (!active || stopped || token !== generation) return;
           onBar(bar);
+          if (active && !stopped && token === generation && !pausedOffline) {
+            armSilenceWatchdog(token);
+          }
         };
         const invoke = () => upstreamSubscribe(
           ticker,
@@ -162,6 +196,28 @@ export function guardProviderSubscription<T extends DataProvider>(
         }
         currentUnsubscribe = upstreamUnsubscribe;
         currentRelease = releaseWebSocketGuard;
+        // A socket can open successfully yet never publish a first candle
+        // (for example when the exchange stream is half-open or the
+        // subscription acknowledgement is lost).  Arm the same bounded
+        // watchdog immediately after the lease is installed so this state
+        // cannot wait forever for the first callback.  Each received bar
+        // re-arms it from guardedCallback, preserving the idle-stream check.
+        armSilenceWatchdog(token);
+      };
+
+      const retryCurrentStart = (): void => {
+        if (!active || stopped || pausedOffline) return;
+        try {
+          startCurrent();
+        } catch {
+          // A transient constructor failure must not strand the lease. Retry
+          // with a bounded delay while preserving the generation gate.
+          if (!active || stopped || pausedOffline) return;
+          silenceTimer = setTimeout(() => {
+            silenceTimer = undefined;
+            retryCurrentStart();
+          }, LIVE_RECONNECT_RETRY_MS);
+        }
       };
 
       const eventTarget = globalThis as typeof globalThis & {

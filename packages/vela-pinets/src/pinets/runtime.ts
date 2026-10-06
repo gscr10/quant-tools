@@ -164,7 +164,7 @@ export class LowerTimeframeFetchCache {
         const options: LowerTimeframeFetchCacheOptions = typeof candidate === 'number'
             ? { maxEntries: candidate, ...(positionalTtlMs === undefined ? {} : { ttlMs: positionalTtlMs }) }
             : candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate)
-                ? candidate as LowerTimeframeFetchCacheOptions
+                ? candidate
                 : {};
         // A bad host option must not turn the cache into an unbounded map.  A
         // zero budget is a useful explicit opt-out for tests/diagnostics.
@@ -582,9 +582,9 @@ function suppliedChildBars(bars: unknown): OHLCV[] {
                 low: numberOrNaN(bar?.low),
                 close: numberOrNaN(bar?.close),
                 ...(bar?.volume == null ? {} : { volume: numberOrNaN(bar.volume) }),
-            } as OHLCV;
+            };
         } catch {
-            return { time: Number.NaN, open: Number.NaN, high: Number.NaN, low: Number.NaN, close: Number.NaN } as OHLCV;
+            return { time: Number.NaN, open: Number.NaN, high: Number.NaN, low: Number.NaN, close: Number.NaN };
         }
     });
 }

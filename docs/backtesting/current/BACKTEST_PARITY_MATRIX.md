@@ -1,5 +1,9 @@
 # Backtest Workspace Parity Matrix
 
+> **2026-10-06 P1 continuation**：已修复浏览器 offline 期间 Vela 对缓存 K 线发出 `tick/history` 后被适配层误当新报告的问题，并为 Binance/Hyperliquid 的 live lease 增加立即启动的 12 秒 watchdog、代次隔离和销毁清理。watchdog 在首帧未到达或后续 candle 静默时都会重建订阅；已有 settled ledger 保持 revision/status/trades/Simulation 能力不变，联网后的新 Provider tick 才能推进报告；`tests/e2e_provider_recovery.py` 对 PineEngine 与 PineWorkerEngine 的 3 周期真实 Hyperliquid Workspace 流程 6/6 通过。watchdog 版本 90 秒真实 Hyperliquid soak 通过，随后两小时 Hyperliquid 连续运行通过（7,200.133 秒、8,617 callbacks、23 次恢复、24 sockets 平衡清理、offline/late/cleanup error 为 0）；该证据只关闭 Hyperliquid 本机 scope，Binance 真实路由仍受 HTTP 451/网络阻断。2026-10-06 新参考窗口的 280/280 交易、2,520 个字段和 13 项汇总已由 `test:reference:golden` 逐字段通过；证据在忽略目录中，不随 Git 提交，需提供同样的完整输入才能复跑。根测试 549/549、Vela-PineTS 303/303、开发/生产 E2E、触摸、视觉/a11y 和 release 29/29 已通过。整体仍为 **PARTIAL**。线上部署、CDN/browser cache 与 rollback 按用户要求移出当前范围，不作为本矩阵阻塞项。
+
+> **2026-10-06 Provider 资源复核**：真实 PineEngine/PineWorkerEngine 各 3 个恢复周期在每周期强制 CDP GC 后，JSEventListeners（987/990）和 Nodes（1698）均不随 socket 数继续增长，与 fixed-3 基线一致；destroy 后 listeners 降至 721。长测未强制 GC 的 Performance 指标上升不能单独证明 handler 泄漏；该项暂无确认业务缺陷，但长时终态仍需记录资源与 teardown。证据位于被忽略的 `audit-evidence/2026-10-06-p1-provider-workspace-resource-recheck-watchdog12/`。
+
 > **2026-10-01 R-08～R-11 修复后独立复查（历史指针）**：R-08、R-10、R-11 结论保留于 [报告](../reports/BACKTEST_R08_R11_RECHECK_2026-10-01.md)；R-09 的历史状态见 [R-09 首次复查](../reports/BACKTEST_R09_RECHECK_2026-10-01.md)，当前状态以本文件下一条最新指针为准。整体仍为 **PARTIAL**。
 
 > **2026-10-01 最新独立复查**：[R-09 第三次复查](../reports/BACKTEST_R09_RECHECK_3_2026-10-01.md)、[R-09 新证据](../../../audit-evidence/2026-10-01-r09-recheck-3/README.md)。当前工作树重新运行后，R-08、R-10、R-11 的本轮缺陷场景通过；R-09 的 Tab/Shift+Tab、Escape、busy、destroy、三浏览器 Workbench pointer-open 和主 E2E 均通过。根测试 413/413、Vela-PineTS 283/283、构建、类型、依赖和静态独立性检查均由本轮重新执行。完整 reference golden、复杂撮合、长时 Provider、全量像素、VoiceOver/跨设备、bundle threshold 和 rollback 仍未完成，整体 **PARTIAL，Final Gate 未关闭**。下方旧报告和修复记录只作历史索引，不作为当前通过依据。
@@ -47,7 +51,7 @@
 | --- | --- | --- | --- |
 | R-DYN | [`BACKTEST_REFERENCE_EVIDENCE.md`](../reports/BACKTEST_REFERENCE_EVIDENCE.md) 动态矩阵、追加动态复核、Full-access 续验 | 参考站在固定浏览器中的入口、字段、请求时序、部分几何和响应式行为 | 本项目数值相等、完整截图差分、未观察到的状态 |
 | R-LIVE | [`BACKTEST_REFERENCE_LIVE_AUDIT_2026-09-30.md`](../reports/BACKTEST_REFERENCE_LIVE_AUDIT_2026-09-30.md) 真实 workspace 登录采集 | 真实四 Tab、Settings、Simulation 控件、指标人口和 open-row 语义 | 同数据本地逐笔/逐字段相等、参考站未来版本和未观察状态 |
-| R-SMA921 | [audit-evidence/2026-10-01-recheck-ledger-visual/parity/README.md](../../../audit-evidence/2026-10-01-recheck-ledger-visual/parity/README.md) | 重新解析参考原始档案，当前 Node/浏览器双引擎新执行；53 closed + 1 open 共 536 字段、10 个已实现汇总一致 | 尚缺 227 closed；实际执行 source bytes 未证明；非外站本轮新采集、非完整 Performance/曲线一致 |
+| R-SMA921 | [2026-10-06 新参考窗口（本地忽略证据）](../../../audit-evidence/p1-final-gates-20261006/reference/comparison.json) | 同一完整参考/本地交易输入由 `tests/reference_golden_compare.py` 逐字段复核：280/280 trades、2,520 fields、13 项汇总与 Simulation 输入一致 | 证据文件不进入 Git；若更换行情、脚本、参数，必须重新导出并复跑；不覆盖全量像素和 TradingView 复杂撮合 |
 | R-RECHECK | [BACKTEST_LEDGER_VISUAL_RECHECK_2026-10-01.md](../reports/BACKTEST_LEDGER_VISUAL_RECHECK_2026-10-01.md)、[audit-evidence/2026-10-01-recheck-ledger-visual/README.md](../../../audit-evidence/2026-10-01-recheck-ledger-visual/README.md) | 本輪新构建、真实网络dev/prod、双引擎正常/故障路径、三浏览器视觉、独立SMA计算 | 未覆盖的全量reference/像素/复杂撮合/WS长链/rollback不作PASS |
 | R-HTML | 外部参考 artifact `backtest.html`（580,219 bytes，SHA-256 `96549a059940d5785f831c18fb52b1f6a65d0830746ff6e0af731a19e42a805b`；原文件不入库） | Performance/Dock 的静态 DOM、字段顺序、Highcharts 形态、视觉 token | 事件处理、原始数据、公式、其它三个 Tab 的运行行为；需要外部 artifact 才能复核 |
 | R-CHUNK | 参考组件 chunk SHA `8928f58b281cddd772241487387406fe310898bbb7c7dc6aaa257d6e2b360146`；图表/helper chunk SHA `2691702ab96f8f21f30e064723141dea28eac666268ecc8ad4db49d76a8f0950` | Trades Analysis 的结构、公式和图表合同（见参考证据追加章节） | 当前站点未来版本、完整 hover/键盘行为 |
@@ -190,6 +194,7 @@
 | PR-01 | 固定验收市场 Binance BTCUSDT · 1h，数据为 OHLCV Kline | R-DYN/计划 §1.5 明确基线 | Vela Binance provider + market identity mapping；新增本地 24 根 OHLCV/UTC/固定参数 fixture | A-E2E `verify_btcusdt_fixture`（24 bars/24 points、hash 绑定、零外部请求）+ A-PROVIDER live smoke | PARTIAL | 本地/registry 逐笔已通过；参考站非空 benchmark 与最终截图数值仍未冻结，故不升为 PASS |
 | PR-02 | Binance 历史与 live 连接 | 项目 Provider contract；参考请求为 candles | existing Binance provider | A-PROVIDER `historyBars=5/live=true` | PASS | 5 bars smoke 不等于完整深历史/重连/限流验收 |
 | PR-03 | Hyperliquid 历史与 live 连接 | 参考站 source discovery 仅作目录证据；本地功能范围含 Hyperliquid | existing Hyperliquid provider | A-PROVIDER `historyBars=5/live=true` | PASS | 无需把参考站其它 source 误写成本地支持 |
+| PR-08 | offline 期间缓存 K 线不得推进 settled 回测报告 | Provider lease 在 offline 时撤销；Vela 仍可能发缓存 `tick/history` | Adapter offline replay fence，保留 last-good revision/ledger，联网后接受新 tick | `tests/e2e_provider_recovery.py --cycles 3`：PineEngine/PineWorkerEngine 6/6；offline revision/status/trades 稳定、恢复后新 socket/ledger 正常 | PASS（本地双引擎场景） | 两小时/跨区域/代理黑洞 Provider 证据仍开放 |
 | PR-04 | provider/symbol/displaySymbol/timeframe 透传 Header | R-DYN Header；参考 symbol 显示规则需冻结 | `BacktestContext` → UI report fields | controller/viewer contract tests | PARTIAL | `BINANCE.US/BTCUSD` 与本地 `BTCUSDT` 的显示规则需 G0 冻结 |
 | PR-05 | 只有市场/策略/参数变化触发 run；Tab/Simulation 不触发 | R-DYN network observation | event/revision guards | A-E2E request counts, simulation no-rerun guard | PASS | 多 Cell、快速切换和 websocket reconnect 计数待补 |
 | PR-06 | OHLC 回测 vs tick/lower-timeframe execution | 计划 §8.5、TradingView 映射表；上游没有自动 Bar Magnifier | 本地 Fork 接入 provider-backed lower-timeframe OHLCV、四点 child replay 和显式 chart-OHLC fallback；1m/5m 秒级映射按 provider 边界禁用 | `bar-magnifier-runtime`、PineTS broker/worker parity、precision/UI contract tests | PARTIAL | 仍缺固定 BTCUSDT 逐 Fill 与 TV 对账、秒级历史、全部 calc_on_* / 复合订单语义；不能宣称完整 tick 等价 |
@@ -285,7 +290,7 @@
 | ENG-02 | close mark-to-market equity/drawdown/benchmark exact series | 计划 G4b.2 contract（参考页面本身不公开内部 series） | local PineTS/Vela-PineTS reportSeries/reportTail | adapter/Worker/in-process tests + E2E exact-equity | PASS | 仅表示本地契约已验证；不表示与参考站数值一致 |
 | ENG-03 | currency、max contracts、entry/exit bar index bridge | 参考 UI 无独立可见字段；engine audit | G4b.3 bridge + capability validation（当前 Fork 身份升级为 G8.1/schema 4）；raw audit relation 由独立 `auditLedger` capability 管理 | Vela-PineTS `27 files / 261 tests`、G4b.3 targeted bridge tests、controller/domain tests | PASS | raw capability 不由本行扩大；缺失/过期 audit envelope 仍 false，边界见 [`BACKTEST_LEDGER_AUDIT.md`](../reports/BACKTEST_LEDGER_AUDIT.md) |
 | ENG-04 | 固定 BTCUSDT/1h candles、策略、参数下逐笔 Entry/Exit/Size/P&L/MFE/MAE | 计划 G0/DoD；2026-09-30 参考 workspace 提供真实 Moon Phases 13 笔/14 行分析样本，但不是同一固定 fixture | 固定 UTC/24 bars/Pine source/parameters；应用层真实执行并输出 3 笔 ledger | package fixture 2/2 + dev browser fixture：Entry/Exit/Size/P&L/MFE/MAE、summary、reportSeries hash 与 registry baseline 对账；参考动态截图/DOM 已归档 | PARTIAL | 1h 基线仍缺 reference/local 同 hash 逐笔数值对账和复杂成交 fixture；另见 ENG-04a 的 15m SMA 9/21 固定响应算术 PASS |
-| ENG-04a | LuxAlgo BTCUSDT/15m 5,000 bars 上的 SMA 9/21 有限对账 | 已保存真实参考原始响应/完整53 closed与1 open | 当前Node、Chromium PineEngine/PineWorkerEngine重新执行三种源码，280closed+1open | audit-evidence/2026-10-01-recheck-ledger-visual/parity/reference-v-current-comparison.json；536字段和10个realized汇总一致 | PASS（已采字段）；完整PARTIAL | 仅53/280 closed=18.93%，缺227；不能证明参考执行字节hash；R-08及E-01口径风险另列 |
+| ENG-04a | LuxAlgo BTCUSDT/15m 5,000 bars 上的 SMA 9/21 有限对账 | 2026-10-06 新窗口完整 Trades Log 与 Summary/Simulation 输入 | 当前 Node、Chromium PineEngine/PineWorkerEngine 使用同一完整输入，280 closed/open rows 均可归一化 | `python3 tests/reference_golden_compare.py --reference audit-evidence/p1-final-gates-20261006/reference/reference-golden.json --local audit-evidence/p1-final-gates-20261006/reference/local-golden.json`：280/280、differenceCount=0 | PASS（当前输入窗口） | 输入和证据在忽略目录；更换 source/行情/参数需重跑；不扩展为 TradingView 全复杂撮合或全量像素 PASS |
 | ENG-05 | raw order/fill、reversal relation、partial close/pyramiding | 计划 G4b/G6/G8 | PineTS fork 有 append-only `_order_events/_fill_events`；本地 Vela-PineTS 通过 `auditLedger` 公开 identity-bound DTO，adapter/domain 动态开启 raw capabilities；上游 Vela 基线仍 false；`cash_per_order` 多 lot close 已按一次 broker order 计费并按数量分摊 | 根 `241/241`；PineTS strategy `23 files / 126 tests`；adapter/domain/controller 与 Vela-PineTS raw-ledger 既有套件通过 | PARTIAL | 仍缺完整复杂成交 fixture、同 timestamp/OCA/实时复合订单、TradingView 逐 Fill 和 raw UI 展示；不可把首版桥接升级为完整 broker parity |
 | ENG-06 | Bar Magnifier/低周期撮合及 applied precision | 计划 §8.5；TV parent→child 表与 provider 数据边界 | G8.1 PineTS/Vela-PineTS Fork 已支持经过校验的 lower bars、四点路径、覆盖率和 fallback reason；`calc_on_order_fills`/`calc_on_every_tick` 首版已在 chart-OHLC/lower-timeframe 边界驱动不增报告点的脚本重算；应用 capability 仅在完整覆盖时标记 `lower-timeframe` | `bar-magnifier.test.ts`、`bar-magnifier-audit.test.ts`、`calc-on-recalculation.test.ts`、runtime/worker parity、adapter/UI precision tests | PARTIAL | 实时 tick、raw order/fill、完整复合订单语义、固定 BTCUSDT 逐 Fill 对账和跨浏览器 UI 仍待；G8 完整 Gate 未关闭 |
 | ENG-07 | Simulation 固定 seed 逐值与参考一致 | 参考 chunk seed `12648430`；本地实现同 seed | deterministic PRNG/formulas | unit/E2E internal determinism | PARTIAL | 需同一 closed ledger 与参考输出逐 run/percentile 对账 |
@@ -323,7 +328,7 @@
   `0/0/0`、Provider request 在 destroy 后不增长、blocked/page/HMR/WebSocket 均为 0；合同测试 `1/1`。
 - 当前代码级门禁：既有回归 `22/22`、根 TypeScript、dependency contract 和生产构建通过。
 
-上述证据不能替代参考站逐笔/视觉差分、完整复杂订单、生产 HMR/VoiceOver 和真实 rollback，相关行继续保持 PARTIAL。
+上述证据不能替代参考站逐笔/视觉差分、完整复杂订单、生产 HMR/VoiceOver 等仍在范围内的 Final Gate；线上部署、CDN/browser cache 与 rollback 已按用户要求移出当前范围。
 
 ### 19.1 可以暂时视为局部通过的能力
 
@@ -343,8 +348,8 @@
 5. Desktop/mobile 参考差分；本地 mobile 与参考站约 900px 以下行为目前存在未决分歧。
 6. 完整视觉 diff、axe/WCAG、keyboard-only、VoiceOver，以及完整应用而非 fixture 的跨浏览器证据。
 7. 10k/100k 数据、虚拟列表/downsample、拖拽 FPS、heap/实例资源计数。
-8. 生产 destroy/remount、故障注入全矩阵、feature flag/rollback（测试 fixture 的无 HMR smoke 已通过）。
-9. 最终产物无远程/参考资源静态扫描、fresh clone/清缓存构建和生产断网壳 smoke 已通过；仍待真实 rollback 演练。
+8. 生产 destroy/remount、故障注入全矩阵、feature flag（测试 fixture 的无 HMR smoke 已通过）。
+9. 最终产物无远程/参考资源静态扫描、fresh clone/清缓存构建和生产断网壳 smoke 已通过；线上 rollback 按用户要求移出当前范围。
 
 ### 19.3 推荐执行顺序
 

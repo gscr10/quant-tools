@@ -36,6 +36,15 @@ export function formatReportAxisValue(value: number, _currency = false, tickInte
   });
 }
 
+function formatPerformanceAxisValue(value: number, compact: boolean, tickInterval?: number): string {
+  const scale = compact
+    ? ([1e12, 1e9, 1e6, 1e3].find((candidate) => Math.abs(value) >= candidate) ?? 1)
+    : 1;
+  const suffix = ({ 1e12: 'T', 1e9: 'G', 1e6: 'M', 1e3: 'k' } as Record<number, string>)[scale] ?? '';
+  return formatReportAxisValue(value / scale, false, tickInterval === undefined ? undefined : tickInterval / scale)
+    .replaceAll(',', '') + suffix;
+}
+
 export interface ReportChartZone {
   readonly value?: number;
   readonly color: string;
@@ -765,6 +774,11 @@ export async function enhanceReportChart(
     } as HighchartsNamespace.SeriesOptionsType;
   });
   const chart = Highcharts.chart(host, {
+    // Match the report's English/UTC labels even when the browser locale is
+    // Chinese. Highcharts 13 otherwise localizes date ticks independently of
+    // the English report header and tooltips.
+    lang: { locale: 'en-US' },
+    time: { timezone: 'UTC' },
     chart: {
       type: options.kind,
       backgroundColor: 'transparent',
@@ -773,7 +787,8 @@ export async function enhanceReportChart(
       // Highcharts' own observer bypasses our drag suspension/deduplication.
       reflow: false,
       height: options.height ?? 180,
-      spacing: options.chartSpacing ? [...options.chartSpacing] : [8, 8, 8, 8],
+      spacing: options.chartSpacing ? [...options.chartSpacing]
+        : options.tooltipMode === 'performance-bucket' ? [10, 10, 15, 10] : [8, 8, 8, 8],
     },
     accessibility: {
       // The optional Highcharts accessibility module is intentionally not in
@@ -802,8 +817,10 @@ export async function enhanceReportChart(
         text: options.xAxisTitle,
         style: { color: 'var(--vela-fg-muted, #868a96)' },
       },
-      lineColor: 'transparent',
-      tickColor: options.xAxisTickColor ?? 'transparent',
+      lineColor: options.tooltipMode === 'performance-bucket' ? 'rgba(255,255,255,0.1)' : 'transparent',
+      ...(options.tooltipMode === 'performance-equity' ? { lineWidth: 0, tickWidth: 0 } : {}),
+      tickColor: options.xAxisTickColor
+        ?? (options.tooltipMode === 'performance-bucket' ? 'rgba(255,255,255,0.1)' : 'transparent'),
       labels: {
         ...(options.tooltipMode === 'performance-equity'
           && tooltipPoints?.some((point) => point.tradeNumber !== undefined) ? {
@@ -834,7 +851,9 @@ export async function enhanceReportChart(
             }
             : {}
         ),
-        style: { color: 'var(--vela-fg-muted, #868a96)' },
+        style: options.tooltipMode === 'performance-bucket'
+          ? { color: '#71717a', fontSize: '10px' }
+          : { color: options.tooltipMode === 'performance-equity' ? '#999999' : 'var(--vela-fg-muted, #868a96)' },
       },
       plotLines: xPlotLines,
     },
@@ -846,22 +865,29 @@ export async function enhanceReportChart(
       ...(options.yAxisTickInterval === undefined ? {} : { tickInterval: options.yAxisTickInterval }),
       title: {
         text: options.yAxisTitle,
-        style: { color: 'var(--vela-fg-muted, #868a96)' },
+        style: options.tooltipMode === 'performance-bucket'
+          ? { color: '#71717a', fontSize: '11px' }
+          : { color: 'var(--vela-fg-muted, #868a96)' },
       },
-      gridLineColor: 'rgba(134, 138, 150, 0.16)',
+      gridLineColor: options.tooltipMode === 'performance-bucket' ? 'rgba(255,255,255,0.05)' : 'rgba(134, 138, 150, 0.16)',
       ...(options.yAxisGridLineWidth === undefined
         ? {}
         : { gridLineWidth: options.yAxisGridLineWidth }),
       labels: {
         formatter() {
           if (options.yAxisPercent) return formatPercentRatio(Number(this.value), 0);
-          return formatReportAxisValue(Number(this.value), options.valueUnit === 'currency'
-            || options.tooltipMode === 'performance-equity' || options.tooltipMode === 'performance-bucket',
-          this.axis.options.tickInterval ?? (this.axis.tickPositions
-            && this.axis.tickPositions.length > 1
-            ? this.axis.tickPositions[1] - this.axis.tickPositions[0] : undefined));
+          const ticks = this.axis.tickPositions;
+          const tickInterval = this.axis.options.tickInterval
+            ?? (ticks && ticks.length > 1 ? ticks[1] - ticks[0] : undefined);
+          if (options.tooltipMode === 'performance-equity' || options.tooltipMode === 'performance-bucket') {
+            return formatPerformanceAxisValue(Number(this.value), options.tooltipMode === 'performance-bucket',
+              tickInterval);
+          }
+          return formatReportAxisValue(Number(this.value), options.valueUnit === 'currency', tickInterval);
         },
-        style: { color: 'var(--vela-fg-muted, #868a96)' },
+        style: options.tooltipMode === 'performance-bucket'
+          ? { color: '#71717a', fontSize: '10px' }
+          : { color: options.tooltipMode === 'performance-equity' ? '#999999' : 'var(--vela-fg-muted, #868a96)' },
       },
       plotLines: yPlotLines,
     },

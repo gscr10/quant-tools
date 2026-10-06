@@ -879,13 +879,22 @@ function renderKpi(
   value: string,
   tone: string,
   secondary?: string,
+  currency?: string,
 ): HTMLElement {
   const item = createElement(doc, 'div', 'quant-backtest-kpi');
   const name = createElement(doc, 'span', 'quant-backtest-kpi-label');
   name.textContent = label;
   const valueRow = createElement(doc, 'div', 'quant-backtest-kpi-value-row');
   const amount = createElement(doc, 'strong', `quant-backtest-kpi-value quant-backtest-tone-${tone}`);
-  amount.textContent = value;
+  const suffix = currency ? ` ${currency.toUpperCase()}` : '';
+  if (suffix && value.endsWith(suffix)) {
+    amount.append(doc.createTextNode(value.slice(0, -suffix.length)));
+    const unit = createElement(doc, 'span', 'quant-backtest-kpi-currency');
+    unit.textContent = suffix;
+    amount.appendChild(unit);
+  } else {
+    amount.textContent = value;
+  }
   valueRow.appendChild(amount);
   if (secondary) {
     const detail = createElement(doc, 'span', 'quant-backtest-kpi-secondary');
@@ -929,10 +938,12 @@ function performanceSummaryKpis(doc: Document, report: BacktestReport): HTMLElem
       'Net Profit',
       formatMetric(net, currency, true),
       net === null ? 'neutral' : net > 0 ? 'positive' : 'negative',
+      undefined,
+      currency,
     ),
     renderKpi(doc, 'Trades', formatMetric(trades, 'count'), 'neutral'),
     renderKpi(doc, 'Win Rate', formatMetric(winRate, '%'), 'neutral', winBreakdown),
-    renderKpi(doc, 'Max Drawdown', formatMetric(drawdown, currency), 'neutral', drawdownDetail),
+    renderKpi(doc, 'Max Drawdown', formatMetric(drawdown, currency), 'neutral', drawdownDetail, currency),
     renderKpi(doc, 'Profit Factor', formatMetric(factor, 'ratio'), factorTone),
   );
   return bar;

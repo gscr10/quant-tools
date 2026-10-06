@@ -1,5 +1,6 @@
 import type { PineRun, PinePlot, PinePlotPoint, PineRunMeta, PineTrade } from './PineRun';
 import { asString, asNumber } from './PineRun';
+import { openTradeLedger } from './openTradeLedger';
 
 /** Loose view of the raw PineTS Context (only what we read). */
 interface RawContext {
@@ -117,7 +118,7 @@ export function normalizeContext(ctx: unknown): PineRun {
 }
 
 /**
- * The ledger as-is: closed trades first, then the still-open ones. These arrays are
+ * Closed trades first, then the remaining accounting entries. These arrays are
  * STATE (the current ledger), not an event log — no cross-tick dedupe is needed, and a
  * partial close legitimately leaves the same trade id in both lists (the closed lot and
  * the open remainder). Malformed entries are dropped.
@@ -125,7 +126,7 @@ export function normalizeContext(ctx: unknown): PineRun {
 function normalizeTrades(strategy: NonNullable<RawContext['strategy']>): PineTrade[] {
     const out: PineTrade[] = [];
     const closed = Array.isArray(strategy.closedtrades) ? strategy.closedtrades : [];
-    const open = Array.isArray(strategy.opentrades) ? strategy.opentrades : [];
+    const open = openTradeLedger(strategy);
     for (const raw of [...closed, ...open]) {
         const t = (raw ?? {}) as Record<string, unknown>;
         const entry_price = asNumber(t.entry_price);

@@ -31,7 +31,9 @@ ALIASES = {
 
 
 def load_rows(path: Path) -> list[dict]:
-    payload = json.loads(path.read_text())
+    def reject_nonfinite(token: str):
+        raise ValueError(f"{path}: non-finite JSON number {token}")
+    payload = json.loads(path.read_text(), parse_constant=reject_nonfinite)
     if isinstance(payload, list):
         rows = payload
     elif isinstance(payload, dict):
@@ -71,7 +73,8 @@ def value(row: dict, field: str):
                 return current.strip().lower()
             if field in NUMERIC and isinstance(current, str):
                 try:
-                    return float(current)
+                    number = float(current)
+                    return number if math.isfinite(number) else current
                 except ValueError:
                     return current
             return current
@@ -119,11 +122,47 @@ def indexed_rows(rows: list[dict], source: str) -> tuple[dict[int, dict], list[d
     return indexed, errors
 
 
+def validate_values(rows: list[dict], source: str) -> list[dict]:
+    """Matching omissions/nulls must not masquerade as a complete golden.
+
+    Only an open trade can omit its exit values and realized P&L. Numeric
+    strings are accepted, but booleans are not numbers in this contract.
+    """
+    errors = []
+    for index, row in enumerate(rows):
+        open_trade = has_value_field(row, "exitTime") and value(row, "exitTime") is None
+        if "open" in row and (not isinstance(row["open"], bool) or row["open"] != open_trade):
+            errors.append({"source": source, "row": index, "reason": "inconsistent-open-state"})
+        for field in FIELDS:
+            # The comparison reports missing-field separately.
+            if not has_value_field(row, field):
+                continue
+            current = value(row, field)
+            if current is None and open_trade and field in {"exitTime", "exitPrice", "pnl"}:
+                continue
+            if field == "side":
+                valid = current in ("long", "short")
+            else:
+                valid = (not isinstance(current, bool) and isinstance(current, (int, float))
+                         and math.isfinite(current))
+                if valid and field in {"entryTime", "exitTime"}:
+                    valid = current == int(current)
+            if not valid:
+                errors.append({"source": source, "row": index, "field": field,
+                               "reason": "invalid-field-value", "value": current})
+        if open_trade and has_value_field(row, "exitPrice") and value(row, "exitPrice") is not None:
+            errors.append({"source": source, "row": index, "field": "exitPrice",
+                           "reason": "open-trade-has-exit-price"})
+    return errors
+
+
 def compare(reference: list[dict], local: list[dict], tolerance: float) -> dict:
+    if not math.isfinite(tolerance) or tolerance < 0:
+        raise ValueError("tolerance must be finite and non-negative")
     ref, ref_errors = indexed_rows(reference, "reference")
     actual, local_errors = indexed_rows(local, "local")
     differences = []
-    errors = ref_errors + local_errors
+    errors = ref_errors + local_errors + validate_values(reference, "reference") + validate_values(local, "local")
     for number in sorted(set(ref) | set(actual)):
         if number not in ref or number not in actual:
             differences.append({"trade": number, "reason": "missing-row"})

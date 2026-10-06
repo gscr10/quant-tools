@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Deterministic visual, geometry and accessibility gate for the backtest viewer.
 
-This gate intentionally uses the checked-in BTCUSDT fixture rather than the
-reference website.  The reference site is not a runtime dependency and its
-pixels are not a legal or reproducible golden source for this repository.  A
-golden run therefore freezes *our* rendered shell, while the parity matrix
-continues to describe which parts still need a reference capture.
+This gate uses the checked-in BTCUSDT fixture to detect local regressions.
+Live reference captures stay under ignored audit-evidence/ so the deployment
+repository carries only the small local baselines. Passing this gate does not
+prove reference parity; that requires a separate same-data live comparison.
 
 Usage::
 
@@ -443,7 +442,10 @@ def assert_page_surface_geometry(
     panel = item["panel"]
     assert surface, (label, "missing report page", item)
     assert abs(surface["left"] - panel["left"]) <= 1, (label, surface, panel)
-    assert abs(surface["right"] - panel["right"]) <= 1, (label, surface, panel)
+    # Content fills the panel's client area. The measured reference reserves
+    # a scrollbar gutter, which is part of its border box but not its content.
+    content_right = panel["left"] + item["panelClientWidth"]
+    assert abs(surface["right"] - content_right) <= 1, (label, surface, panel)
     style = surface["style"]
     assert style["boxSizing"] == "border-box", (label, style)
     assert style["maxWidth"] in {"none", "100%"}, (label, style)
@@ -648,7 +650,11 @@ def run_gate(update: bool) -> dict[str, object]:
                     assert_page_surface_geometry(
                         variant,
                         (label, width, height),
-                        12 if width <= 640 and tab == "analysis" else (16 if width <= 640 else padding),
+                        # The reference Analysis surface intentionally keeps a
+                        # 40px mobile inset so its wide direction table can
+                        # scroll inside the page without touching the shell.
+                        40 if width <= 640 and tab == "analysis"
+                        else (24 if width <= 640 and tab == "log" else (16 if width <= 640 else padding)),
                         require_log_card=needs_card,
                         require_toolbar=needs_toolbar,
                     )
