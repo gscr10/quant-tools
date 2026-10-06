@@ -19,7 +19,7 @@ Safari 专项、Replay、真实线上部署/rollback/CDN 验收不在本阶段�
 
 ### 2026-10-06 本轮证据与边界
 
-- 根测试 549/549、Vela-PineTS 303/303、PineTS offline 1,653 passed/1 skipped；新 FIFO/ANY 手算用例 15/15。PineTS 全仓联网测试另有 150 项网络失败，不记为通过。
+- 根测试 550/550、Vela-PineTS 303/303、PineTS offline 1,653 passed/1 skipped；新 FIFO/ANY 手算用例 15/15。PineTS 全仓联网测试另有 150 项网络失败，不记为通过。
 - fresh build、类型检查、Vela-PineTS 全包 lint、开发/生产 E2E、六组触摸模拟和本地 visual/a11y 回归通过。原有 runtime 三处多余类型断言已移除。
 - 生产预览无 fixture 实测请求 Binance.US 两页共 2,000 根 BTCUSDT/15m；12 次采样 KPI 账本完整，页面错误为 0，多空分项与 Outperformance 均可复算。
 - 当前参考数据为 2026-10-06 新采集的 279 closed + 1 open；不能把它描述成旧窗口缺失的 227 行已补齐。完整新样本已重新用最终构建的本地引擎对账。
@@ -43,7 +43,7 @@ Safari 专项、Replay、真实线上部署/rollback/CDN 验收不在本阶段�
 - 既有 release manifest 已覆盖 candidate/previous 同槽切换、制品篡改拒绝和 Storage reconciliation；新增缓存 smoke 校验入口 HTML 可重新验证、hash 资源 immutable 且回滚保留旧资源。不把本地模拟等同真实 CDN/线上回滚。
 - Provider smoke 使用独立的无 HMR Vite 配置，避免 fork 构建或源文件变更触发测试页导航；已完成 Binance Spot/Futures、Hyperliquid 真实网络 10 轮历史与 live 验证。
 - `vite preview` 已提供发布缓存契约：HTML 入口 `no-cache/no-store/must-revalidate`，带 hash 的静态资源 `immutable`；这只证明本地预览协议，线上 CDN 仍需部署实测。
-- 本地回归门禁已补齐：等待服务测试在高负载下不再因 Node 子进程启动抖动误报；根测试当前 549/549，Vela-PineTS 303/303，release 29/29，Provider recovery 本地验证通过，触摸 E2E 6/6，Bar Magnifier golden 通过。
+- 本地回归门禁已补齐：等待服务测试在高负载下不再因 Node 子进程启动抖动误报；根测试当前 550/550，Vela-PineTS 303/303，release 29/29，Provider recovery 本地验证通过，触摸 E2E 6/6，Bar Magnifier golden 通过。
 
 ## 验证命令
 
