@@ -149,6 +149,7 @@
         bootstrapCount = 0;
         listSnapshotsCount = 0;
         emittedEventCount = 0;
+        revision = snapshot.revision;
 
         subscribe(listener) {
           this.subscribeCount += 1;
@@ -166,6 +167,15 @@
         listSnapshots() {
           this.listSnapshotsCount += 1;
           return [snapshot];
+        }
+
+        emitRevision() {
+          this.emittedEventCount += 1;
+          this.revision += 1;
+          for (const listener of this.listeners) listener({
+            type: 'snapshot',
+            snapshot: { ...snapshot, revision: this.revision, ledgerRevision: this.revision },
+          });
         }
       }
 
@@ -216,10 +226,12 @@
           state.simulationChangeCount += 1;
           controller.updateSimulation(change);
         },
+        onSimulationSessionEnd: (key) => controller.resetSimulationSession(key),
       });
 
       window.__simulationFixture = {
         ready: true,
+        emitRevision: () => source.emitRevision(),
         rerunSimulation: (variationPercent) => {
           return Number.isFinite(variationPercent)
             && controller.updateSimulation({ variationPercent }) !== null;

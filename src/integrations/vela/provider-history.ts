@@ -1,4 +1,5 @@
 import type { BarRange, DataProvider, OHLCV } from '@luxalgo/vela';
+import { repairHistoryGaps, type HistoryCalendar } from './history-continuity.ts';
 
 /**
  * Validate and copy a Vela bar range before it reaches a third-party provider.
@@ -92,6 +93,98 @@ function timeframeDurationMs(timeframe: unknown): number | undefined {
 }
 
 /**
+ * A history page is allowed to fail transiently at the transport boundary.
+ * Vela's registry feed converts that rejection into `[]`; without a retry this
+ * looks exactly like a valid genesis page to CachingDataFeed and can leave a
+ * hole in the shared cache. Keep this retry deliberately small: it repairs
+ * short exchange/proxy blips without turning a real outage into a long page
+ * stall.
+ */
+const HISTORY_RETRY_ATTEMPTS = 3;
+const HISTORY_RETRY_DELAY_MS = 40;
+
+function retryableHistoryError(error: unknown): boolean {
+  if (error === null || typeof error !== 'object') return true;
+  const value = error as { name?: unknown; status?: unknown };
+  // provider-network already bounds a timeout and, for Binance Spot, tries
+  // its independent mirror. Retrying that completed deadline here would
+  // double the outage latency without improving the request.
+  if (value.name === 'ProviderTimeoutError' || value.name === 'AbortError') return false;
+  if (typeof value.status === 'number' && Number.isFinite(value.status)) {
+    return value.status === 408
+      || value.status === 425
+      || value.status === 429
+      || value.status >= 500;
+  }
+  // TypeError is the browser fetch/network failure shape; generic errors are
+  // retained as retryable for guarded provider implementations that expose a
+  // transport failure without a status/name (the custom-provider contract is
+  // still fail-fast below when no network guard is present).
+  return true;
+}
+
+function retryDelay(attempt: number): Promise<void> {
+  if (attempt <= 0) return Promise.resolve();
+  return new Promise(resolve => setTimeout(resolve, HISTORY_RETRY_DELAY_MS * attempt));
+}
+
+function mergeBars(existing: readonly OHLCV[], additions: readonly OHLCV[]): OHLCV[] {
+  if (additions.length === 0) return [...existing];
+  const byTime = new Map<number, OHLCV>();
+  for (const bar of existing) byTime.set(bar.time, bar);
+  for (const bar of additions) byTime.set(bar.time, bar);
+  return [...byTime.values()].sort((a, b) => a.time - b.time);
+}
+
+/**
+ * Re-fetch short intraday holes inside a page.  The exchange APIs normally
+ * return one candle per interval; a short response caused by a gateway race
+ * should therefore be checked once before the chart accepts the gap. We do
+ * not synthesize candles when the retry remains empty — a no-trade interval
+ * must not become fabricated strategy data.
+ */
+async function repairIntradayGaps(
+  bars: readonly OHLCV[],
+  timeframe: string,
+  request: (range: BarRange) => Promise<unknown>,
+): Promise<OHLCV[]> {
+  const duration = timeframeDurationMs(timeframe);
+  // Cover every minute-based intraday resolution through 1h. A timeframe
+  // switch preserves the visible time span, so a page-internal hole can be
+  // introduced at 15m/30m/1h just as it can at 1m/5m. Daily/weekly/monthly
+  // feeds are deliberately excluded because session calendars can contain
+  // legitimate multi-hour/day gaps.
+  if (duration === undefined || duration > 60 * 60 * 1_000 || bars.length < 2) return [...bars];
+
+  let repaired = [...bars];
+  // Re-check at most eight gaps in one provider page. This prevents malformed
+  // data from turning a single load into an unbounded request fan-out.
+  const candidates = [] as Array<{ from: number; to: number; limit: number }>;
+  for (let i = 1; i < repaired.length && candidates.length < 8; i += 1) {
+    const previous = repaired[i - 1]!;
+    const current = repaired[i]!;
+    const missing = Math.round((current.time - previous.time) / duration) - 1;
+    if (missing <= 0 || missing > 1_000) continue;
+    candidates.push({
+      from: previous.time + duration,
+      to: current.time - duration,
+      limit: missing,
+    });
+  }
+  for (const gap of candidates) {
+    try {
+      const received = await request(gap);
+      const filled = normalizeProviderBars(received, gap);
+      repaired = mergeBars(repaired, filled);
+    } catch {
+      // The original page remains usable. A subsequent cache miss can retry;
+      // exposing the page's confirmed bars is safer than manufacturing rows.
+    }
+  }
+  return repaired;
+}
+
+/**
  * Normalize an upstream provider response to Vela's OHLCV contract.
  * Invalid rows are ignored locally, duplicate open times use the newest row,
  * and the result is always ascending and bounded by the requested range.
@@ -141,7 +234,42 @@ export function normalizeProviderBars(
   return result;
 }
 
-type GuardedProvider = DataProvider & { __quantToolsHistoryGuard?: true };
+type GuardedProvider = DataProvider & {
+  __quantToolsHistoryGuard?: true;
+  __quantToolsContinuousHistory?: true;
+  __quantToolsHistoryCalendar?: HistoryCalendar;
+};
+
+export function hasContinuousHistory(provider: DataProvider): boolean {
+  return (provider as GuardedProvider).__quantToolsContinuousHistory === true;
+}
+
+export function providerHistoryCalendar(provider: DataProvider): HistoryCalendar {
+  return (provider as GuardedProvider).__quantToolsHistoryCalendar ?? 'utc-month';
+}
+
+export type HistoryProviderKind = 'binance' | 'hyperliquid';
+
+function normalizeHistoryRangeForProvider(
+  timeframe: string,
+  requested: BarRange,
+  kind: HistoryProviderKind | undefined,
+): BarRange {
+  // Hyperliquid's monthly candle endpoint rejects negative epoch startTime
+  // values. A count based request for 2,000 monthly bars naturally computes a
+  // window before 1970, even though the venue only has a finite modern
+  // history. Clamp that lower bound to epoch zero; the provider then returns
+  // the available candles and the normalizer preserves the actual count.
+  if (kind !== 'hyperliquid' || requested.from !== undefined || requested.limit == null) {
+    return requested;
+  }
+  const duration = timeframeDurationMs(timeframe);
+  const end = requested.to ?? Date.now();
+  if (duration === undefined || !Number.isFinite(end)) return requested;
+  const estimatedStart = end - (requested.limit + 2) * duration;
+  if (estimatedStart >= 0) return requested;
+  return { ...requested, from: 0 };
+}
 
 export interface ProviderHistoryRequest {
   readonly ticker: string;
@@ -171,14 +299,18 @@ export function subscribeProviderHistoryRequests(
  * etc.) retain their original implementations and the instance still reports
  * the upstream constructor name to existing workspace diagnostics.
  */
-export function guardProviderHistory<T extends DataProvider>(provider: T): T {
+export function guardProviderHistory<T extends DataProvider>(
+  provider: T,
+  providerKind?: HistoryProviderKind,
+): T {
   const guarded = provider as GuardedProvider;
   if (guarded.__quantToolsHistoryGuard) return provider;
 
   const upstreamGetBars = provider.getBars;
   const guardedGetBars = async (ticker: string, timeframe: string, requestedRange: BarRange) => {
-    const range = normalizeProviderRange(requestedRange);
-    if (range === null) return [];
+    const normalizedRange = normalizeProviderRange(requestedRange);
+    if (normalizedRange === null) return [];
+    const range = normalizeHistoryRangeForProvider(timeframe, normalizedRange, providerKind);
 
     let settle!: (result: { error: unknown | null; bars: number; oldestTime: number | null }) => void;
     const result = new Promise<{ error: unknown | null; bars: number; oldestTime: number | null }>(resolve => { settle = resolve; });
@@ -220,8 +352,60 @@ export function guardProviderHistory<T extends DataProvider>(provider: T): T {
     }
 
     try {
-      let bars = await upstreamGetBars.call(receiver, ticker, timeframe, range);
-      if (transportError !== null) throw transportError;
+      const loadPage = async (pageRange: BarRange): Promise<unknown> => {
+        const loadAttempt = async (requestRange: BarRange): Promise<unknown> => {
+          let lastError: unknown;
+          for (let attempt = 0; attempt < HISTORY_RETRY_ATTEMPTS; attempt += 1) {
+            // The network seam records errors because bundled providers swallow
+            // them internally. Clear that per attempt so a later successful retry
+            // cannot inherit the first attempt's failure.
+            transportError = null;
+            try {
+              const result = await upstreamGetBars.call(receiver, ticker, timeframe, requestRange);
+              if (transportError !== null) throw transportError;
+              return result;
+            } catch (error) {
+              lastError = error;
+              // The bundled providers expose transport failures through the
+              // network guard, where the upstream implementation otherwise
+              // swallows them into an empty page. A custom DataProvider may use
+              // rejection for a domain/programming error; preserve that
+              // provider's original fail-fast contract instead of retrying
+              // arbitrary user code.
+              if (!runtime.__quantToolsNetworkGuard && transportError === null) throw error;
+              if (!retryableHistoryError(error)) throw error;
+              if (attempt + 1 >= HISTORY_RETRY_ATTEMPTS) throw error;
+              await retryDelay(attempt + 1);
+            }
+          }
+          throw lastError ?? new Error('Provider history request failed');
+        };
+
+        let result = await loadAttempt(pageRange);
+        // Binance's forward paginator treats an equal from/to range as empty.
+        // Gap repair commonly asks for exactly one missing candle, so apply the
+        // same narrow upper-bound expansion used by the public point-recovery
+        // path here as well. A confirmed empty result remains empty; no row is
+        // fabricated and the caller still applies the original exact bounds.
+        if (Array.isArray(result)
+          && result.length === 0
+          && pageRange.from !== undefined
+          && pageRange.to !== undefined
+          && pageRange.from === pageRange.to) {
+          const duration = timeframeDurationMs(timeframe);
+          if (duration !== undefined) {
+            const pointEnd = pageRange.from <= Number.MAX_SAFE_INTEGER - duration + 1
+              ? pageRange.from + duration - 1
+              : pageRange.from;
+            if (pointEnd !== pageRange.to) {
+              result = await loadAttempt({ ...pageRange, to: pointEnd, limit: 1 });
+            }
+          }
+        }
+        return result;
+      };
+
+      let bars = await loadPage(range);
       // The upstream Vela feed normally returns an array, but custom and
       // test providers can bypass the guarded json/post seam entirely. Do
       // not let an invalid payload become `[]`: the workspace treats a
@@ -239,33 +423,21 @@ export function guardProviderHistory<T extends DataProvider>(provider: T): T {
         throw new Error('Invalid provider candle response: malformed OHLC row');
       }
 
-    // Binance's forward paginator uses `while (cursor < to)`, so a point
-    // range (`from === to`) can incorrectly return no row.  Retry once with a
-    // single-candle upper bound, then apply the exact inclusive filter locally.
-    // Keeping the upper bound narrow is important for Hyperliquid: deleting it
-    // would ask candleSnapshot for `from..now` (up to its ~5000-candle cap) just
-    // to recover one point.
-      if (range.from !== undefined
-        && range.to !== undefined
-        && range.from === range.to
-        && normalized.length === 0) {
-        const duration = timeframeDurationMs(timeframe);
-        if (duration !== undefined) {
-          const pointEnd = range.from <= Number.MAX_SAFE_INTEGER - duration + 1
-            ? range.from + duration - 1
-            : range.from;
-          const pointRetry = { ...range, to: pointEnd, limit: 1 };
-          bars = await upstreamGetBars.call(receiver, ticker, timeframe, pointRetry);
-          if (transportError !== null) throw transportError;
-          if (!Array.isArray(bars)) {
-            throw new Error('Invalid provider candle response: expected an array');
-          }
-          normalized = normalizeProviderBars(bars, range);
-          if (bars.length > 0 && normalized.length === 0) {
-            throw new Error('Invalid provider candle response: malformed OHLC row');
-          }
-        }
-      }
+      // Repair short intraday holes before the result reaches Vela's cache.
+      // The repair is bounded and never fabricates a candle when the provider
+      // confirms that the missing interval is empty.
+      normalized = providerKind
+        ? await repairHistoryGaps(normalized, timeframe, async (gap) => {
+          const received = await loadPage(gap);
+          if (!Array.isArray(received)) throw new Error('Invalid provider candle response: expected an array');
+          return normalizeProviderBars(received, gap);
+        }, providerKind === 'hyperliquid' ? 'fixed-30-days' : 'utc-month')
+        : await repairIntradayGaps(normalized, timeframe, async (gap) => loadPage(gap));
+
+      // Repair may add rows beyond the caller's maximum. Validate continuity
+      // before cropping so an over-budget gap cannot disappear accidentally.
+      normalized = normalizeProviderBars(normalized, range);
+
       settle({ error: null, bars: normalized.length, oldestTime: normalized[0]?.time ?? null });
       return normalized;
     } catch (error) {
@@ -288,5 +460,11 @@ export function guardProviderHistory<T extends DataProvider>(provider: T): T {
     value: true,
     writable: false,
   });
+  if (providerKind) {
+    Object.defineProperty(guarded, '__quantToolsContinuousHistory', { value: true });
+    Object.defineProperty(guarded, '__quantToolsHistoryCalendar', {
+      value: providerKind === 'hyperliquid' ? 'fixed-30-days' : 'utc-month',
+    });
+  }
   return provider;
 }

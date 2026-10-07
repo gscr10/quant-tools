@@ -398,9 +398,12 @@ test('chart locate stays behind the WorkspacePort public seam', async () => {
   assert.match(adapter, /focusBacktestExecution\(/);
   assert.match(chartAdapter, /supportsExternalCrosshair/);
   assert.match(chartAdapter, /setExternalCrosshair\(/);
-  assert.match(chartAdapter, /supports\('highlights'\)/);
-  assert.match(chartAdapter, /set\('highlights'/);
-  assert.match(chartAdapter, /Vela 0\.7\.x does not expose a marker-id selection API/);
+  assert.match(chartAdapter, /registerNativeIndicator\(/);
+  assert.match(chartAdapter, /addNativeIndicator\(BACKTEST_EXECUTION_HIGHLIGHT_TYPE\)/);
+  assert.match(chartAdapter, /unregisterNativeIndicator\(BACKTEST_EXECUTION_HIGHLIGHT_TYPE\)/);
+  assert.match(chartAdapter, /cell\.history\.silently\(/);
+  assert.match(adapter, /clearBacktestExecutionFocus\(/);
+  assert.doesNotMatch(chartAdapter, /set\('highlights'/);
 });
 
 test('extracts Pine titles without coupling to the editor', async () => {

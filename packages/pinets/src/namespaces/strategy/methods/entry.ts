@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 LuxAlgo
 
-import { calculateOrderQty, parseDirection, wouldExceedPyramiding, roundToMintick } from '../utils';
+import { calculateOrderQty, entryRiskQuantity, parseDirection, wouldExceedPyramiding, roundToMintick } from '../utils';
 import { Order } from '../types';
 import { Series } from '../../../Series';
 import { parseArgsForPineParams } from '../../utils';
-import { markOrderCancelled, recordOrderCreated, recordRejectedAttempt } from '../ledger';
+import { markOrderCancelled, markOrderRejected, recordOrderCreated, recordRejectedAttempt } from '../ledger';
 
 /**
  * Pine signature:
@@ -84,8 +84,8 @@ export function entry(context: any) {
             if ((o.category ?? 'entry') === 'entry'
                 && o.id === idValue
                 && o.status === 'pending') continue;
-            if (o.bar === context.idx && o.category === 'entry' && o.type === 'market') {
-                currentSize += parseDirection(o.direction) * o.qty;
+            if (o.bar === context.idx && (o.category ?? 'entry') === 'entry' && o.type === 'market' && o.status === 'pending') {
+                currentSize += parseDirection(o.direction) * entryRiskQuantity(strategy, o, currentSize);
             }
         }
 
@@ -157,6 +157,7 @@ export function entry(context: any) {
             time: currentTime,
             status: 'pending',
             category: 'entry',
+            _isStrategyEntry: true,
             oca_name: ocaName,
             oca_type: ocaType as 'cancel' | 'reduce' | 'none' | undefined,
             comment: commentValue,
@@ -169,6 +170,14 @@ export function entry(context: any) {
             // 0.263108 longs at the same fill).
             _base_qty: baseQty,
         } as any;
+
+        // A halted strategy cannot park a new order for the next session.
+        // Reject at creation as well as at fill time, including the final
+        // script pass where there may be no subsequent broker checkpoint.
+        if (strategy.risk_halted || strategy._risk_intraday_halted) {
+            markOrderRejected(context, orderObj, 'risk_rule');
+            return;
+        }
 
         // TradingView treats an unfilled `strategy.entry()` with the same ID
         // as a mutable order: a later call updates its direction/quantity and

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Real-network smoke test for the Vela Binance and Hyperliquid providers."""
+"""Real-network smoke test for the Vela Binance and Hyperliquid providers.
+
+QUANT_PROVIDER_PROXY optionally sets the browser proxy (e.g. http://127.0.0.1:9981).
+Loopback Vite traffic bypasses it; REST and WebSocket use the same browser route.
+"""
 
 from __future__ import annotations
 
@@ -38,6 +42,7 @@ class EvidenceWriter:
             self.write("run.json", {
                 "pid": os.getpid(), "startedAt": datetime.now(timezone.utc).isoformat(),
                 "requestedDurationSeconds": duration_seconds, "status": "running",
+                "explicitBrowserProxy": bool(os.environ.get("QUANT_PROVIDER_PROXY")),
                 "sourceSha256": {
                     str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
                     for path in [Path(__file__).resolve(), ROOT / "tests/fixtures/provider-smoke.html",
@@ -193,11 +198,24 @@ def run_duration_soak(page, duration_seconds: float, recovery: bool, evidence: E
                     raise AssertionError("soak completed before the requested duration")
                 if recovery and not state["recoveryCycles"]:
                     raise AssertionError("soak completed without a scheduled offline/online cycle")
-                page.wait_for_timeout(2_000)
+                # CDP reports Network.webSocketClosed asynchronously.  The
+                # provider contract requires unsubscribe to close every
+                # socket, but a fixed two-second sample can race the final
+                # close event (especially after a long run with many
+                # reconnects).  Wait for quiescence with a bounded deadline
+                # and still fail closed if a socket remains active.
+                teardown_started = time.monotonic()
+                close_deadline = teardown_started + 10.0
+                cleanup = page.evaluate("window.providerSoakState()")
+                sockets = network.snapshot()
+                while any(counters["active"] for counters in sockets.values()) and time.monotonic() < close_deadline:
+                    page.wait_for_timeout(250)
+                    cleanup = page.evaluate("window.providerSoakState()")
+                    sockets = network.snapshot()
+                teardown_wait_ms = round((time.monotonic() - teardown_started) * 1000)
                 cleanup = page.evaluate("window.providerSoakState()")
                 if cleanup["activeSubscriptions"] or cleanup["callbacksAfterCleanup"] or cleanup["cleanupErrors"]:
                     raise AssertionError(f"soak subscription cleanup failed: {cleanup}")
-                sockets = network.snapshot()
                 if any(counters["active"] for counters in sockets.values()):
                     raise AssertionError(f"WebSockets remained active after unsubscribe: {sockets}")
                 if require_websocket and any(sockets[name]["candleFrames"] == 0 for name in provider_names):
@@ -208,6 +226,7 @@ def run_duration_soak(page, duration_seconds: float, recovery: bool, evidence: E
                     "websockets": sockets,
                     "transportRecovery": transport_recovery,
                     "cleanup": {key: cleanup[key] for key in ("activeSubscriptions", "callbacksAfterCleanup", "cleanupErrors")},
+                    "teardownWaitMs": teardown_wait_ms,
                     "resources": {"first": resources[0], "last": browser_resources(session),
                                   "maxHeapUsedBytes": max(sample.get("JSHeapUsedSize", 0) for sample in resources),
                                   "samples": len(resources)},
@@ -306,6 +325,8 @@ def run_smoke(rounds: int = 1, recovery: bool = False, duration_seconds: float =
         launch_options: dict[str, object] = {"headless": True}
         if executable:
             launch_options["executable_path"] = executable
+        if proxy_server := os.environ.get("QUANT_PROVIDER_PROXY"):
+            launch_options["proxy"] = {"server": proxy_server, "bypass": "127.0.0.1,localhost"}
         browser = playwright.chromium.launch(**launch_options)
         page = browser.new_page()
         page.set_default_timeout(45_000)

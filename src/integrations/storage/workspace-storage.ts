@@ -1,4 +1,5 @@
 import { WORKSPACE_HISTORY_BARS } from '../../config/workspace-options.ts';
+import { BACKTEST_EXECUTION_HIGHLIGHT_TYPE } from '../../domain/ports/workspace-port.ts';
 export { WORKSPACE_HISTORY_BARS } from '../../config/workspace-options.ts';
 
 interface WorkspaceStorage {
@@ -11,6 +12,31 @@ type JsonRecord = Record<string, unknown>;
 
 function isRecord(value: unknown): value is JsonRecord {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Transient execution labels must not become saved indicators after reload. */
+export function stripTransientWorkspaceIndicators(raw: string): string {
+  try {
+    const state: unknown = JSON.parse(raw);
+    if (!isRecord(state)) return raw;
+    let changed = false;
+    const clean = (entry: unknown): void => {
+      if (!isRecord(entry)) return;
+      const ledger = entry.indicators;
+      const natives = isRecord(ledger) ? ledger.natives : ledger;
+      if (!Array.isArray(natives)) return;
+      const retained = natives.filter((value) => value !== BACKTEST_EXECUTION_HIGHLIGHT_TYPE
+        && !(isRecord(value) && value.type === BACKTEST_EXECUTION_HIGHLIGHT_TYPE));
+      if (retained.length !== natives.length) {
+        if (isRecord(ledger)) ledger.natives = retained;
+        else entry.indicators = retained;
+        changed = true;
+      }
+    };
+    if (Array.isArray(state.charts)) state.charts.forEach(clean);
+    if (isRecord(state.cells)) Object.values(state.cells).forEach(clean);
+    return changed ? JSON.stringify(state) : raw;
+  } catch { return raw; }
 }
 
 /**
@@ -95,11 +121,11 @@ export function createMigratingWorkspaceStorage(
         } catch { return null; }
       }
       if (raw === null) return null;
-      const migrated = migrateWorkspaceState(raw, minimumBars);
+      const migrated = stripTransientWorkspaceIndicators(migrateWorkspaceState(raw, minimumBars));
       if (migrated !== raw) write(key, migrated);
       return migrated;
     },
-    set(key, value) { write(key, value); },
+    set(key, value) { write(key, typeof value === 'string' ? stripTransientWorkspaceIndicators(value) : value); },
     remove(key) { write(key, null); },
   };
 }

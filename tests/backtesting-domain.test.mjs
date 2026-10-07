@@ -302,6 +302,36 @@ test('performance exposes direction-specific daily and weekly averages and fixed
   assert.equal(performance.weekdayPerformance.length, 7);
 });
 
+test('weekly Performance averages use the reference Sunday boundary for every direction', () => {
+  const report = createBacktestReport({
+    key: { cellId: 'weekly', indicatorId: 'sunday-boundary' }, status: 'ready',
+    context: { provider: 'binance', symbol: 'BTCUSDT', timeframe: '15m', timezone: 'UTC' },
+    trades: [
+      closed(1, 10, 'long', Date.parse('2024-01-07T12:00:00Z')),
+      closed(2, 20, 'short', Date.parse('2024-01-08T12:00:00Z')),
+    ],
+  });
+  const performance = calculatePerformanceMetrics(report);
+  assert.deepEqual(performance.averagePnlPerWeek, { all: 30, long: 10, short: 20 });
+  assert.deepEqual(performance.weeklyPerformance.map(({ bucket, pnl }) => ({ bucket, pnl })),
+    [{ bucket: '2024-01-07', pnl: 30 }]);
+});
+
+test('Sunday weekly boundaries still respect the report calendar timezone', () => {
+  const report = createBacktestReport({
+    key: { cellId: 'weekly', indicatorId: 'timezone-boundary' }, status: 'ready',
+    context: { provider: 'binance', symbol: 'BTCUSDT', timeframe: '15m', timezone: 'America/New_York' },
+    trades: [
+      closed(1, 10, 'long', Date.parse('2024-01-07T04:00:00Z')),
+      closed(2, 20, 'long', Date.parse('2024-01-07T06:00:00Z')),
+    ],
+  });
+  const performance = calculatePerformanceMetrics(report);
+  assert.deepEqual(performance.averagePnlPerWeek, { all: 15, long: 15, short: null });
+  assert.deepEqual(performance.weeklyPerformance.map(({ bucket, pnl }) => ({ bucket, pnl })),
+    [{ bucket: '2023-12-31', pnl: 10 }, { bucket: '2024-01-07', pnl: 20 }]);
+});
+
 test('keeps authoritative close underwater and fill-anchored benchmark points', () => {
   const report = createBacktestReport({
     key: { cellId: 'cell-a', indicatorId: 'strategy-engine-series' },

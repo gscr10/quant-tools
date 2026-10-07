@@ -51,6 +51,14 @@ export interface BacktestControlPort {
 export class VelaBacktestControlAdapter implements BacktestControlPort {
   private readonly workspace: VelaWorkspace;
 
+  private markStateDirty(key: BacktestAdapterKey): void {
+    try {
+      if (this.workspace.active?.id === key.cellId) this.workspace.context().stateChanged();
+    } catch {
+      // Persistence is best effort; the engine update itself already succeeded.
+    }
+  }
+
   constructor(workspace: VelaWorkspace) {
     this.workspace = workspace;
   }
@@ -114,6 +122,7 @@ export class VelaBacktestControlAdapter implements BacktestControlPort {
       const handle = this.getHandle(key);
       if (!handle || handle.nativeType) return false;
       handle.setInputs(values);
+      this.markStateDirty(key);
       return true;
     } catch {
       return false;
@@ -128,6 +137,7 @@ export class VelaBacktestControlAdapter implements BacktestControlPort {
       const handle = this.getHandle(key);
       if (!handle || handle.nativeType) return false;
       handle.setProps(values);
+      this.markStateDirty(key);
       return true;
     } catch {
       return false;
@@ -146,6 +156,7 @@ export class VelaBacktestControlAdapter implements BacktestControlPort {
         if (Object.keys(inputs).length) handle.setInputs(inputs);
         if (Object.keys(props).length) handle.setProps(props);
       });
+      this.markStateDirty(key);
       return true;
     } catch {
       return false;

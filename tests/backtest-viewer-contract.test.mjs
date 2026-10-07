@@ -36,10 +36,20 @@ test('Dock and Viewer share one UTC report-range formatter', () => {
   assert.equal(formatBacktestRange(report), 'Jan 1 - Jan 2, 2026');
 });
 
+test('Dock and Viewer display activity dates while preserving legacy host ranges', () => {
+  const range = { from: Date.UTC(2025, 11, 1), to: Date.UTC(2026, 0, 3) };
+  const activityRange = { from: Date.UTC(2025, 11, 31, 23), to: Date.UTC(2026, 0, 1, 1) };
+  assert.equal(formatBacktestRange({ range, activityRange }), 'Dec 31, 2025 - Jan 1, 2026');
+  assert.equal(formatBacktestRange({ range, activityRange: null }), '');
+  assert.equal(formatBacktestRange({ range }), 'Dec 1, 2025 - Jan 3, 2026');
+  const oneExit = Date.UTC(2026, 0, 2);
+  assert.equal(formatBacktestRange({ range, activityRange: { from: oneExit, to: oneExit } }), 'Jan 2 - Jan 2, 2026');
+});
+
 test('Viewer report revisions preserve the active panel scroll position', async () => {
   const source = await readFile(new URL('../src/features/backtesting/backtest-viewer.ts', import.meta.url), 'utf8');
   assert.match(source, /const previousPanelScrollTop = this\.panel\.scrollTop/);
-  assert.match(source, /if \(!liveUpdated\) this\.panel\.scrollTop = previousPanelScrollTop/);
+  assert.match(source, /if \(!liveUpdated\) this\.panel\.scrollTop = restoredPanelScrollTop/);
 });
 
 test('Performance currency formatting preserves reference sub-unit precision', () => {
@@ -47,6 +57,13 @@ test('Performance currency formatting preserves reference sub-unit precision', (
   assert.equal(formatBacktestCurrency(0.5), '0.50');
   assert.equal(formatBacktestCurrency(3), '3.00');
   assert.equal(formatBacktestCurrency(null), '—');
+});
+
+test('Viewer normalizes account currency before splitting KPI units', async () => {
+  const source = await readFile(new URL('../src/features/backtesting/backtest-viewer.ts', import.meta.url), 'utf8');
+  const workbench = await readFile(new URL('../src/features/backtesting/backtest-workbench.ts', import.meta.url), 'utf8');
+  assert.match(source, /return report\.currency\?\.trim\(\)\.toUpperCase\(\) \|\| 'USD'/);
+  assert.match(workbench, /const currency = report\.currency\?\.trim\(\)\.toUpperCase\(\) \|\| 'USD'/);
 });
 
 test('execution precision header metadata is explicit and fallback-safe', () => {
@@ -123,6 +140,25 @@ test('Trades Log defaults to Trade # descending and keeps equal keys stable', ()
     nextBacktestTradeSort({ key: 'entryTime', direction: 1 }, 'mae'),
     { key: 'mae', direction: -1 },
   );
+});
+
+test('Trades Log equal metric values retain reference Trade # descending order', () => {
+  // Live reference inspection: an all-size-1 SMA log stays newest-first in
+  // both Size directions, and zero MFE/MAE ties use the same numeric order.
+  const trades = [
+    { id: 'older', number: 2, size: 1, mfe: 0, mae: 0 },
+    { id: 'newer', number: 10, size: 1, mfe: 0, mae: 0 },
+    { id: 'duplicate', number: 10, size: 1, mfe: 0, mae: 0 },
+    { id: 'open', number: 0, size: 1, mfe: 0, mae: 0 },
+  ];
+  for (const key of ['size', 'mfe', 'mae']) {
+    for (const direction of [-1, 1]) {
+      assert.deepEqual(
+        sortBacktestTrades(trades, { key, direction }).map((trade) => trade.id),
+        ['newer', 'duplicate', 'older', 'open'],
+      );
+    }
+  }
 });
 
 test('Trades Log sorts every visible metric and formats price/excursion contracts', () => {
@@ -263,6 +299,8 @@ test('Trades Log keeps the evidence-constrained visible controls', async () => {
   assert.match(source, /isBacktestTradeLocationTime\(value\)/);
   assert.match(source, /backtestTradesHaveSize\(trades\)/);
   assert.match(source, /backtestTradesHaveExcursions\(trades\)/);
+  assert.match(source, /table\.dataset\.tradeLayout = 'full'/);
+  assert.match(source, /const colgroup = createElement\(this\.doc, 'colgroup'\)/);
   assert.match(source, /Show \$\{side\} on chart/);
   assert.match(source, /data-trade-locate="\$\{side\}"/);
   assert.match(source, /CROSSHAIR_ICON_MARKUP/);
@@ -280,6 +318,8 @@ test('Trades Log keeps the evidence-constrained visible controls', async () => {
   assert.match(styles, /\.quant-backtest-trade-table \{[\s\S]*border: 0;[\s\S]*font-size: 14px;[\s\S]*line-height: 20px/);
   assert.match(styles, /\.quant-backtest-trade-table th,[\s\S]*padding: 8px 16px/);
   assert.match(styles, /\.quant-backtest-trade-table thead th[\s\S]*position: sticky[\s\S]*text-transform: none/);
+  assert.match(styles, /@media \(min-width: 1024px\)[\s\S]*quant-backtest-trade-table\[data-trade-layout='full'\][\s\S]*width: 1080\.875px[\s\S]*table-layout: fixed/);
+  assert.match(styles, /quant-backtest-trade-table\[data-trade-layout='full'\] col:nth-child\(8\)[\s\S]*width: 120\.9375px/);
   assert.match(styles, /\.quant-backtest-log-card[\s\S]*padding: 16px[\s\S]*border: 1px solid/);
   assert.match(styles, /\.quant-backtest-trade-datetime,[\s\S]*font-size: 14px/);
 });
@@ -527,7 +567,8 @@ test('Performance Viewer preserves the reference header identity and missing-cel
   assert.match(viewer, /dataset\.executionFallback/);
   assert.match(viewer, /dataset\.executionFallbackReason/);
   assert.match(viewer, /rawProvider\.toLowerCase\(\) === 'unknown'/);
-  assert.match(viewer, /icon\(doc, 'minimize'\)/);
+  // The current live reference uses an X; Return to chart behavior is unchanged.
+  assert.match(viewer, /icon\(doc, 'close'\)/);
   const format = await readFile(
     new URL('../src/features/backtesting/backtest-format.ts', import.meta.url),
     'utf8',
@@ -540,6 +581,12 @@ test('Performance Viewer preserves the reference header identity and missing-cel
   assert.match(workbench, /dataset\.executionFallbackReason/);
   assert.match(viewer, /column\.id === 'all' && row\.group === 'Benchmark' \? '-'/);
   assert.match(viewer, /column\.id === 'all' \? '—' : ''/);
+  // Risk-adjusted ratios keep the reference's three-decimal display precision
+  // while their underlying formula/capital contract remains engine-defined.
+  assert.match(viewer, /\{ key: 'calmar', label: 'Calmar Ratio', unit: 'ratio', group: 'Risk-Adjusted Performance' \}/);
+  assert.match(viewer, /\{ key: 'sharpe', label: 'Sharpe Ratio', unit: 'ratio', group: 'Risk-Adjusted Performance' \}/);
+  assert.match(viewer, /\{ key: 'sortino', label: 'Sortino Ratio', unit: 'ratio', group: 'Risk-Adjusted Performance' \}/);
+  assert.match(viewer, /digits = unit === 'count' \? 0 : unit === 'ratio' \? 3 : 2/);
   assert.match(styles, /quant-backtest-viewer-back:focus-visible/);
   assert.match(styles, /quant-backtest-viewer-heading > span:last-child/);
   assert.match(styles, /data-execution-fallback='true'/);
@@ -719,7 +766,10 @@ test('Simulation modal and async redraws preserve one isolated focus lifecycle',
   );
   assert.match(viewer, /focusedSimulationControl/);
   assert.match(viewer, /this\.restoreSimulationFocus\(focusedSimulationControl\)/);
-  assert.match(viewer, /const focusRoot = this\.simulationSettingsOpen && dialog \? dialog : this\.element/);
+  assert.match(viewer, /const dialogOpen = this\.simulationSettingsOpen \|\| Boolean\(dialog\)/);
+  assert.match(viewer, /pendingSimulationFocus/);
+  assert.match(viewer, /addEventListener\('keydown', this\.onDocumentKeydown, true\)/);
+  assert.match(viewer, /currentFocus === 'settings:variation'/);
   assert.match(viewer, /const focusable = focusableElements\(focusRoot\)/);
   assert.match(viewer, /current\.getAttribute\('aria-hidden'\) === 'true'/);
   assert.match(viewer, /candidate\.dataset\.simulationFocus === focusKey/);
@@ -762,7 +812,7 @@ test('Dock collapse removes the hidden resize control from keyboard and pointer 
   assert.match(workbench, /this\.separator\.tabIndex = -1/);
   assert.match(workbench, /this\.separator\.setAttribute\('aria-hidden', 'true'\)/);
   assert.match(workbench, /this\.separator\.setAttribute\('aria-disabled', 'true'\)/);
-  assert.match(workbench, /this\.separator\.setAttribute\('aria-keyshortcuts', 'ArrowUp ArrowDown Home End'\)/);
+  assert.match(workbench, /this\.separator\.setAttribute\('aria-keyshortcuts', 'ArrowUp ArrowDown Shift\+ArrowUp Shift\+ArrowDown Home End'\)/);
   assert.match(styles, /\.quant-backtest-dock\.is-collapsed \.quant-backtest-dock-separator \{[\s\S]*pointer-events: none/);
 });
 

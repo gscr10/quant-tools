@@ -345,3 +345,16 @@ test('uses the captured zero-anchored histogram boundaries and colors', () => {
   assert.equal(equal.length, 2);
   assert.equal(equal[1].count, 4);
 });
+
+test('near-equal real engine P&Ls cannot create an unbounded histogram or stall report mapping', () => {
+  const values = Array.from({ length: 60 }, (_, index) =>
+    index % 2 ? 0.06000000000005912 : 0.060000000000002274);
+  for (const population of [values, values.map(value => -value), [1e9, 1e9 + 1], [-Number.MAX_VALUE, Number.MAX_VALUE]]) {
+    const bins = createTradeAnalysisHistogram(population);
+    assert.ok(bins.length > 0 && bins.length <= 256);
+    assert.equal(bins.reduce((sum, bin) => sum + bin.count, 0), population.length);
+    assert.ok(bins.every(bin => [bin.from, bin.to, bin.midpoint].every(Number.isFinite)));
+    assert.ok(bins[0].from <= Math.min(...population));
+    assert.ok(bins.at(-1).to >= Math.max(...population));
+  }
+});

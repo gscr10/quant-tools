@@ -289,8 +289,16 @@ function withWebSocketOpenGuard<T>(
   const native = (globalThis as { WebSocket?: unknown }).WebSocket;
   if (typeof native !== 'function') return { value: invoke(), release: () => {} };
 
+  const sockets = new Set<object>();
+  const closeSockets = (): void => {
+    for (const socket of sockets) {
+      try { (socket as { close?: () => void }).close?.(); } catch { /* best effort */ }
+    }
+    sockets.clear();
+  };
   const Wrapped = function(this: unknown, ...args: unknown[]): unknown {
     const socket = Reflect.construct(native as abstract new (...xs: unknown[]) => object, args);
+    sockets.add(socket);
     if (!releasedWebSocketWrappers.has(Wrapped)) wrapOpenHandler(socket, isActive);
     return socket;
   } as unknown as typeof WebSocket;
@@ -321,6 +329,13 @@ function withWebSocketOpenGuard<T>(
         if (released) return;
         released = true;
         releasedWebSocketWrappers.add(Wrapped);
+        // The upstream provider normally closes its socket from the returned
+        // unsubscribe function. Keep teardown fail-closed when an upstream
+        // path is interrupted between an async endpoint lookup and socket
+        // creation, or when a provider double omits that close. Closing every
+        // socket created by this short-lived guard is idempotent for native
+        // WebSocket implementations and makes the lifetime contract explicit.
+        closeSockets();
         if (scope.WebSocket !== Wrapped) return;
         // Skip wrappers whose lease was released before this nested lease.
         // Their constructor is now transparent, so restoring to the first
@@ -333,6 +348,7 @@ function withWebSocketOpenGuard<T>(
       },
     };
   } catch (error) {
+    closeSockets();
     if (scope.WebSocket === Wrapped) scope.WebSocket = previousWebSocket;
     throw error;
   }

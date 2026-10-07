@@ -1,45 +1,61 @@
 # Quant Tools 回测工作区一比一复刻与功能完备实施计划（最终复核版）
 
-> **2026-10-01 R-08～R-11 修复后独立复查（历史指针）**：R-08、R-10、R-11 结论保留于 [报告](../reports/BACKTEST_R08_R11_RECHECK_2026-10-01.md)；R-09 的历史状态见 [R-09 首次复查](../reports/BACKTEST_R09_RECHECK_2026-10-01.md)，当前状态以本文件下一条最新指针为准。整体仍为 **PARTIAL**。
+> 最新对齐批次（2026-10-07）：H-09共享Tab滚动196/196、S-11 Simulation挂载生命周期216/216、D-10实际小值轴28标签、ENG-10脚本错误双引擎64项、STG-03/06恢复和LC-07/NR-05故障隔离198项通过；根652/652、类型、构建、生产主E2E及工程门禁通过。K线空最新页缓存保护/连续性定向31项通过。证据为本地忽略目录 `audit-evidence/2026-10-07-tab-parity-closure/`及各专项目录。当前剩余项以[需求状态表](BACKTEST_REQUIREMENTS_STATUS.md)为准；本文G0～G9历史勾选不代替现行状态。
 
-> **2026-10-01 最新独立复查**：[R-09 第三次复查](../reports/BACKTEST_R09_RECHECK_3_2026-10-01.md)、[R-09 新证据](../../../audit-evidence/2026-10-01-r09-recheck-3/README.md)。R-09 当前 Workbench pointer-open 契约在 Chromium、Firefox、WebKit 均回 Settings 触发按钮；Tab/Shift+Tab、Escape、busy、destroy、主 E2E 及构建门禁均通过。R-08、R-10、R-11 的本轮缺陷场景也通过。完整 reference golden、复杂撮合、长时 Provider、全量像素、VoiceOver/跨设备、bundle threshold 和 rollback 仍开放，整体 **PARTIAL，Final Gate 未关闭**。下方旧报告只作历史索引。
+> 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。此前完整本地门禁保持原时点；本轮未改视觉基线，VoiceOver与参考交互差异仍开放。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
 
-> **2026-10-01 修复者过程记录（历史）**：见 [账本与视觉修复记录](../reports/BACKTEST_LEDGER_VISUAL_REMEDIATION_2026-10-01.md)。真实 Binance.US 首次 SMA 的 ledger/KPI、单 tick 停止、工厂晚挂载、12,000 根后台补历史及无事件深度请求失效已通过新验证；移动 KPI、关闭/设置图标、SVG ID、本地资产标识与 Settings modal 已修。根测试 394/394、组件测试 283/283、开发/生产 E2E 通过。完整逐笔 golden、整体像素对账、复杂撮合和发布门禁仍开放。下方此前“当前状态”是各轮历史快照；整体仍 **PARTIAL**。
+> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver、共享参考差异和最终提交CI仍按需求表开放，未commit/push。
 
-> **2026-09-30 修复前独立参考对账（历史快照）**：见 [BACKTEST_REFERENCE_PARITY_DEEP_AUDIT_2026-09-30.md](../reports/BACKTEST_REFERENCE_PARITY_DEEP_AUDIT_2026-09-30.md)。用户 SMA 9/21 在同一份 LuxAlgo 5,000-bar 响应上与本地 PineEngine 的固定窗口算术 parity 已 PASS；默认 Binance.US 500-bar 应用链路的 ledger/readiness、open-row 计数和 provider/partial policy 仍开放。
+> 当前有效的需求、优先级和状态以 [BACKTEST_REQUIREMENTS_STATUS.md](BACKTEST_REQUIREMENTS_STATUS.md) 为准；本文下方的独立审计和历史轮次仅用于追溯。
 
-> **2026-10-01 D-01 修复跟踪（当前仍开放）**：已补充 partial/pending 门控，但独立动态 probe 仍观测到首个 `status=ready`、`history.complete=false`、交易数为 0；详见 [D-01 修复记录](../reports/BACKTEST_DYNAMIC_DEEP_REMEDIATION_2026-10-01.md)。D-01 不能标记完成，整体 Final Gate 仍未关闭。
+> 2026-10-07 用户修正 UI 标准：功能、交互、图标和组件风格对标参考，整体布局适配本项目；没有 AI 对话区和顶部登录 banner，也不为它们留白。§3.3～3.4、§10 和 §14.2 已改用此标准；整页 1px / 0.5% / 1% 旧阈值不再有效。已有 PASS/PARTIAL 仍须按实际证据判定，不随标准文字自动关闭。
 
-> **2026-09-30 动态深审（历史快照）**：综合结论见 [BACKTEST_DYNAMIC_DEEP_AUDIT_2026-09-30.md](../reports/BACKTEST_DYNAMIC_DEEP_AUDIT_2026-09-30.md)，独立证据见 [audit-evidence/2026-09-30-dynamic-deep/README.md](../../../audit-evidence/2026-09-30-dynamic-deep/README.md)。当前源适配器 R-05/R-06/R-07 的 9 项 probe 全部通过，两种真实引擎和 Viewer/Simulation 动态路径通过；新发现 D-01：初始 `history:complete` 后立即新增策略时，首个控制器快照可能提前暴露 `ready`，但无历史完成标志、无交易且不可 Simulation。D-01 尚未修复。整体计划仍为 **PARTIAL**，Final Gate 未关闭。
+> 最新范围调整：手机端适配先暂缓，见需求表 SCOPE-07。手机布局、横竖屏、safe-area、手机触摸及手机实机专项不再阻塞本阶段；保留已有实现与证据。本文未逐项重写的历史移动端目标仅供后续恢复工作，当前继续桌面全模块对标、窗口缩放、键盘和 VoiceOver，不取消通用功能正确性。
 
-> **参考站动态深审**：用户 workspace 的独立黑盒结果见 [BACKTEST_REFERENCE_DEEP_AUDIT_2026-09-30.md](../reports/BACKTEST_REFERENCE_DEEP_AUDIT_2026-09-30.md) 和 [audit-evidence/2026-09-30-reference-deep/README.md](../../../audit-evidence/2026-09-30-reference-deep/README.md)。参考站四 Tab、Settings、Simulation、市场搜索、Panels 和移动边界已采集；固定 SMA 9/21 对账已单独 PASS，15m 普通切换/Calendar 内容和默认 Provider/UI 端到端 parity 仍需补证。
+> PERF-01 已取得独立生产终态：固定 Chromium DPR1 的 10k/100k 冷 selector p95 为 52.2/399.9ms，分页 41.4/42.2ms，列明的跨浏览器功能/资源检查通过；Firefox 超出 Chromium 对照值及 factory/API 限制如实记录于需求表，不声称所有设备同预算。启动预算、包体预算和生产两小时分别保留，不相互替代。此前 UI 批次根 627/627、类型/构建、开发/生产主 E2E、32 状态生产检查保留其时点；当前桌面632批次及最后CSS补丁的验证边界见顶部，剩余工作以需求表为准。参考信息已提供，无需用户重复补充。
 
-> **2026-09-30 第四轮独立复查（历史快照）**：见 [BACKTEST_AUDIT_RECHECK_4_2026-09-30.md](../reports/BACKTEST_AUDIT_RECHECK_4_2026-09-30.md)。其开放边界已在当前工作区重新 probe；当前状态以本文件顶部最新独立复查为准。
+> 2026-10-07 较早对话/证据复核批次：原 6/7/8/9/10+14/15 映射见需求表。DATA-11/REL-01 明确合同、ENGINE-03 三项有限验收与 STARTUP-01 资源预算已关闭：跨订单/实时风险浏览器 14/14、完整归档重放 496 字段、空图/SMA 首屏 JS gzip 分别减少44.05%/17.50%；该批次根 616/616、桥接 310/310、引擎 offline 1773 + 1 skipped、类型/构建和开发/生产 E2E 通过。原有历史精度 8/8、风险/entry 16/16 保持各自范围；当时 Settings 生产 32 状态/34 交互及九组参考几何通过。独立冻结生产构建的完整 Workspace 两小时长测已通过（7,200.505 秒，资源预算和卸载清理通过；采样期间的短暂 DOM/listener 峰值在卸载后归零）；工作区图标的有限合同随后已由 UI-09 关闭，完整 UI/交互及真实辅助技术/设备仍开放。Safari、线上部署、Replay 暂缓；长期持久化仅待讨论，其它 golden 不重入队，完整 TV 外部逐 Fill 按 SCOPE-05 不作为当前关闭条件。
 
-> 第四轮后续修复记录（历史过程材料）：R-06/R-07 的修复声明见 [BACKTEST_RECHECK_4_REMEDIATION_2026-09-30.md](../reports/BACKTEST_RECHECK_4_REMEDIATION_2026-09-30.md)；当前是否通过以最新独立 probe 为准。
+> **2026-10-01 R-08～R-11 修复后独立复查（历史指针）**：R-08、R-10、R-11 结论保留于 `报告`（本地忽略证据，公开仓库不携带）；R-09 的历史状态见 `R-09 首次复查`（本地忽略证据，公开仓库不携带），当前状态以本文件下一条最新指针为准。整体仍为 **PARTIAL**。
 
-> **历史记录（第三轮独立复查，2026-09-30）**：S-01～S-03、U-01 及空行情首次加载/回切已用全新输入和真实两引擎浏览器复测通过；新增发现 R-05 dev E2E legacy snapshot 合同失败、R-07 空行情 hide/show 重新接纳旧账本，R-06 为受控混合 envelope 兼容边界。详见 [BACKTEST_AUDIT_RECHECK_3_2026-09-30.md](../reports/BACKTEST_AUDIT_RECHECK_3_2026-09-30.md)。整体 Final Gate 仍未关闭。
+> **2026-10-01 最新独立复查（历史指针）**：`R-09 第三次复查`（本地忽略证据，公开仓库不携带）、`R-09 新证据`（本地忽略证据，公开仓库不携带）。R-09 当前 Workbench pointer-open 契约在 Chromium、Firefox、WebKit 均回 Settings 触发按钮；Tab/Shift+Tab、Escape、busy、destroy、主 E2E 及构建门禁均通过。该历史轮次的完整 reference golden、复杂撮合和长时 Provider结论已由后续 2026-10-06 状态更新；VoiceOver/真实设备仍未验收；SCOPE-03 仅暂缓 Safari 专项。下方旧报告只作历史索引。
 
-> 第三轮后续修复记录：R-05、R-06、R-07 的目标场景曾通过独立回归，详见 [BACKTEST_RECHECK_3_REMEDIATION_2026-09-30.md](../reports/BACKTEST_RECHECK_3_REMEDIATION_2026-09-30.md)。第四轮已重新审查适配器边界；原报告保留为历史证据，整体 Final Gate 仍未关闭。
+> **2026-10-01 修复者过程记录（历史）**：见 `账本与视觉修复记录`（本地忽略证据，公开仓库不携带）。真实 Binance.US 首次 SMA 的 ledger/KPI、单 tick 停止、工厂晚挂载、12,000 根后台补历史及无事件深度请求失效已通过新验证；移动 KPI、关闭/设置图标、SVG ID、本地资产标识与 Settings modal 已修。根测试 394/394、组件测试 283/283、开发/生产 E2E 通过。完整逐笔 golden、整体像素对账、复杂撮合和发布门禁仍开放。下方此前“当前状态”是各轮历史快照；整体仍 **PARTIAL**。
 
-> 2026-09-30 后续修复：S-01～S-03、U-01 已修复并重新执行原审计探针及新增边界验证，详见 [第二轮修复记录](../reports/BACKTEST_RECHECK_2_REMEDIATION_2026-09-30.md)。下方第二轮审计结论保留为修复前状态；整体 Final Gate 仍未关闭。
+> **2026-09-30 修复前独立参考对账（历史快照）**：见 `BACKTEST_REFERENCE_PARITY_DEEP_AUDIT_2026-09-30.md`（本地忽略证据，公开仓库不携带）。用户 SMA 9/21 在同一份 LuxAlgo 5,000-bar 响应上与本地 PineEngine 的固定窗口算术 parity 已 PASS；默认 Binance.US 500-bar 应用链路的 ledger/readiness、open-row 计数和 provider/partial policy 仍开放。
+
+> **2026-10-01 D-01 修复跟踪（历史记录，当前已关闭）**：当时独立动态 probe 发现首个 `status=ready` / `history.complete=false` 边界；后续已补充 partial/pending 门控、ledgerRevision 和新策略首轮门控，并由两种引擎的立即挂载、晚挂载、hide/show、市场切换回归关闭。原始修复记录（本地忽略证据，公开仓库不携带）仅作追溯，当前状态以 `BACKTEST_REQUIREMENTS_STATUS.md` 的 REL-02 为准。
+
+> **2026-09-30 动态深审（历史快照）**：综合结论见 `BACKTEST_DYNAMIC_DEEP_AUDIT_2026-09-30.md`（本地忽略证据，公开仓库不携带），独立证据见 `audit-evidence/2026-09-30-dynamic-deep/README.md`（本地忽略证据，公开仓库不携带）。当时 R-05/R-06/R-07 probe 全部通过，并发现 D-01；D-01 已在后续版本关闭。整体计划仍以最新需求状态表为准。
+
+> **参考站动态深审**：用户 workspace 的独立黑盒结果见 `BACKTEST_REFERENCE_DEEP_AUDIT_2026-09-30.md`（本地忽略证据，公开仓库不携带） 和 `audit-evidence/2026-09-30-reference-deep/README.md`（本地忽略证据，公开仓库不携带）。参考站四 Tab、Settings、Simulation、市场搜索、Panels 和移动边界已采集；固定 SMA 9/21 对账已单独 PASS，15m 普通切换/Calendar 内容和默认 Provider/UI 端到端 parity 仍需补证。
+
+> **2026-09-30 第四轮独立复查（历史快照）**：见 `BACKTEST_AUDIT_RECHECK_4_2026-09-30.md`（本地忽略证据，公开仓库不携带）。其开放边界已在当前工作区重新 probe；当前状态以本文件顶部最新独立复查为准。
+
+> 第四轮后续修复记录（历史过程材料）：R-06/R-07 的修复声明见 `BACKTEST_RECHECK_4_REMEDIATION_2026-09-30.md`（本地忽略证据，公开仓库不携带）；当前是否通过以最新独立 probe 为准。
+
+> **历史记录（第三轮独立复查，2026-09-30）**：S-01～S-03、U-01 及空行情首次加载/回切已用全新输入和真实两引擎浏览器复测通过；新增发现 R-05 dev E2E legacy snapshot 合同失败、R-07 空行情 hide/show 重新接纳旧账本，R-06 为受控混合 envelope 兼容边界。详见 `BACKTEST_AUDIT_RECHECK_3_2026-09-30.md`（本地忽略证据，公开仓库不携带）。整体 Final Gate 仍未关闭。
+
+> 第三轮后续修复记录：R-05、R-06、R-07 的目标场景曾通过独立回归，详见 `BACKTEST_RECHECK_3_REMEDIATION_2026-09-30.md`（本地忽略证据，公开仓库不携带）。第四轮已重新审查适配器边界；原报告保留为历史证据，整体 Final Gate 仍未关闭。
+
+> 2026-09-30 后续修复：S-01～S-03、U-01 已修复并重新执行原审计探针及新增边界验证，详见 `第二轮修复记录`（本地忽略证据，公开仓库不携带）。下方第二轮审计结论保留为修复前状态；整体 Final Gate 仍未关闭。
 
 > 版本：1.6
 >
-> 日期：2026-09-27（历史计划版本；当前审计状态见顶部第四轮指针）
+> 日期：2026-09-27（历史计划版本；当前状态见顶部需求表及最新批次）
 >
-> 文档状态：实施中；G4b.2/G4b.3 精确曲线与字段桥接保留为历史基线；当前 Fork 已升级为 G8.1（`reportSchemaVersion=4`），G8.1 第一版低周期回放、精度 fallback、Worker parity 和 `calc_on_*` 首版重算边界已接入并通过当前定向证据；G6 已完成 Trades Analysis、Trades Log 列表与 Calendar 的当前证据约束增量，G7 已完成 Simulation 当前证据约束下的应用层闭环；本批次新增固定 Binance `BTCUSDT · 1h` 的本地 PineEngine → BacktestController → Workbench 浏览器 fixture、逐项 `BACKTEST_PARITY_MATRIX.md` 和 canonical hash 绑定，并通过串行 dev/prod smoke；已完成批次均通过对应根/原有回归、类型检查、dependency contract、fresh build、dev/prod E2E 与 Provider smoke，Fork 增量另有 Vela-PineTS/Pine strategy 验证；G8 完整 TradingView 逐 Fill/复杂订单语义、G5/G6 剩余对账、PineTS 全仓联网、连续滚动虚拟化/精确 marker、完整视觉/性能 Final Gate 待补。2026-09-28 复核为历史过程记录；2026-09-30 已成功登录用户提供的参考 workspace，补采真实四 Tab、Settings、Simulation 和 13 笔报告，详见 `BACKTEST_REFERENCE_LIVE_AUDIT_2026-09-30.md`。参考站同数据逐笔数值对账仍未完成。
+> 文档状态：实施中；G4b.2/G4b.3 和后续阶段过程保留作历史基线，当前状态只以顶部需求表为准。G8.1（`reportSchemaVersion=4`）下的本期有限引擎合同、固定 `BTCUSDT · 15m · SMA` 数值窗口、K 线合并、代表网络、STARTUP-01、PERF-01 固定生产合同与 REL-06 本地两小时已验；完整工作区字段/组件视觉/交互、最终提交 CI 和真实辅助技术/设备继续推进。长期持久化只待讨论；完整 TV 外部逐 Fill 不作为条件，Safari 专项和线上 rollback 暂缓，不能扩大为取消 VoiceOver/真实设备。
 >
 > 实施目标：功能完备、前端 UI 与交互一比一对标、运行时完全独立于参考网站
 >
-> “功能完备”包含持续实现当前明确标记为 `PARTIAL`、`NOT STARTED` 或“未实现”的能力，不能只把缺口留在 TODO：每项纳入实施的功能都必须落到底层引擎/Provider、应用桥接、UI 状态、错误与降级语义以及回归测试；若受数据源、公开 API 或参考站证据限制暂时不能安全实现，则必须保留明确的 unavailable/fallback 状态、验收边界和下一步任务。当前批次已继续落地 PineTS 内部 order/fill lifecycle ledger、`process_orders_on_close`、`backtest_fill_limits_assumption`、`strategy.cancel` 生命周期标记、按交易所日重置的 intraday risk 规则、bare `error()` 运行时错误和 `calc_on_*` 首版重算边界；完整 raw 对外契约、partial-fill/parent relation、实时/复合订单重算、逐 Fill TradingView 对账等仍按矩阵继续推进，不得用近似值冒充完成。
+> “功能完备”包含持续实现当前需求表中明确标记为 `PARTIAL`、`NOT STARTED` 或“未实现”的范围内能力，不能只把缺口留在 TODO。底层引擎/Provider、应用桥接、UI、错误与降级语义及回归须一致；受数据源限制时保留明确 unavailable/fallback 和证据边界。order/fill ledger、raw audit、重算、风险、部分平仓/parent relation、forming/覆盖率与完整输入归档的本期合同已由 ENGINE-03 列明证据关闭。完整 TV 外部逐 Fill 不作为条件，也不新增盘口流动性 partial fill 或 raw 展示入口；后续实际缺陷按反例处理，不无限追加排列。
 >
 > 使用场景：当前阶段仅本地自用，许可证不作为本计划的设计、实施或验收阻塞项
 
 > 范围调整（2026-09-30）：Replay → 选择 K 线 → Backtest 状态链暂不纳入本阶段回测工作区建设、验收或发布阻塞项。保留参考证据用于未来规划，但当前验收从普通策略回测入口和 Backtest Viewer 开始。
 
 > 第二轮独立复核（2026-09-30，历史快照；当前状态见顶部最新独立复查）：`feature/backtest-workspace-build`、HEAD
-> `53ab05795f45e5440eba1c1513b3bb63a659b9ae` 加最新未提交业务修复。详见 [BACKTEST_AUDIT_RECHECK_2_2026-09-30.md](../reports/BACKTEST_AUDIT_RECHECK_2_2026-09-30.md)。
+> `53ab05795f45e5440eba1c1513b3bb63a659b9ae` 加最新未提交业务修复。详见 `BACKTEST_AUDIT_RECHECK_2_2026-09-30.md`（本地忽略证据，公开仓库不携带）。
 > 上轮 R-01～R-04、O-01～O-03 原场景已用全新输入复核通过；仍有 S-01 重叠市场切换 history
 > 丢失、S-02 tick 版本下限、S-03 bootstrap 读取归属/身份缺口，以及 U-01 设置错误文案截断。
 > 用户禁止以旧测试/fixture/修复者结论代替独立验收；全部旧数字仅保留为过程记录。参考站/TradingView
@@ -48,7 +64,7 @@
 ## 0. 执行结论
 
 > 2026-09-30 修复跟踪：独立审计 F-01～F-10 的实现和新验收证据单独记录于
-> [`BACKTEST_AUDIT_REMEDIATION_2026-09-30.md`](../reports/BACKTEST_AUDIT_REMEDIATION_2026-09-30.md)。
+> `BACKTEST_AUDIT_REMEDIATION_2026-09-30.md`（本地忽略证据，公开仓库不携带）。
 > 修复过程记录不是最新验收结论；以本轮独立 recheck 为准，局部通过不关闭剩余门禁。
 
 本项目能够在现有 Vela Workspace 与 PineTS 基础上实现一个独立运行、功能完整、前端 UI 与交互一比一对标 LuxAlgo Quant 回测工作区的版本。
@@ -56,7 +72,7 @@
 最终结果必须同时满足四条硬性标准：
 
 1. **功能完备**：策略自动回测、摘要 Dock、完整查看器、Performance、Trades Analysis、Trades Log、Simulation、参数重算、图表定位、多图多策略、空态和错误态全部可用。
-2. **UI/交互一比一**：布局、尺寸、间距、颜色、字体、图标、图表、表格、滚动、拖拽、悬停、Tab、响应式和状态切换均通过差分验收。
+2. **UI/交互对标与布局适配**：功能、颜色、字体、图标、组件风格、滚动、拖拽、悬停、Tab 和状态切换按 §10 对标；整体布局及响应式适配本项目可用区域，不复制 AI 侧栏/登录 banner 或要求整页绝对坐标与像素重合。
 3. **独立运行**：生产代码和构建产物不请求 `app.luxalgo.com`、LuxAlgo 私有接口、远程页面资源或其 Next.js chunk；市场数据只使用项目明确注册的 Binance/Hyperliquid Provider。
 4. **现有功能零非预期回归且有可重复验证证据**：回测功能的新增、重算、失败、销毁和刷新路径不得改变现有工具栏、指标管理/收藏、Pine 编辑器、个人脚本持久化、模板、布局恢复、Provider、截图和生命周期行为；必须在原有测试、构建、开发/生产 E2E、Provider smoke、故障注入和基线差分中得到证据，任一既有回归测试或行为基线失败时不得合并。
 
@@ -64,7 +80,7 @@ G4b.2 已将回测结果契约从“摘要+交易账本”推进到带 `runId/sn
 
 G4b.3 已在不改变成交语义的前提下接通 `account_currency`、`max_contracts_held_all/long/short` 和逐笔 `entry_bar_index/exit_bar_index`，应用层分别映射为账户币种、All/Long/Short 最大持仓以及 UI report 的 `entryBar/exitBar`；该阶段身份 `quant-tools-g4b.3` / `reportSchemaVersion=3` 保留为历史。当前 G8.1 两个 Fork 身份为 `quant-tools-g8.1`、`reportSchemaVersion=4`；`reportSeries/reportTail` wire envelope 仍独立使用 `schemaVersion=1`。逐笔 bar index capability 只在当前 revision 的 ledger 已 ready 且所有 index 完整、合法并不晚于当前执行 bar 时开启；新 live revision 不得沿用旧 ledger 的 exact capability。`BACKTEST_LEDGER_AUDIT.md` 已确认 PineTS 内部 reversal/FIFO/partial/pyramiding 撮合语义存在，但上游 Vela 的普通公共快照仍无 raw order/fill 历史、partial-fill event 或精确 reversal/parent relation；因此在本地 Vela-PineTS 的 `auditLedger` 未通过 `runId/revision/bar` 身份校验时，`rawOrders/rawFills` 必须保持 false，不能从 marker、pending queue 或 round-trip trade 行推断。当前 audit bridge 只公开已校验的 append-only 事件和有限关系字段，尚未补齐单一原子 order/fill/curve 报告包、完整 TradingView 低周期/逐 Fill 语义和全部 Performance UI 参考口径；G8.1 第一版只在校验通过的 lower-timeframe envelope 下提供四点回放并显式回退，任何阶段都不得用近似值冒充参考站正式指标。
 
-底层源码采用“两个必需、一个条件式”策略，决策记录见 [`VELA_FORK_DECISION.md`](../../architecture/VELA_FORK_DECISION.md)：PineTS 与 Vela-PineTS 的完整上游源码最终保存在本仓库并作为本地 workspace 依赖；Vela 只有在公开 API Spike 证明无法完成精确定位/结果契约时才本地化。源码通过 Git subtree 保留上游同步能力，不保存或修改 `node_modules`。
+底层源码采用“两个必需、一个条件式”策略，决策记录见 [`VELA_FORK_DECISION.md`](../../architecture/VELA_FORK_DECISION.md)：PineTS 与 Vela-PineTS 源码保存在本仓库并作为本地 workspace 依赖；Vela 主包仍锁定 registry 版本。当前历史容错使用内部缓存边界，窄屏视口通过显式版本/SHA 校验补丁修改安装后的 ESM 产物，详见 [Vela viewport 补丁](../../forks/vela-viewport.md)。补丁脚本纳入 Git 和构建指纹，`node_modules` 本身不入 Git；不能再将当前集成概括为完全不修改上游产物。
 
 分阶段交付只是降低实施风险，**中间阶段不等于最终范围缩减**。只有所有 Final Gate 通过，才能宣称“功能完备、一比一复刻”。
 
@@ -104,7 +120,7 @@ G4b.3 已在不改变成交语义的前提下接通 `account_currency`、`max_co
 上传的 `backtest.html` 是运行态 DOM 快照，不是源码或可独立运行页面。它可作为以下项目的证据：
 
 - Performance 页面的 DOM 层级、字段、样式和响应式结构。
-- 默认 Dock 高度约 280px；参考站折叠后约 28px（详见动态证据），不得把折叠态误当作 104px。
+- 默认 Dock 高度约 280px；当前实际参考组件折叠后为 45px，保留策略名、日期、净利和打开 Viewer 入口。此前 28px 只留控制行的判断已由 2026-10-07 原生组件实测纠正；104px 是展开态拖拽下限。
 - `Performance / Trades Analysis / Trades Log / Simulation` 标签结构。
 - Highcharts 13.0.0 图表形态和 Lucide 风格图标。
 - 正收益 `#089981`、负收益 `#f23645` 等视觉 token。
@@ -192,7 +208,7 @@ G4b.3 已在不改变成交语义的前提下接通 `account_currency`、`max_co
 - 多 Cell、多策略、活动策略切换和生命周期隔离。
 - 历史加载、实时形成 K 线、重算、取消、乱序响应和 stale 状态。
 - 无交易、仅未平仓、全胜、全负、全平手和错误状态。
-- 桌面、平板、移动端、触摸和键盘交互。
+- 桌面工作区、紧凑窗口、鼠标与键盘交互；手机布局、safe-area、触摸及手机实机专项按 SCOPE-07 暂缓。
 - 确定性结果、视觉差分、性能、可访问性和独立运行验收。
 - 现有 PineTS 高精度历史回测/Bar Magnifier TODO 与结果工作区的最终整合。
 
@@ -246,19 +262,21 @@ G4b.3 已在不改变成交语义的前提下接通 `account_currency`、`max_co
 
 默认值基线为：初始资金 1,000,000、fixed qty 1、pyramiding 0、commission 0%、slippage 0、long/short margin 100%。不同脚本的 Inputs 由其 schema 决定。
 
-设置对话框必须遵循：
+2026-10-07 当前参考完整源码确认：字段控件提交即触发 `onChange`；Cancel 逐字段恢复打开时的值，Reset 逐字段应用默认值，Ok 仅关闭。关闭按钮、backdrop 和 Escape 也只关闭，不撤销已经提交的值；有菜单时 Escape 先关闭菜单。没有网络请求不代表没有本地/Worker 重算，因此旧请求计数不能证明参考使用草稿事务。
+
+本地保留以下已验证的草稿和批量提交合同，与参考即时编辑明确不同：
 
 - 输入修改先进入 draft state。
 - Cancel、关闭和 Esc 不提交、不重跑。
-- Reset defaults 只重置当前 dialog 的 draft（本轮实测：将 qty 改为 2 后恢复为 1），不提交、不触发请求；Cancel/关闭/Esc 同样不提交。该行为以 [`BACKTEST_REFERENCE_EVIDENCE.md`](../reports/BACKTEST_REFERENCE_EVIDENCE.md) 的请求计数为准。
-- Ok 使用一次 `setInputs` 和一次 `setProps` 批量提交，不能逐字段触发多次完整回测。
+- Reset defaults 只重置当前 dialog 的 draft，不提交、不重跑；由本地 Settings 单元、真实双引擎和浏览器验证该合同。
+- Ok 经 `batchPineSettings` 合并 Inputs/Properties，一次引擎 update/重算，不能逐字段触发多次完整回测。
 - 非法数值、空日期、越界、精度和单位按 schema 校验。
 - 日期与时间使用图表时区解释，显示格式遵守已冻结的 locale 规则。
 
 ### 3.3 底部 Dock
 
 - 是 Vela Workspace 的应用层兄弟节点，不是右侧 SidePanel。
-- 默认高度约 280px；本轮 `1440 × 900` 实测展开高度为 280px、折叠后约 28px（`Expand backtest summary` 入口），不得把折叠高度误设为 104px。最终像素以 G0 截图测量为准。
+- 默认高度约 280px，折叠为 45px；Header、五 KPI 和图表纵向排列。展开态范围为 104px 至本地宿主高度的 75%；拖拽结束低于 190px 收到 104px，低于 190px 隐藏图表、低于 230px 隐藏坐标轴。方向键步长 16px，Shift 为 48px，Home 到上限、End 到下限；折叠保留名称/日期/净利与 Viewer 入口。实际参考组件及本地两浏览器证据见 `audit-evidence/2026-10-07-dock-components/`，数值用于组件交互，不要求参考整页坐标一致。
 - 顶部包含策略名、结果日期范围、折叠和打开完整 Viewer。
 - 展示 Net Profit、Trades、Win Rate、Max Drawdown、Profit Factor。
 - 展示累计 P&L/Equity 图形。
@@ -267,13 +285,13 @@ G4b.3 已在不改变成交语义的前提下接通 `account_currency`、`max_co
 
 ### 3.4 完整 Viewer
 
-- Viewer 替换右侧图表工作区域，不跳转路由，也不是浏览器全屏 Modal。
-- 打开后保留全局顶部栏；在参考完整布局中左侧 AI 区也保留。
+- Viewer 使用本项目的图表/回测宿主区域，不跳转路由，也不是浏览器全屏 Modal。
+- 保留本项目既有图表工具栏及其功能，按实际可用宽高布局。不创建参考站左侧 AI 对话区或顶部登录 banner，也不保留它们的占位；参考宿主元素不属于复刻范围。
 - 返回图表时恢复原 chart、viewport、面板高度和回测摘要。
 - Header 保留策略收藏星标；收藏状态必须与现有 FavoriteService 和指标列表同步，不能形成第二份状态。
 - 每次重新打开默认进入 Performance。
 - Tab 栏 sticky，内容区独立滚动。
-- 同一次打开期间记录每个 Tab 的 scroll position；重新打开后的恢复规则以 G0 实测为准。
+- 同一次打开期间共用内容区当前 scroll position；切换 Tab 时按新内容实际高度夹紧，不分别记忆各 Tab 位置。再次打开进入 Performance/top0；同 Tab 的临时加载保留位置，导航、终态和报告身份变化清理待恢复位置（H-09）。
 - Viewer 和 Dock 共享同一份结果快照，不各自重新计算。
 
 ### 3.5 Performance
@@ -704,10 +722,10 @@ G4b.3 将 trade bar-index capability 进一步绑定到账本 revision：只有 
 - `entry_bar_index/exit_bar_index` → `entryBarIndex/exitBarIndex` → UI `entryBar/exitBar`，并按 ready/current-revision ledger、safe integer、closed-trade 完整性、先后顺序和 execution bar 上界开启 capability。
 - G4b.3 的 `quant-tools-g4b.3` / `reportSchemaVersion=3` 与 G4b.2 的 `quant-tools-g4b.2` / schema 2 均为历史已验证身份；当前两层 Fork 身份为 `quant-tools-g8.1` / `reportSchemaVersion=4`。曲线传输 envelope 自身仍为 `schemaVersion=1`，不得与 report schema 混为同一版本字段。
 
-待补：
+当前合同：
 
-- 更完整的未平仓交易快照、raw order/fill 完整历史以及精确 reversal/parent relation。
-- 帐本、order/fill 与曲线的单一原子报告包；当前 exact capability 分别只对已校验曲线和当前 revision 的已校验 bar index 承诺。
+- 未平仓快照及带身份的 raw order/fill、partial progress、parent/reversal relation 已实现；三项有限组合已由当前需求表 ENGINE-03 关闭，后续修改保留回归。
+- summary/trades/series/audit 由同一次联合 context 读取并验证 run/revision 与能力；不另建平行 DTO。双真实引擎实时风险回滚已验证当前分支的账本/audit/完整曲线与静态结果一致。
 
 上述新增字段属于数据合同补齐。参考 UI 没有独立 Currency、Max contracts 或 Bar index KPI/列，因此在取得相反对标证据前不新增这些独立可见项；Entry/Exit bar index 只服务现有定位交互。
 
@@ -727,8 +745,8 @@ Worker 内联 PineTS，因此升级项目根部 `pinets` 依赖不会自动更�
   fill lifecycle 保持为 append-only 审计事件，而不是宣称交易所逐笔成交。
 - [x] Entry/Exit bar index，以及与 ledger revision、execution bar 边界绑定的精确 capability。
 - [x] audit ledger 中的有限 parent/reversal relation（仅限引擎已明确发出的 DTO）。
-- [ ] 交易账本、order/fill 与曲线的单一原子报告包，以及完整 partial-fill、parent/reversal、
-  同 timestamp 与实时复合订单语义。
+- [x] 同一 context 的联合读取及 run/revision 门控，含账本、order/fill 与曲线。已有 partial progress、parent/reversal；
+  跨订单价格段顺序、实时风险回滚与归档重放已按 ENGINE-03 有限合同验收，不重复设计报告包。
 - [x] 数据覆盖、执行起止、requested/applied precision 和 fallback reason（G8.1 第一版；完整逐 Fill/复合订单语义仍待）。
 
 完整历史通过异步 selector 按需拉取，不塞入每个 tick 的 `script:run`；live tick 只传输并合并尾点。在大数据曲线的 downsample/虚拟化与内存预算完成前，该实现只表示契约已接通，不表示性能 Gate 已通过。
@@ -973,11 +991,11 @@ Fork 接入后必须验证：
 4. 上游升级时先验证是否已经提供等价能力；若提供，则删除本地补丁并通过同一契约测试。
 5. 某个包不再包含必要本地差异时，从 `packages/`、workspaces、`file:` 依赖和构建脚本一并移除，切回经过验证的精确 registry 版本，不长期保留无修改 Fork。
 
-## 10. UI 一比一实施规范
+## 10. UI 对标与本项目布局适配规范
 
 ### 10.1 视觉基线
 
-G0 在固定 viewport、DPR、字体、timezone、locale 和数据下保存：
+G0 在记录 viewport、DPR、字体、timezone、locale 和固定数据的前提下，分别记录参考站与本项目有效工作区的宽高；保存以下状态：
 
 - Dock 展开、折叠、默认高度、最大可用高度。
 - Viewer Header 和四个 Tab。
@@ -985,33 +1003,35 @@ G0 在固定 viewport、DPR、字体、timezone、locale 和数据下保存：
 - Settings Inputs/Properties。
 - List、Calendar、Simulation 控件。
 - loading、no-trades、open-only、partial、error。
-- 桌面、平板、手机 portrait/landscape。
+- 当前验收桌面；手机 portrait/landscape 按 SCOPE-07 暂缓，既有采集保留。
 
-所有测量写入 `BACKTEST_PARITY_MATRIX.md`，包含尺寸、间距、字体、weight、line-height、颜色、border、radius、shadow、z-index、动画时长和 easing。
+所有测量写入 `BACKTEST_PARITY_MATRIX.md`，包含尺寸、间距、字体、weight、line-height、颜色、border、radius、shadow、z-index、动画时长和 easing。可在相同组件宽度下隔离比较局部样式，但诊断页面中的参考宿主偏移不得带入产品。最终必须验证本项目真实宿主下的布局与操作可用性。
 
-### 10.2 差分标准
+### 10.2 对标评价标准（2026-10-07 用户修正）
 
-- 主要容器、Dock、Header、Tab、表格列和图表边界几何差异不超过 1px。
-- 文本和 Canvas/SVG 抗锯齿允许 2px 局部容差。
-- 颜色 token、字体规格、文案、正负号、单位和格式必须精确一致。
-- 排除实时价格、光标和随机 Simulation 后，桌面截图差异目标不高于 0.5%，移动端不高于 1%。
-- 所有交互状态必须有结构化断言，不能只凭截图或肉眼判断。
-- 如果操作系统字体栅格化造成差异，使用项目内固定字体资源和统一 Playwright 环境。
+- 功能、入口、交互流程、结果和状态按已冻结合同对标；四 Tab、Dock/Header、Calendar、Settings/Simulation 弹窗和图表联动均在范围内。
+- 组件内部的信息层级、图标形状、字体、颜色、按钮/字段/卡片/图表风格及 hover/focus/selected 状态对标参考；文案、正负号、单位和格式须正确。已明确的数据/可访问性修正保留，不为追求外观复制参考缺陷。
+- 整体布局适配本项目实际工作区。容器伸展、列宽、换行、分列和滚动可随可用宽高变化，保持模块层级、操作顺序和内容可读性；不为参考站 AI 侧栏、登录 banner 留白。
+- 宿主差异带来的绝对位置/宽高、合理的亚像素取整和字体栅格化差异不单独判为失败。不再要求所有边界误差 ≤1px，或整页截图误差 ≤0.5%/1%。
+- 遮挡、裁切、跨格不可读重叠、非预期页面横滚、图标错误、交互缺失和不可达入口仍须修复；不能以“布局适配”掩盖这些问题。
+- 所有交互与异常状态必须实际操作并保留结构化断言；截图、DOM 和局部几何差分用于发现问题，不能只凭截图或放宽测试宣称通过。
 
-阈值在首轮基准截图建立后可收紧，但不得以放宽阈值掩盖结构错误。
+对照证据保存 reference、candidate、输入/状态及两站各自有效工作区、viewport/DPR 元数据；必要时保存局部 diff 和测量结果解释差异，不将全页 diff 百分比作为硬门槛。在矩阵中区分“符合参考”“本项目布局适配”“明确保留的正确性/可访问性修正”和“未解决问题”，每项状态仍需要对应证据。
 
-差分证据必须同时保存 reference、candidate、diff、机器可读指标和 viewport/DPR 元数据；阈值变更需要在 `BACKTEST_PARITY_MATRIX.md` 记录原因和复核人。当前矩阵已建立为 0.1 审计草案，但尚未保存完整 reference/candidate/diff 三件套，故本节的阈值仍只能作为待验收合同，不能当作已通过的视觉证据。
+本地 screenshot baseline 继续用于发现项目自身回归。此次修正参考对标标准不授权无条件更新基线、弱化功能断言或将所有 PARTIAL 自动改为 PASS；历史像素测量只保留为局部设计/诊断证据。
 
 ### 10.3 响应式
 
-- 桌面 Dock、Viewer 和表格行为按参考还原。
-- 移动端不强行压缩桌面 Dock。最新黑盒复核显示 `1024px` 仍显示图表/Dock，而约 `900px` 及以下 Quant chart 区切换为仅含 `Chart` 入口的窄屏占位；若产品要求在窄屏继续展示 Report/Sheet，必须作为明确的有意偏离记录，不能宣称该状态是一比一参考行为。
-- G0 实测移动端策略完成后的打开方式和返回后的再次入口。
-- 验证断点前后 1px、portrait/landscape、safe-area、200% zoom、窄高和宽矮窗口。
+本阶段验收桌面容器、紧凑窗口、DPR 和缩放。手机布局、触摸入口及 safe-area 按 SCOPE-07 暂缓；既有实现和证据保留，不作为本期退出条件。具体区分如下：
+
+- 桌面 Dock、Viewer 和表格保留参考的信息层级与操作，按本项目容器伸展。
+- 桌面紧凑窗口提供可达的 Backtest 入口、Viewer、弹窗与返回路径。参考站受 AI 侧栏/banner 影响的整页断点或仅 `Chart` 占位不作为本地产品要求，也不为模仿该占位隐藏本地功能。
+- 验证桌面断点前后 1px、200% zoom、窄高和宽矮窗口；桌面窗口变窄不等于手机专项，不取消这些检查。
 - Tab 可横向滚动且不触发页面拖拽。
-- 表格和 KPI 横向滚动不锁死纵向页面。
-- hover-only 控件在 touch/hover:none 下提供等价常显或点击入口。
-- Dock 高度是否跨刷新持久化以参考实测为准；如持久化，值必须版本化、校验并按 viewport clamp。
+- 表格和 KPI 横向滚动不锁死纵向页面；Calendar 保持七列和月份语义，但不得照抄参考窄屏金额跨格重叠。必要缩略提供点击/键盘可达的完整信息。
+- 参考 Dock 重挂载后恢复展开 280px，当前原始组件没有高度/折叠持久化；本地继续使用版本化、校验并按 viewport clamp 的独立偏好增强。该差异已记录在 D-13，不再等待不存在的参考服务器持久化证据。
+
+暂缓项：手机端策略完成后的打开/返回和再次入口、手机 portrait/landscape、safe-area，以及 touch/hover:none 的等价触摸入口与实机验收。手机代码、测试脚本和历史结果保留；可选执行不代表重新纳入本期必过门禁。
 
 ### 10.4 可访问性与视觉兼容
 
@@ -1029,7 +1049,7 @@ G0 在固定 viewport、DPR、字体、timezone、locale 和数据下保存：
 - 保持外观不变的前提下扩大透明触控 hit area。
 - 策略标题只通过 `textContent` 渲染，避免脚本标题注入。
 
-可执行验收门槛：以 WCAG 2.2 AA 为目标；axe 或等价自动检查不得有 critical/serious 违规，moderate 违规必须逐项记录并有豁免；键盘必须能完成所有 Viewer/Dock/Tab/表格排序/设置/关闭操作且无焦点丢失；至少在 Chromium + macOS VoiceOver 做一次屏幕阅读器 smoke。视觉一比一不能覆盖这些不可见语义要求。
+可执行验收门槛：当前阶段以桌面 WCAG 2.2 AA 的浏览器自动化可验证部分为目标；axe 或等价自动检查不得有 critical/serious 违规，moderate 违规必须逐项记录并有豁免；键盘必须能完成所有 Viewer/Dock/Tab/表格排序/设置/关闭操作且无焦点丢失。桌面 VoiceOver 仍需独立证据，缺环境时记录外部阻塞；Safari 专项按 SCOPE-03、手机适配及手机实机触摸按 SCOPE-07 暂缓。视觉对标不能覆盖这些不可见语义要求。
 
 ## 11. 性能、持久化与故障隔离
 
@@ -1045,7 +1065,9 @@ G0 在固定 viewport、DPR、字体、timezone、locale 和数据下保存：
 - 面板隐藏时不重复渲染；重新显示后执行一次确定性 reflow。
 - 为新增 JS/CSS 建立 bundle budget，避免无界增长。
 
-首轮性能 Gate 的可执行阈值（以固定 Chromium、1440×900、DPR 1 的基线机记录；基线建立后可收紧，不得无证据放宽）：10k 笔聚合 p95 ≤ 100ms，100k 笔聚合 p95 ≤ 500ms；Dock 拖拽/resize 的长任务 p95 ≤ 50ms 且采样帧率 ≥ 50 FPS；10 次 Viewer/Dock open→close 后 JS heap 相对基线回落至 ≤ 20MB 增量、Highcharts/Observer 实例为零；应用新增生产 bundle ≤ 100KB gzip，单次交互不得重复完整 ledger 请求。每项需保存原始 trace、heap snapshot、bundle 报告和设备信息；若项目决定不同阈值，必须在矩阵中显式批准。
+运行期性能 Gate 的可执行阈值（以固定 Chromium、1440×900、DPR 1 的基线机记录；基线建立后可收紧，不得无证据放宽）：10k 笔首次聚合 p95 ≤ 100ms，100k 笔首次聚合 p95 ≤ 500ms；已有浏览器分页门禁也分别采用 100/500ms，不能拿分页时间代替 selector 聚合时间。Dock 拖拽/resize 的长任务 p95 ≤ 50ms 且采样帧率 ≥ 50 FPS；10 次 Viewer/Dock open→close 后 JS heap 相对基线回落至 ≤ 20MB 增量、销毁后 Highcharts/Observer 实例为零；单次交互不得重复完整 ledger 请求。同一 immutable report 的缓存命中与新报告首次计算分别记录，Firefox/其它 DPR 的兼容和性能结果不冒充固定基线预算通过。
+
+生产包体使用当前 BUILD-02 / 矩阵 PF-07 / `scripts/check-bundle-size.mjs` 已建立的 main、Worker、Highcharts 分组 raw/gzip 预算；旧首轮草案的“新增 ≤100KB gzip”仅作历史目标，不能与当前已执行预算并列成两套现行门禁。本次复核未放宽运行期时间、帧率或内存阈值。每项需保存原始 trace、heap snapshot、bundle 报告和设备信息；后续更改阈值仍须在矩阵中明确记录依据。
 
 ### 11.2 持久化
 
@@ -1062,7 +1084,7 @@ G0 在固定 viewport、DPR、字体、timezone、locale 和数据下保存：
 `{version,height,collapsed}`。读取失败、版本不匹配或非有限高度均回退到 Workbench
 默认值；恢复高度还会按当前 viewport 和 min/max 约束 clamp。该 key 不包含回测报告、交易
 账本、策略参数或 `quant-tools:workspace:v2`，Dock/Viewer/Simulation 生命周期也不会写入它。
-参考站是否持久化该偏好仍待 G0 动态复测，故本地实现不能据此宣称一比一行为。
+2026-10-07 已读取当前原始 `w6` 组件及父调用：高度/折叠是组件内部 `useState(false/280)`，没有持久化 props、storage 或回调；重新挂载回到展开 280 并按宿主 clamp。本地保留版本化 Dock 偏好是明确的本地增强，不能宣称严格一比一，也不再等待服务器高度保存证据。
 
 Viewer 每次重新打开默认 Performance 是已观察行为，不能被“记住最后 Tab”的常见做法破坏。策略 Inputs/Properties 继续由 Vela Workspace state 负责。
 
@@ -1211,6 +1233,8 @@ G4b.3 增量（历史）已通过：`npm test` `191/191`、`npm run test:regress
 
 阶段证据必须把“原有回归先跑、新增测试后跑”写入命令时间序列；仅在表格中把两行列出来、但没有时间/commit/输出，不能证明顺序。任何命令失败、外部网络阻塞、启动 workaround 或人工跳过都必须写入 `status` 和 `blockers`，不可折算成 PASS。
 
+以下G0～G9保留最初阶段分解及当时勾选状态，属于历史实施清单，不是当前剩余任务队列。旧`[ ]`不得单独触发重新实施或推翻后续直接证据；执行前须映射到[当前需求状态表](BACKTEST_REQUIREMENTS_STATUS.md)的具体条目和现行范围。例如固定BTCUSDT/15m/SMA对账、有限撮合、Dock/Settings组件及本地HMR/生产长测已有各自证据，不能因旧阶段未勾选而重新列未完成。现有证据只覆盖其源码时点和场景，后续改动仍按BUILD-01回归；手机、Safari、Replay及线上部署/rollback依对应SCOPE暂缓，未执行项不伪记通过。
+
 ### G0：冻结动态、静态和公式对标合同
 
 任务：
@@ -1219,7 +1243,7 @@ G4b.3 增量（历史）已通过：`npm test` `191/191`、`npm run test:regress
 - [ ] 将视觉/交互基线与数值/引擎基线完全分开；本地 registry/engine 数值基线已建立，双方参考站可运行策略的逐笔对账仍待完成。
 - [ ] 保存四个 Tab、Dock、Settings、List、Calendar、Simulation 的基准截图和结构化结果。
 - [ ] 补测多 Strategy、多 Cell、0 trade、open-only、compile/runtime error、行情失败和重算失败。
-- [ ] 补测 mobile 打开/返回、Dock 高度持久化、Reset defaults、Viewer scroll 恢复。
+- [ ] 按当前需求表核对桌面 Dock 高度持久化、Reset defaults、Viewer scroll 恢复；mobile 打开/返回按 SCOPE-07 暂缓，不计入本阶段退出条件。
 - [ ] 黑盒确认 P&L variation、Preserve win/loss 和风险指标公式。
 - [ ] 用 benchmark 非空样本确认 Strategy Outperformance 的参考可见单位；本项目引擎合同暂按账户币种金额 `netprofit - buy_and_hold_pnl`，禁止与百分比差值混用。
 - [ ] 冻结未平仓兼容行的 Trade #、epoch/`N/A` 显示规则，同时确认其不进入 closed/Calendar/Simulation 人口。
@@ -1264,10 +1288,10 @@ G4b.3 增量（历史）已通过：`npm test` `191/191`、`npm run test:regress
 - [ ] 改造 App Shell，增加应用层 Dock 和 Viewer。
 - [ ] 实现拖拽、折叠、键盘 resize、reflow 和 z-index 协调。
 - [ ] 实现 Header、Tab、返回图表、focus management 和 scroll container。
-- [ ] 实现桌面/平板/手机布局与 safe-area。
+- [ ] 验证桌面和紧凑窗口布局；手机布局、safe-area 及手机触摸专项按 SCOPE-07 暂缓。
 - [ ] 加入 Settings、Favorite、Strategy badge 和 Show backtest 联动。
 
-退出条件：使用 fixture 时壳层视觉差分达标；所有键盘、触摸和响应式交互通过；现有工具栏、指标管理、收藏、编辑器、模板和布局恢复无回归；回测壳失败时 Workspace 仍可启动。
+退出条件：壳层组件风格符合 §10、本地可用区域布局合理；本期桌面键盘、鼠标及窗口缩放交互通过；现有工具栏、指标管理、收藏、编辑器、模板和布局恢复无回归；回测壳失败时 Workspace 仍可启动。手机子项暂缓不算通过，也不阻塞当前退出。
 
 ### G4a：本地源码依赖零行为变更接入
 
@@ -1342,7 +1366,7 @@ reference/candidate 视觉差分；无近似正式指标。当前实现与本地
 - [x] 完成 Log 当前可见列、条件列、全列排序、Trade #/方向 badge、Entry/Exit 双行内容、MFE/MAE 与 Crosshair 入口的证据约束对标；分页排序缓存、边界页、caption 与键盘焦点已补，固定 Chromium 10k/100k DOM/交互 trace 已归档（`tests/backtest_performance.py`），参考站视觉差分和跨浏览器仍归 G9。
 - [x] 实现 Calendar 当前月/前后月导航、每日/月度聚合、活跃日均值、空月、Best/Worst、时区和 open 排除合同；最终跨 viewport 视觉 Gate 仍归 G9。
 - [ ] 按 G2 决策通过应用 Adapter 或最小 Vela Fork 实现 Entry/Exit 精确 bar 定位和 marker 高亮。
-- [ ] 实现 reversal、partial close、pyramiding 和同 timestamp 多事件。
+- [x] reversal、partial close、pyramiding 和关联审计事件已有实现及独立预期；同价格段跨订单次序单列 ENGINE-03，不能据此称全部排列已验。
 
 退出条件：逐笔字段、累计值、日历值和图表 marker 与固定参考逐行一致；定位结果在预定像素/bar 范围内。
 
@@ -1359,7 +1383,7 @@ reference/candidate 视觉差分；无近似正式指标。当前实现与本地
 
 本阶段只修改 Quant Tools 应用层、应用 Worker、展示层和测试，没有修改 `packages/pinets` 或 `packages/vela-pinets`；Simulation 是 settled ledger 的本地投影，不改变策略撮合语义。
 
-退出条件：固定 seed 下 percentile、概率、曲线点、直方图 bucket 和表格在冻结 fixture 中逐值一致；1k/10k 性能与内存有界；Worker 取消/乱序/失败、空态、桌面/移动交互和焦点合同通过；Simulation 操作不触发策略重跑、Provider 重订阅、WebSocket 或 Storage 写入。G7 的应用层闭环完成不代表项目 Final Gate 完成，参考站最终数值/截图差分和跨功能长时性能仍由 G9 验收。
+退出条件：固定 seed 下 percentile、概率、曲线点、直方图 bucket 和表格在冻结 fixture 中逐值一致；1k/10k 性能与内存有界；Worker 取消/乱序/失败、空态、桌面交互和焦点合同通过；手机交互和 Drawer 专项按 SCOPE-07 暂缓，已有实现与验证保留。Simulation 操作不触发策略重跑、Provider 重订阅、WebSocket 或 Storage 写入。G7 的应用层闭环完成不代表项目 Final Gate 完成，参考站最终数值/组件对照及本项目布局适配按 §10、跨功能长时性能按 G9 验收。
 
 ### G8：高精度撮合补齐
 
@@ -1369,22 +1393,23 @@ reference/candidate 视觉差分；无近似正式指标。当前实现与本地
   任一工具栏、指标、编辑器、模板、Provider、Storage 或生命周期差异未解释时，
   即使引擎定向测试全绿也不得合并。
 - [x] 在 `packages/pinets` 完成 Bar Magnifier 的默认四点路径和经过校验的低周期回放第一版；当前证据仅覆盖本地 Fork 的 provider-backed OHLCV。
-- [ ] 补齐限价、止损、止盈、移动止损、反转、部分平仓和保证金事件顺序。
+- [x] 完成本期有限合同的限价、止损、止盈、移动止损、反转、部分平仓和保证金事件顺序：默认/高精度、风险/entry、跨订单及形成中回滚均有独立预期和双引擎证据；不把未穷举的排列写成全部语义已关闭。
 - [x] 补齐显式 `strategy.oca.cancel` / `strategy.oca.reduce` 订单组：首个实际成交后分别取消
   兄弟挂单或按实际成交数量缩减兄弟数量；无 `oca_name` 时不推断隐式分组，并写入取消审计事件。
 - [x] 修复 `cash_per_order` 在一次 close order 消费多个 FIFO lots 时的重复收费：按一次
   broker close order 计算固定手续费，再按实际关闭数量分摊到 closed-trade rows；其它
   commission 类型仍沿用数量线性语义。
-- [ ] 补齐 Pine 相关重算和成交配置语义。
+- [x] 完成本期有限合同的 Pine 重算和成交配置语义，并纳入固定回归：收盘成交、生效顺序、`calc_on_order_fills`/`calc_on_every_tick` 边界、费用、风险及形成中回滚均已覆盖；超出本期有限合同的排列按 ENGINE-03 新反例处理。
 - [x] 在策略 Properties 增加 Default/High precision 选择器，直接映射 Pine 的 mutable `use_bar_magnifier` 属性；Cancel/Reset 不提交，precision-only 的 Ok 通过既有 `setProps` 批量链路只触发一次 update，且 UI 不维护平行状态。
 - [x] 展示 requested/applied precision、低周期、覆盖率和回退原因；不支持父周期会显式报告 `lower-timeframe-undetermined`，缺少 fallback reason 的未应用 envelope 被 Adapter 拒绝。
-- [ ] 使用成对的父周期/映射低周期 Binance BTCUSDT OHLCV fixture 与参考逐笔对账。
+- 成对父/子 OHLC 的独立成交预期和双真实引擎验证按 ENGINE-03 验收；完整 TV 外部逐 Fill 按 SCOPE-05 不作为本期关闭条件。
 - [x] 覆盖低周期缺失、重复、越界、仅部分覆盖、断档以及显式回退场景；仍在形成的 live 请求按不支持回退。
 - [x] 重建 `packages/vela-pinets` 内联 Worker，并通过 parity 测试对齐 in-process 和 Worker 的 precision envelope/结果边界。
 
-G8.1 当前 checkpoint 已通过上述第一版定向证据；其 `quant-tools-g8.1` / schema 4 身份、性能
-artifact 和外部联网阻塞详见 §11.5/§11.6。该 checkpoint 仍是 PARTIAL：不可将四点 OHLCV 回放
-描述为 TradingView 完整逐 Fill broker emulator。
+G8.1 当前 checkpoint 已通过上述本期有限合同的定向证据；其 `quant-tools-g8.1` / schema 4
+身份、性能 artifact 和外部联网阻塞详见 §11.5/§11.6。该 checkpoint 仍是 PARTIAL：不可将
+四点 OHLCV 回放描述为 TradingView 完整逐 Fill broker emulator；完整外部逐 Fill 对账按
+SCOPE-05 不作为本期关闭条件。
 
 退出条件：精度模式真实可验证；UI 不会仅因脚本参数存在就声称高精度已启用；固定样本下逐模拟点、逐 Fill、订单顺序和结果通过基准对账；in-process/Worker 的 fingerprint 与执行结果一致。
 
@@ -1403,17 +1428,17 @@ artifact 和外部联网阻塞详见 §11.5/§11.6。该 checkpoint 仍是 PARTI
 - [ ] 验证 `npm ls` 只有一份 Vela/Vela-PineTS/PineTS；两个必需包为本地 workspace，Vela 与 Fork 决策一致，lockfile 无重复或 invalid peer。
 - [ ] 删除 Fork `dist` 和本地安装缓存后完成 fresh build，构建后 Git 工作区干净。
 - [ ] 验证应用、Worker、in-process 报告的完整 build fingerprint 与 `docs/forks` 基线一致，并通过 sentinel 反向失败测试。
-- [ ] 验证不存在 `node_modules` 修改、patch 或深度源码导入。
+- [ ] 验证不存在未声明的`node_modules`手改、任意补丁或应用层深度源码导入。允许[已登记的Vela 0.7.7 viewport兼容补丁](../../forks/vela-viewport.md)：仅由构建锁下的脚本执行，校验精确版本及完整输入/输出SHA并纳入指纹；隔离安装须可复现，未知版本/内容必须拒绝。该例外不授权其它依赖手改。
 - [ ] 按 12.0 的顺序运行 `npm run test:regression:existing` → `npm test` → `npx tsc --noEmit --pretty false` → `npm run check:dependencies` → `npm run build` → `npm run test:e2e` → `npm run test:e2e:prod` → `npm run test:providers`，确保零回归；若验证 Fork，追加 `npm run build:forks`、`npm run test:forks`，并执行 `npm --workspace packages/vela-pinets run typecheck`、`npm --workspace packages/vela-pinets run lint`。`packages/pinets` 没有 `typecheck`/`lint` script，必须使用其实际存在的 build/test 或显式 `tsc -p` 命令并在账本中写明，不得虚构脚本。
 - [ ] 对照 `BACKTEST_REGRESSION_BASELINE.md` 重跑既有工具栏、指标、收藏、编辑器、脚本、模板、布局、截图和 Provider smoke；检查事件/请求/监听器/Worker/DOM 计数没有未解释增加。
 - [ ] 注入回测 Adapter、报表、Simulation 和 Worker 的失败，确认图表、工具栏、指标、编辑器和模板功能仍可使用，且错误只显示在回测区域。
-- [ ] 执行发布回滚演练：记录上一份已验证的 commit/构建产物 hash，验证 feature flag/kill switch 可在不改写用户 Workspace 的情况下禁用 Backtesting；模拟触发阈值（回归失败、外部请求、资源泄漏或严重性能超标），一键切回上一版本并重新运行既有回归、build、E2E、Provider smoke 与 Storage/schema 恢复检查；确认没有不可逆迁移，旧脚本/收藏/模板仍可读取。回滚后的验证结果与触发原因必须留档。
+- [ ] 发布回滚演练（SCOPE-01：DEFERRED，不阻塞本阶段）：目标部署环境具备且恢复该任务后，记录上一份已验证的线上commit/制品hash、切回过程、CDN/browser cache恢复及回滚后的Storage/schema检查，重跑既有回归/E2E/Provider smoke并留档。当前本地kill switch已有下述证据；日常Workspace/脚本/收藏/模板兼容回归仍执行，不因线上演练暂缓而豁免。
 
-当前已先完成 kill switch 的可重复 smoke，但完整发布回滚演练仍未关闭：
+当前本地kill switch的有限合同已通过；真实线上部署/rollback/CDN恢复因缺少目标环境按SCOPE-01暂缓，不进入本阶段阻塞队列，也不记为通过：
 `npm run test:e2e:kill-switch` 使用 `VITE_ENABLE_BACKTESTING=false` 构建并在
 production preview 中确认 backtest workbench 子树/动态 host 为 0、旧工具栏/Indicators/Pine
 editor/Templates 仍可用，blocked/LuxAlgo 请求为 `0/0`，market mock 请求仍正常，且
-`quant-tools:workspace:v2` 字节不变。该证据不等同于上一版本制品回滚和清缓存 fresh-clone 验收。
+`quant-tools:workspace:v2` 字节不变。该证据不等同于上一线上制品回滚；fresh clone独立安装/构建另按BASE-08/I-05保留其直接证据，不能将已完成的本地构建与暂缓的线上回滚混成一个未完成项。
 
 E2E 的“冷启动”必须区分两种证据：当前 runner 的 `predev`/Fork 构建可能超过 20 秒等待窗口；在 runner 支持可配置等待或复用已启动服务前，预先启动 Vite 再运行浏览器回归只能标记为 workaround，不能冒充 `npm run test:e2e` 冷启动直接通过。生产 preview 仍必须在 `npm run build` 后独立启动并记录产物版本。
 
@@ -1474,10 +1499,11 @@ E2E 的“冷启动”必须区分两种证据：当前 runner 的 `predev`/Fork
 
 ### 13.5 Viewport 与视觉
 
+- 按 §10.2 在本项目真实宿主布局下验收；记录各自有效工作区，不要求与参考站整页坐标重合。
 - 1920×1080、1440×900、1280×800。
 - 断点前后 1px。
-- 1024、768、390×844、360×640、mobile landscape。
-- DPR 1/2、200% zoom、touch/hover:none。
+- 当前桌面覆盖 1024 及紧凑窗口；390×844、360×640、mobile landscape 和手机 safe-area 暂缓。
+- 当前桌面 DPR 1/2、200% zoom；手机 touch/hover:none 专项按 SCOPE-07 暂缓。
 - Dock min/default/expanded。
 - 四个 Tab、Settings、List、Calendar、Simulation。
 - loading、partial、no-trades、open-only、error、positive、negative。
@@ -1486,7 +1512,7 @@ E2E 的“冷启动”必须区分两种证据：当前 runner 的 `predev`/Fork
 ### 13.6 性能预算测试
 
 - 1k、10k、100k trades 聚合。
-- 大账本虚拟滚动。
+- 大账本有界分页、焦点与交易定位；当前采用每页最多 200 行，不额外要求虚拟滚动。
 - 大曲线 downsample 与 tooltip。
 - 1k/10k Simulation runs。
 - 高频 tick 下不重复拉完整 ledger。
@@ -1503,7 +1529,7 @@ E2E 的“冷启动”必须区分两种证据：当前 runner 的 `predev`/Fork
 - 删除所有 Fork `dist` 后能通过根构建重新生成。
 - Fork build 不改写已跟踪源码或生成未提交文件。
 - 上游同步模拟分支可以完整执行 build、typecheck、package tests 和 app contract tests。
-- 应用打包不深度引用 `packages/**/src`，也不依赖 `node_modules` patch。
+- 应用打包不深度引用 `packages/**/src`，不依赖未版本化的 `node_modules` 手改；已批准的 Vela 安装补丁必须有版本/SHA 校验、可重现脚本和独立回归。
 - Highcharts 在 lockfile 中精确为 `13.0.0`，运行时只加载本地 chunk。
 
 ### 13.8 现有功能非回归测试
@@ -1542,10 +1568,10 @@ E2E 的“冷启动”必须区分两种证据：当前 runner 的 `predev`/Fork
 
 当前可复现证据：原有回归 `22/22`、根 `npm test` `219/219`、Provider network/history
 离线 contract 各 `8/8`（合计 `16/16`）、raw adapter/domain/controller 定向 `63/63`、
-Vela-PineTS 定向 `47/47`、`npx tsc --noEmit`、
-`npm run check:dependencies`、`npm run build`、`npm run test:e2e:multicell` 和 multicell
-contract `1/1` 均通过。PineTS 全仓联网套件仍因外部 Binance connect timeout 受阻；TradingView
-逐 Fill/复杂订单、参考站逐笔与最终视觉/VoiceOver/真实 rollback Gate 继续保持 PARTIAL。
+Vela-PineTS 定向 `47/47`、`npx tsc --noEmit`、`npm run check:dependencies`、`npm run build`、
+`npm run test:e2e:multicell` 和 multicell contract `1/1` 均通过。PineTS 全仓联网套件仍因外部
+Binance connect timeout 受阻；TradingView 逐 Fill/复杂订单和参考站逐笔 Gate 继续保持 PARTIAL。
+Safari 专项和线上 rollback 按 SCOPE-03/SCOPE-01 暂缓；VoiceOver、真实设备仍未验收。
 
 ### 13.10 2026-09-28 Trades Log 性能续跑
 
@@ -1568,13 +1594,13 @@ contract `1/1` 均通过。PineTS 全仓联网套件仍因外部 Binance connect
 - [ ] 无近似值冒充正式指标，无 unsupported 显示为 0。
 - [ ] Bar Magnifier 显示的 applied precision 与实际撮合一致。
 
-### 14.2 UI 与交互一比一
+### 14.2 UI、交互对标与布局适配
 
-- [ ] 结构化交互 Parity Matrix 100% 通过。
-- [ ] 桌面、平板、移动视觉差分达到第 10.2 节阈值。
+- [ ] 结构化交互 Parity Matrix 本期适用的桌面行/子项通过；暂缓、范围外和明确保留的本地正确性差异单列，不计作未实现。
+- [ ] 桌面组件风格和交互符合 §10.2，本项目布局无非预期遮挡、裁切或不可达内容；手机子项按 SCOPE-07 暂缓。
 - [ ] Tooltip、hover、focus、scroll、drag、calendar、chart animation 均对齐。
 - [ ] 文案、单位、locale、符号、精度和颜色对齐。
-- [ ] 不复制不可见的语义缺陷，键盘和触摸具有等价能力。
+- [ ] 不复制不可见的语义缺陷，桌面键盘与鼠标操作均可达；手机触摸等价能力按 SCOPE-07 暂缓。
 
 ### 14.3 数值与引擎一致性
 
@@ -1623,7 +1649,7 @@ contract `1/1` 均通过。PineTS 全仓联网套件仍因外部 Binance connect
 9. 为精确 Entry/Exit 定位新增稳定 Chart Port，不调用 Vela 私有方法。
 10. 多策略、多 Cell、源码从 strategy 变 indicator、失败 updateCode 等生命周期。
 11. Simulation 的确定性 seed、Worker、取消和大数据性能。
-12. 响应式断点、移动端、safe-area、200% zoom、touch/hover:none。
+12. 当前验收桌面响应式断点、紧凑窗口和 200% zoom；手机布局、safe-area、touch/hover:none 及手机实机专项按 SCOPE-07 暂缓。
 13. Visual parity 与不可见 a11y 缺陷分离，保持外观一致但补齐语义。
 14. Highcharts 生命周期、虚拟列表、downsample 和 bundle/performance gate。
 15. 阻断参考域名的独立运行 E2E，而不是只靠代码审查判断独立性。

@@ -104,3 +104,25 @@ test('combined Settings reports a failed second setter rather than silent partia
   assert.equal(adapter.applySettings(key, { length: 11 }, { precision: 3 }), false);
   assert.equal(inputCalled, 1);
 });
+
+test('successful Settings mutations notify Vela persistence for the active cell', () => {
+  const calls = [];
+  const handle = {
+    id: 'strategy-1',
+    nativeType: undefined,
+    setInputs(values) { calls.push(['inputs', values]); },
+    setProps(values) { calls.push(['props', values]); },
+  };
+  const workspace = {
+    active: { id: 'cell-1' },
+    cell: () => ({ chart: { indicators: () => [handle] } }),
+    context: () => ({ stateChanged: () => calls.push(['stateChanged']) }),
+  };
+  const adapter = new VelaBacktestControlAdapter(workspace);
+  assert.equal(adapter.applySettings(key, { length: 11 }, { initial_capital: 20_000 }), true);
+  assert.deepEqual(calls, [
+    ['inputs', { length: 11 }],
+    ['props', { initial_capital: 20_000 }],
+    ['stateChanged'],
+  ]);
+});

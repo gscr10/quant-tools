@@ -335,11 +335,21 @@ function resolveBarMagnifierStatus(
 
     const consumedChildren = new Set<number>();
     let covered = 0;
+    let coverageFailure: BarMagnifierStatus['fallbackReason'];
+    // Count every valid parent, including a usable recent suffix behind a
+    // provider's history cap. Stopping at the first missing old parent would
+    // report 0% for, e.g., 833 complete parents among 2,000 requested bars.
+    // A failure still disables replay for the ENTIRE run; this is availability
+    // metadata, not permission to mix default and high-precision fills.
+    const asOf = input?.asOf;
+    const invalidAsOf = asOf !== undefined && !Number.isFinite(asOf);
+    let hasFormingChildren = false;
     for (let i = 0; i < parentWindows.length; i += 1) {
         const parent = parentWindows[i]!;
         const startIndex = lowerBoundBars(children, parent.start);
         const endIndex = lowerBoundBars(children, parent.end);
         const contained: number[] = [];
+        let formingParent = invalidAsOf;
         for (let childIndex = startIndex; childIndex < endIndex; childIndex += 1) {
             const child = childWindows[childIndex]!;
             // Only complete child candles are eligible for broker replay. A
@@ -347,33 +357,51 @@ function resolveBarMagnifierStatus(
             if (child.start >= parent.start
                 && child.end <= parent.end
                 && child.end - child.start === childDuration) {
-                contained.push(childIndex);
+                if (asOf !== undefined && (invalidAsOf || child.end > asOf)) {
+                    formingParent = true;
+                    hasFormingChildren = true;
+                } else {
+                    contained.push(childIndex);
+                }
             }
         }
 
         const parentSpan = parent.end - parent.start;
         const expectedChildren = Math.floor(parentSpan / childDuration);
         const edgeRemainder = parentSpan - expectedChildren * childDuration;
+        if (formingParent) {
+            coverageFailure ??= 'forming-lower-bar';
+            continue;
+        }
         if (expectedChildren <= 0 || contained.length < expectedChildren) {
             // Distinguish a missing candle inside the available run from a
             // truncated leading/trailing response.
+            let reason: BarMagnifierStatus['fallbackReason'] = 'partial-lower-coverage';
             for (let childIndex = 1; childIndex < contained.length; childIndex += 1) {
                 if (childWindows[contained[childIndex]!]!.start > childWindows[contained[childIndex - 1]!]!.end) {
-                    return precisionStatus(true, false, lowerTimeframe, parents.length, children.length, covered, 'gapped-lower-bars');
+                    reason = 'gapped-lower-bars';
+                    break;
                 }
             }
-            return precisionStatus(true, false, lowerTimeframe, parents.length, children.length, covered, 'partial-lower-coverage');
+            coverageFailure ??= reason;
+            continue;
         }
         if (contained.length > expectedChildren) {
             return precisionStatus(true, false, lowerTimeframe, parents.length, children.length, covered, 'overlapping-lower-bars');
         }
 
+        let gapped = false;
         for (let childIndex = 1; childIndex < contained.length; childIndex += 1) {
             const previous = childWindows[contained[childIndex - 1]!]!;
             const child = childWindows[contained[childIndex]!]!;
             if (child.start !== previous.end) {
-                return precisionStatus(true, false, lowerTimeframe, parents.length, children.length, covered, 'gapped-lower-bars');
+                gapped = true;
+                break;
             }
+        }
+        if (gapped) {
+            coverageFailure ??= 'gapped-lower-bars';
+            continue;
         }
 
         const firstChild = childWindows[contained[0]!]!;
@@ -386,7 +414,8 @@ function resolveBarMagnifierStatus(
         // may never hide an internal missing candle.
         if (leadingRemainder < 0 || trailingRemainder < 0
             || leadingRemainder + trailingRemainder !== edgeRemainder) {
-            return precisionStatus(true, false, lowerTimeframe, parents.length, children.length, covered, 'partial-lower-coverage');
+            coverageFailure ??= 'partial-lower-coverage';
+            continue;
         }
 
         // A complete count and edge remainder are not sufficient for
@@ -401,6 +430,11 @@ function resolveBarMagnifierStatus(
 
         for (const childIndex of contained) consumedChildren.add(childIndex);
         covered += 1;
+    }
+
+    if (coverageFailure) {
+        return precisionStatus(true, false, lowerTimeframe, parents.length, children.length, covered,
+            hasFormingChildren ? 'forming-lower-bar' : coverageFailure);
     }
 
     // Every supplied row must either be replayable, a provider-inclusive row
@@ -1323,7 +1357,9 @@ export class PineTS {
         this.ohlc4[index] = (candle.high + candle.low + candle.open + candle.close) / 4;
         this.hlcc4[index] = (candle.high + candle.low + candle.close + candle.close) / 4;
         this.openTime[index] = candle.openTime;
-        this.closeTime[index] = candle.closeTime;
+        // Match the initial-load contract when a streaming provider supplies
+        // only OHLC/openTime. Replacing the tail must not erase its boundary.
+        this.closeTime[index] = candle.closeTime ?? candle.openTime + getTimeframeDurationMs(this.timeframe);
     }
 
     /**
@@ -1342,7 +1378,7 @@ export class PineTS {
         this.ohlc4.push((candle.high + candle.low + candle.open + candle.close) / 4);
         this.hlcc4.push((candle.high + candle.low + candle.close + candle.close) / 4);
         this.openTime.push(candle.openTime);
-        this.closeTime.push(candle.closeTime);
+        this.closeTime.push(candle.closeTime ?? candle.openTime + getTimeframeDurationMs(this.timeframe));
     }
 
     /**
@@ -1774,6 +1810,7 @@ export class PineTS {
             : [open, child.low, child.high, child.close];
 
         for (const [pointIndex, price] of prices.entries()) {
+            context._barMagnifierPricePoint = Number(context._barMagnifierPricePoint ?? 0) + 1;
             const previousPrice = pointIndex === 0 ? price : prices[pointIndex - 1]!;
             const point: BrokerBar = {
                 openTime: child.openTime,
@@ -1812,9 +1849,6 @@ export class PineTS {
                 // does not append a report/result row; the parent-bar pass
                 // below remains the sole public series cardinality.
                 const filledAfterEntryPass = this._strategyFillCount(context) > (context._strategyFillCursor ?? 0);
-                if (transpiledFn && context.strategy?.config?.calc_on_every_tick === true) {
-                    await this._runStrategyRecalcPass(context, transpiledFn, 'every_tick');
-                }
                 if (transpiledFn && context.strategy?.config?.calc_on_order_fills === true && filledAfterEntryPass) {
                     await this._runStrategyRecalcPass(context, transpiledFn, 'order_fill');
                 }
@@ -1896,6 +1930,15 @@ export class PineTS {
                     checkpointStrategyExecutionRange(context, observed, price);
                 }
 
+                // The point's matching completes before an every-tick
+                // evaluation can replace/create orders for the next point.
+                // Running it before exits would cancel a valid previous
+                // bracket and could also backfill a new exit against a
+                // segment that has already elapsed.
+                if (transpiledFn && context.strategy?.config?.calc_on_every_tick === true) {
+                    await this._runStrategyRecalcPass(context, transpiledFn, 'every_tick');
+                }
+
                 delete context._barMagnifierPointPhase;
                 delete context._barMagnifierSegmentStart;
                 delete context._barMagnifierExecutionRange;
@@ -1914,8 +1957,13 @@ export class PineTS {
         // A deferred close margin call is booked at the beginning of the next
         // parent bar.  It must run once, before the first child entry phase.
         applyPendingCloseMarginCall(context);
-        for (const child of children) {
-            await this._processMagnifiedChild(context, child, transpiledFn);
+        context._barMagnifierPricePoint = 0;
+        try {
+            for (const child of children) {
+                await this._processMagnifiedChild(context, child, transpiledFn);
+            }
+        } finally {
+            delete context._barMagnifierPricePoint;
         }
         // The report/equity point remains parent-bar based.  This preserves
         // the existing public series cardinality while fills carry the child
@@ -2177,8 +2225,19 @@ export class PineTS {
                 // follow-up is intentionally deferred to the next broker
                 // opportunity; this close pass remains single-shot.
                 const closeFillCursor = this._strategyFillCount(context);
-                if (processOrdersOnClose) processStrategyOrders(context, 'close');
-                processExitOrders(context, 'close');
+                const closePrice = Number(Series.from(context.data.close).get(0));
+                const closePoint: BrokerBar = {
+                    openTime: Number(Series.from(context.data.openTime).get(0)),
+                    closeTime: Number(Series.from(context.data.closeTime).get(0)),
+                    open: closePrice, high: closePrice, low: closePrice, close: closePrice,
+                };
+                // A post-script close opportunity contains only the closing
+                // price. The bar's high/low happened before these new orders
+                // existed and cannot supply fills or fresh trade excursions.
+                this._withBrokerBar(context, closePoint, () => {
+                    if (processOrdersOnClose) processStrategyOrders(context, 'close', true);
+                    processExitOrders(context, 'close');
+                });
                 if (transpiledFn
                     && context.strategy?.config?.calc_on_order_fills === true
                     && this._strategyFillCount(context) > closeFillCursor) {
@@ -2188,7 +2247,7 @@ export class PineTS {
                 // the script body.  A close pass can change realized/open P&L
                 // on that same bar, so replace the current report tail after
                 // the close fills instead of leaving a stale equity snapshot.
-                finalizeStrategyBar(context);
+                finalizeStrategyBar(context, { high: closePrice, low: closePrice });
                 finalizedAfterClosePass = true;
             }
 

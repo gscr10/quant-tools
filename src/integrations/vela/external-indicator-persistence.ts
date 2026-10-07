@@ -55,14 +55,19 @@ export function registerExternalIndicatorPersistence(
       if (!cell) return [];
       return cell.instances.flatMap((instance) => {
         if (!instance.external) return [];
+        const inputs = instance.handle?.inputValues?.() ?? instance.values?.inputs;
+        const props = instance.handle?.propValues?.() ?? instance.values?.props;
         return [{
           name: instance.entry.name,
           script: instance.entry.script,
           ...(instance.entry.language ? { language: instance.entry.language } : {}),
           ...(instance.id ? { id: instance.id } : {}),
           ...(instance.handle ? { hidden: !instance.handle.visible } : {}),
-          ...(instance.values?.inputs ? { inputs: instance.values.inputs } : {}),
-          ...(instance.values?.props ? { props: instance.values.props } : {}),
+          // `values` is populated during restore, but Vela keeps subsequent
+          // edits on the public handle. Read both surfaces so an applied
+          // Settings batch is present in the next Workspace snapshot.
+          ...(inputs && Object.keys(inputs).length > 0 ? { inputs } : {}),
+          ...(props && Object.keys(props).length > 0 ? { props } : {}),
         }];
       });
     },

@@ -2,6 +2,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMigratingWorkspaceStorage, migrateWorkspaceState, WORKSPACE_HISTORY_BARS } from '../src/integrations/storage/workspace-storage.ts';
 import { WORKSPACE_DEFAULTS } from '../src/config/workspace-options.ts';
+import { BACKTEST_EXECUTION_HIGHLIGHT_TYPE } from '../src/domain/ports/workspace-port.ts';
+
+test('autosave strips only the dedicated transient execution annotation and preserves all user indicator records', () => {
+  const values = new Map();
+  const store = createMigratingWorkspaceStorage({ getItem: k => values.get(k) ?? null,
+    setItem: (k, v) => values.set(k, v), removeItem: k => values.delete(k) });
+  const user = ['volume', { type: 'sma', inputs: { length: 9 } },
+    { name: BACKTEST_EXECUTION_HIGHLIGHT_TYPE }, 'quant-backtest-execution-highlight-user'];
+  const state = { charts: [{ bars: 2000, indicators: [...user,
+    BACKTEST_EXECUTION_HIGHLIGHT_TYPE, { type: BACKTEST_EXECUTION_HIGHLIGHT_TYPE }] },
+    { bars: 2000, indicators: { natives: ['volume', BACKTEST_EXECUTION_HIGHLIGHT_TYPE],
+      scripts: [{ name: BACKTEST_EXECUTION_HIGHLIGHT_TYPE }], removedNatives: [] } }],
+    cells: { other: { bars: 2000, indicators: ['volume', BACKTEST_EXECUTION_HIGHLIGHT_TYPE] } },
+    ext: { text: BACKTEST_EXECUTION_HIGHLIGHT_TYPE } };
+  store.set('workspace', JSON.stringify(state));
+  const saved = JSON.parse(values.get('workspace'));
+  assert.deepEqual(saved.charts[0].indicators, user);
+  assert.deepEqual(saved.cells.other.indicators, ['volume']);
+  assert.deepEqual(saved.charts[1].indicators, { natives: ['volume'],
+    scripts: [{ name: BACKTEST_EXECUTION_HIGHLIGHT_TYPE }], removedNatives: [] });
+  assert.deepEqual(saved.ext, state.ext);
+  assert.equal(state.charts[0].indicators.length, user.length + 2, 'caller input untouched');
+  values.set('workspace', JSON.stringify(state));
+  assert.deepEqual(JSON.parse(store.get('workspace')), saved, 'old accidental persisted marker is also stripped on read');
+});
 
 test('history migration shares its default with new workspace and preserves user fields', () => {
   assert.equal(WORKSPACE_HISTORY_BARS, WORKSPACE_DEFAULTS.bars);

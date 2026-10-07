@@ -87,5 +87,24 @@ if bar_index == 0
         expect(result.strategy.opentrades).toHaveLength(2);
         expect(result.strategy.opentrades.map((trade: any) => trade.entry_id)).toEqual(['near', 'far']);
     });
-});
 
+    it('orders a mixed stop-limit OCA group by the first actual fill path', async () => {
+        const result = await run([
+            bar(0, 100, 101, 99, 100),
+            // The path reaches 105 before 110. The far stop-limit is declared
+            // first, but its limit cannot fill until after its stop activates.
+            bar(1, 100, 115, 99, 110),
+            bar(2, 110, 110, 110, 110),
+        ], `
+if bar_index == 0
+    strategy.order('far-stop-limit', strategy.long, qty=1, stop=110, limit=111, oca_name='mixed', oca_type=strategy.oca.cancel)
+    strategy.order('near-stop', strategy.long, qty=1, stop=105, oca_name='mixed', oca_type=strategy.oca.cancel)
+`);
+
+        expect(result.strategy.opentrades).toMatchObject([{ entry_id: 'near-stop', entry_price: 105 }]);
+        expect(result.strategy._order_events).toEqual(expect.arrayContaining([
+            expect.objectContaining({ sourceOrderId: 'near-stop', kind: 'filled' }),
+            expect.objectContaining({ sourceOrderId: 'far-stop-limit', kind: 'cancelled', reason: 'oca.cancel' }),
+        ]));
+    });
+});

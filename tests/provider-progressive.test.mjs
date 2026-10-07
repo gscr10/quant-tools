@@ -250,12 +250,17 @@ test('bundled Binance swallowed HTTP 503 remains explicit progressive failure wi
   try {
     const actual = await provider.getBarsProgressive('BTCUSDT', '15', { limit: 2000 }, () => {});
     assert.deepEqual(actual, head);
-    // The guarded transport retries the failing page on Binance.US. It must
-    // not restart the first page or extend the requested historical boundary.
-    assert.equal(urls.length, 3);
+    // The guarded transport retries the failing page at the same cursor. Each
+    // bounded attempt may try Binance's independent spot mirror, so this is
+    // one successful first page plus three global/US pairs. It must not
+    // restart the first page or extend the requested historical boundary.
+    assert.equal(urls.length, 7);
     assert.equal(urls[1].searchParams.get('endTime'), String(head[0].time - 1));
     assert.equal(urls[2].searchParams.get('endTime'), String(head[0].time - 1));
     assert.equal(urls[2].hostname, 'api.binance.us');
+    assert.equal(urls[3].searchParams.get('endTime'), String(head[0].time - 1));
+    assert.equal(urls[6].searchParams.get('endTime'), String(head[0].time - 1));
+    assert.equal(urls[6].hostname, 'api.binance.us');
     assert.match(String((await requests[0].result).error), /HTTP 503/);
   } finally { stop(); globalThis.fetch = original; }
 });

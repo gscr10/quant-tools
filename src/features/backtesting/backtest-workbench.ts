@@ -1,7 +1,8 @@
+import { backtestIcon as svgIcon } from './backtest-icons.ts';
 import './backtest.css';
 import { BacktestViewer } from './backtest-viewer.ts';
 import {
-  formatBacktestCurrency,
+  formatBacktestPerformanceValue,
   formatBacktestRange,
   formatExecutionPrecision,
 } from './backtest-format.ts';
@@ -10,7 +11,8 @@ import {
   destroyReportCharts,
   enhanceReportCharts,
   registerReportChart,
-  updateReportChart,
+  updateReportChartPoints,
+  setReportChartLayout,
   resumeReportChartReflow,
   suspendReportChartReflow,
   type ReportChartPoint,
@@ -24,16 +26,19 @@ import {
   type BacktestWorkbenchPort,
 } from './backtest-types.ts';
 import type { BacktestDockPreferences } from '../../domain/ports/backtest-preferences.ts';
+import type { SettingsControlsPort } from '../../shared/settings-controls.ts';
 
 type BacktestWorkbenchRuntimeOptions = BacktestWorkbenchOptions & {
+  readonly settingsControls?: SettingsControlsPort;
   /** Restore focus to the active chart when a closing control is no longer visible. */
   readonly onFocusFallback?: () => void;
 };
 
 const DEFAULT_DOCK_HEIGHT = 280;
 const MIN_DOCK_HEIGHT = 104;
-const MAX_DOCK_HEIGHT = 520;
-const COLLAPSED_DOCK_HEIGHT = 28;
+const COLLAPSED_DOCK_HEIGHT = 45;
+const CHART_HIDDEN_BELOW = 190;
+const AXES_HIDDEN_BELOW = 230;
 /** Bound SVG/Highcharts work while retaining the complete tooltip source. */
 const MAX_DOCK_RENDER_POINTS = 2_000;
 
@@ -74,32 +79,15 @@ function canRestoreFocus(node: HTMLElement | null): node is HTMLElement {
   return true;
 }
 
-function svgIcon(doc: Document, name: 'chevron-up' | 'chevron-down' | 'external' | 'star' | 'gauge' | 'settings'): SVGSVGElement {
-  const pathMap: Record<typeof name, string[]> = {
-    'chevron-up': ['m3.5 10 4.5-4.5 4.5 4.5'],
-    'chevron-down': ['m3.5 6 4.5 4.5L12.5 6'],
-    external: ['M9.5 2.5h4v4', 'm13.5 2.5-6 6', 'M12 8.5v3.8a1.2 1.2 0 0 1-1.2 1.2H4.7a1.2 1.2 0 0 1-1.2-1.2V5.3a1.2 1.2 0 0 1 1.2-1.2h3.8'],
-    star: ['m8 1.8 1.9 3.85 4.25.62-3.08 3 .73 4.23L8 11.5l-3.8 2  .73-4.23-3.08-3 4.25-.62Z'],
-    gauge: ['m12 14 4-4', 'M3.34 19a10 10 0 1 1 17.32 0'],
-    settings: ['m6.7 1.5-.4 1.7-1.2.7-1.7-.5-1.3 2.2 1.3 1.2v1.4l-1.3 1.2 1.3 2.2 1.7-.5 1.2.7.4 1.7h2.6l.4-1.7 1.2-.7 1.7.5 1.3-2.2-1.3-1.2V6.8l1.3-1.2-1.3-2.2-1.7.5-1.2-.7-.4-1.7Z', 'M10 7.5a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z'],
-  };
-  const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 16 16');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.classList.add('quant-backtest-icon');
-  pathMap[name].forEach((d) => {
-    const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', d);
-    svg.appendChild(path);
-  });
-  return svg;
-}
-
 function unwrapMetric(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (!value || typeof value !== 'object') return null;
   const numeric = (value as { value?: unknown }).value;
   return typeof numeric === 'number' && Number.isFinite(numeric) ? numeric : null;
+}
+
+function dockIcon(doc: Document, name: 'chevron-up' | 'chevron-down' | 'maximize' | 'ghost'): SVGSVGElement {
+  return svgIcon(doc, name, name === 'ghost' ? 32 : 16);
 }
 
 function formatDockMetric(value: number | null, unit = '', signed = false): string {
@@ -109,9 +97,9 @@ function formatDockMetric(value: number | null, unit = '', signed = false): stri
   const sign = signed && normalized > 0 ? '+' : '';
   const suffix = unit === '%' ? '%' : unit && unit !== 'count' && unit !== 'ratio' ? ` ${unit}` : '';
   const formatted = unit && unit !== '%' && unit !== 'count' && unit !== 'ratio'
-    ? formatBacktestCurrency(normalized)
+    ? formatBacktestPerformanceValue(normalized)
     : normalized.toLocaleString('en-US', {
-      minimumFractionDigits: digits,
+      minimumFractionDigits: unit === '%' ? 0 : digits,
       maximumFractionDigits: digits,
     });
   return `${sign}${formatted}${suffix}`;
@@ -128,8 +116,22 @@ interface DockMetricCard {
   readonly secondary?: string;
 }
 
+function setDockMetricAmount(amount: HTMLElement, value: string, currency: string): void {
+  const suffix = ` ${currency}`;
+  if (!value.endsWith(suffix)) {
+    amount.textContent = value;
+    return;
+  }
+  amount.textContent = value.slice(0, -suffix.length);
+  const unit = element(amount.ownerDocument, 'span', 'quant-backtest-dock-currency');
+  unit.textContent = currency;
+  amount.appendChild(unit);
+}
+
 function dockMetricCards(report: BacktestReport): DockMetricCard[] {
-  const currency = report.currency?.trim() || 'USD';
+  // Match the Viewer display contract for account currencies. Providers may
+  // return lower-case ISO codes; the Dock must not diverge from the report.
+  const currency = report.currency?.trim().toUpperCase() || 'USD';
   const net = unwrapMetric(reportValue(report, 'netProfit'));
   const trades = unwrapMetric(reportValue(report, 'trades'));
   const winRate = unwrapMetric(reportValue(report, 'winRate'));
@@ -142,7 +144,7 @@ function dockMetricCards(report: BacktestReport): DockMetricCard[] {
     {
       label: 'Net Profit',
       value: formatDockMetric(net, currency, true),
-      tone: net === null ? 'neutral' : net > 0 ? 'positive' : 'negative',
+      tone: net === null || net === 0 ? 'neutral' : net > 0 ? 'positive' : 'negative',
     },
     { label: 'Trades', value: formatDockMetric(trades, 'count'), tone: 'neutral' },
     {
@@ -162,7 +164,7 @@ function dockMetricCards(report: BacktestReport): DockMetricCard[] {
     {
       label: 'Profit Factor',
       value: formatDockMetric(factor, 'ratio'),
-      tone: factor === null ? 'neutral' : factor > 1 ? 'positive' : 'negative',
+      tone: factor === null || factor === 1 ? 'neutral' : factor > 1 ? 'positive' : 'negative',
     },
   ];
 }
@@ -223,6 +225,7 @@ export class BacktestWorkbench {
   private readonly dockBody: HTMLElement;
   private readonly dockTitle: HTMLElement;
   private readonly dockRange: HTMLElement;
+  private readonly collapsedNet: HTMLElement;
   private readonly dockMetrics: HTMLElement;
   private readonly collapseButton: HTMLButtonElement;
   private readonly viewerButton: HTMLButtonElement;
@@ -245,15 +248,17 @@ export class BacktestWorkbench {
   private settingsReturnFocus: HTMLElement | null = null;
   private lastNotifiedHeight: number | null = null;
   private lastSurfaceSignature: string | null = null;
+  private simulationMounted = false;
+  private simulationSessionKey: BacktestReport['key'];
   private destroyed = false;
 
   constructor(root: HTMLElement | string, options: BacktestWorkbenchRuntimeOptions = {}) {
     const host = resolveRoot(root);
     const doc = host.ownerDocument;
     this.port = options;
-    this.defaultDockHeight = clamp(options.defaultDockHeight ?? DEFAULT_DOCK_HEIGHT, MIN_DOCK_HEIGHT, MAX_DOCK_HEIGHT);
+    this.defaultDockHeight = Math.max(MIN_DOCK_HEIGHT, options.defaultDockHeight ?? DEFAULT_DOCK_HEIGHT);
     this.minDockHeight = clamp(options.minDockHeight ?? MIN_DOCK_HEIGHT, 72, this.defaultDockHeight);
-    this.maxDockHeight = Math.max(this.defaultDockHeight, options.maxDockHeight ?? MAX_DOCK_HEIGHT);
+    this.maxDockHeight = Math.max(this.defaultDockHeight, options.maxDockHeight ?? Number.POSITIVE_INFINITY);
     this.dockHeight = options.dockPreferences?.height ?? this.defaultDockHeight;
     this.collapsed = options.dockPreferences?.collapsed === true;
 
@@ -273,7 +278,7 @@ export class BacktestWorkbench {
     this.dock.style.setProperty('--quant-backtest-dock-height', `${this.dockHeight}px`);
     // The resize floor and the collapsed header are two distinct reference
     // states: users can resize the expanded Dock down to 104px, while the
-    // explicit collapse action leaves only the 28px control row visible.
+    // explicit collapse action retains the title, result and Viewer entry.
     this.dock.style.setProperty('--quant-backtest-dock-collapsed-height', `${COLLAPSED_DOCK_HEIGHT}px`);
     this.dock.classList.toggle('is-collapsed', this.collapsed);
 
@@ -298,10 +303,11 @@ export class BacktestWorkbench {
     const identity = element(doc, 'div', 'quant-backtest-dock-identity');
     this.dockTitle = element(doc, 'strong', 'quant-backtest-dock-title');
     this.dockRange = element(doc, 'span', 'quant-backtest-dock-range');
-    identity.append(this.dockTitle, this.dockRange);
+    this.collapsedNet = element(doc, 'span', 'quant-backtest-dock-collapsed-net');
+    identity.append(this.dockTitle, this.dockRange, this.collapsedNet);
     const actions = element(doc, 'div', 'quant-backtest-dock-actions');
     this.collapseButton = button(doc, 'Collapse', 'quant-backtest-icon-button');
-    this.collapseButton.prepend(svgIcon(doc, 'chevron-down'));
+    this.collapseButton.prepend(dockIcon(doc, 'chevron-down'));
     this.collapseButton.addEventListener('click', () => this.toggleCollapsed());
     this.settingsButton = button(doc, '', 'quant-backtest-icon-button');
     this.settingsButton.append(svgIcon(doc, 'settings'));
@@ -310,7 +316,7 @@ export class BacktestWorkbench {
     this.settingsButton.addEventListener('click', () => this.openSettings());
     this.settingsButton.hidden = !this.port.settings;
     this.viewerButton = button(doc, '', 'quant-backtest-icon-button');
-    this.viewerButton.prepend(svgIcon(doc, 'external'));
+    this.viewerButton.prepend(dockIcon(doc, 'maximize'));
     this.viewerButton.setAttribute('aria-label', 'Open backtest viewer');
     this.viewerButton.title = 'Open backtest viewer';
     this.viewerButton.addEventListener('click', () => this.openViewer());
@@ -327,7 +333,15 @@ export class BacktestWorkbench {
 
     this.viewer = new BacktestViewer(doc, {
       onClose: () => this.closeViewer(),
-      onTabChange: (tab) => this.port.onTabChange?.(tab),
+      onTabChange: (tab) => {
+        if (tab === 'simulation') {
+          this.simulationMounted = true;
+          this.simulationSessionKey = this.report?.key;
+        } else {
+          this.endSimulationSession();
+        }
+        this.port.onTabChange?.(tab);
+      },
       onToggleFavorite: (report) => this.port.onToggleFavorite?.(report),
       onTradeLocate: (trade, side) => {
         // Entry/Exit actions are chart navigation commands.  The reference
@@ -344,6 +358,7 @@ export class BacktestWorkbench {
     });
 
     this.settingsPanel = new StrategySettingsPanel(doc, {
+      controls: options.settingsControls,
       onReadAfterFailure: (snapshot) => {
         const report = this.report;
         if (!report || report.key?.cellId !== snapshot.key.cellId
@@ -379,6 +394,10 @@ export class BacktestWorkbench {
       this.mobileViewerButton,
     );
     host.appendChild(this.element);
+    // The host is only measurable after insertion. Initial preferences and
+    // the separator's maximum must use an embedded workspace's own height,
+    // rather than retaining the pre-mount window fallback.
+    this.clampDockToViewport();
 
     this.report = options.initialReport ?? options.getSnapshot?.() ?? null;
     this.bindSubscription(options.subscribe);
@@ -408,6 +427,15 @@ export class BacktestWorkbench {
     const previousReport = this.report;
     const signature = reportSurfaceSignature(report);
     this.report = report;
+    if (this.simulationMounted
+      && (this.simulationSessionKey?.cellId !== report?.key?.cellId
+        || this.simulationSessionKey?.indicatorId !== report?.key?.indicatorId)) {
+      // The store's active report may already belong to another chart. End
+      // the old owner's session explicitly rather than resetting "active".
+      this.endSimulationSession();
+      this.simulationMounted = report !== null;
+      this.simulationSessionKey = report?.key;
+    }
     if (signature === this.lastSurfaceSignature) return;
     this.lastSurfaceSignature = signature;
 
@@ -435,6 +463,7 @@ export class BacktestWorkbench {
     const active = this.element.ownerDocument.activeElement;
     this.viewerReturnFocus = active instanceof HTMLElement ? active : this.viewerButton;
     this.viewer.open(this.report);
+    this.endSimulationSession();
     this.element.dataset.viewer = 'open';
     this.syncResponsiveVisibility();
     this.viewerButton.setAttribute('aria-expanded', 'true');
@@ -445,6 +474,7 @@ export class BacktestWorkbench {
     if (this.destroyed) return;
     const wasOpen = this.viewer.isOpen;
     this.viewer.close();
+    this.endSimulationSession();
     this.element.dataset.viewer = 'closed';
     this.syncResponsiveVisibility();
     this.viewerButton.setAttribute('aria-expanded', 'false');
@@ -470,6 +500,7 @@ export class BacktestWorkbench {
     // Highcharts instances and ResizeObservers before removing the shell.
     destroyReportCharts(this.dockMetrics);
     this.viewer.destroy();
+    this.endSimulationSession();
     this.settingsPanel.destroy();
     this.viewerReturnFocus = null;
     this.settingsReturnFocus = null;
@@ -478,6 +509,14 @@ export class BacktestWorkbench {
     this.element.remove();
     this.report = null;
     this.lastSurfaceSignature = null;
+  }
+
+  private endSimulationSession(): void {
+    const key = this.simulationSessionKey;
+    const wasMounted = this.simulationMounted;
+    this.simulationMounted = false;
+    this.simulationSessionKey = undefined;
+    if (wasMounted && key) this.notifyPort(() => this.port.onSimulationSessionEnd?.(key));
   }
 
   private bindSubscription(subscribe: BacktestWorkbenchOptions['subscribe']): void {
@@ -498,6 +537,7 @@ export class BacktestWorkbench {
       this.dockMetrics.replaceChildren();
       this.dockTitle.textContent = '';
       this.dockRange.textContent = '';
+      this.collapsedNet.textContent = '';
       this.dockRange.removeAttribute('title');
       this.dockRange.removeAttribute('aria-label');
       delete this.dockRange.dataset.executionPrecision;
@@ -511,6 +551,7 @@ export class BacktestWorkbench {
     }
     this.element.dataset.state = this.report.status ?? 'ready';
     this.dockTitle.textContent = this.report.strategyName;
+    this.updateCollapsedNet(this.report);
     const range = formatBacktestRange(this.report);
     const precision = formatExecutionPrecision(this.report.execution?.precision);
     this.dockRange.textContent = [range, precision?.text].filter(Boolean).join(' · ');
@@ -579,13 +620,18 @@ export class BacktestWorkbench {
     this.dockMetrics.replaceChildren();
     const currency = this.report.currency?.trim() || 'USD';
     const cards = dockMetricCards(this.report);
+    const metricsRow = element(doc, 'div', 'quant-backtest-dock-kpi-strip');
+    metricsRow.tabIndex = 0;
+    metricsRow.setAttribute('role', 'region');
+    metricsRow.setAttribute('aria-label', 'Backtest summary metrics');
+    this.dockMetrics.appendChild(metricsRow);
     cards.forEach(({ label, value, tone, secondary }) => {
       const card = element(doc, 'div', 'quant-backtest-dock-kpi');
       const title = element(doc, 'span');
       title.textContent = label;
       const row = element(doc, 'span', 'quant-backtest-dock-value-row');
       const amount = element(doc, 'strong');
-      amount.textContent = value;
+      setDockMetricAmount(amount, value, currency.toUpperCase());
       amount.classList.add(`quant-backtest-tone-${tone}`);
       row.appendChild(amount);
       if (secondary) {
@@ -594,20 +640,28 @@ export class BacktestWorkbench {
         row.appendChild(detail);
       }
       card.append(title, row);
-      this.dockMetrics.appendChild(card);
+      metricsRow.appendChild(card);
     });
     const chart = element(doc, 'div', 'quant-backtest-dock-sparkline');
     const values = this.report.cumulativePnl ?? [];
     if (values.length === 0) {
-      chart.textContent = '—';
+      if (!(this.report.trades?.length) && (!this.report.status
+        || this.report.status === 'ready' || this.report.status === 'no-trades')) {
+        chart.classList.add('quant-backtest-dock-empty');
+        const title = element(doc, 'strong');
+        title.textContent = 'No trades';
+        const detail = element(doc, 'span');
+        detail.textContent = "This strategy didn't open or close any trades.";
+        chart.append(dockIcon(doc, 'ghost'), title, detail);
+      }
     } else {
       // Build the complete tooltip source in one pass.  This is intentionally
       // iterative: a spread into Math.min/Math.max becomes a call-stack/argument
       // limit at very large histories, while a temporary `numeric` array adds
       // another O(n) allocation to every Dock render.
       const points: ReportChartPoint[] = [];
-      let min = 0;
-      let max = 0;
+      let min = Number.POSITIVE_INFINITY;
+      let max = Number.NEGATIVE_INFINITY;
       values.forEach((point, index) => {
         if (point.y === null || !Number.isFinite(point.y)) return;
         const numericX = typeof point.x === 'number'
@@ -628,6 +682,7 @@ export class BacktestWorkbench {
       // tooltip lookup, while rendering the same bounded, extrema-preserving
       // series used by the Viewer charts.
       const renderPoints = downsampleReportChartPoints(points, MAX_DOCK_RENDER_POINTS);
+      if (!points.length) min = max = 0;
       const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('viewBox', '0 0 320 68');
       svg.setAttribute('role', 'img');
@@ -663,10 +718,15 @@ export class BacktestWorkbench {
         points: renderPoints,
         tooltipPoints: points,
         axis: points.some((point) => Math.abs(point.x) >= 1e11) ? 'datetime' : 'linear',
-        height: 164,
+        height: 'container',
+        hideAxes: this.dockHeight < AXES_HIDDEN_BELOW,
         currency,
         tooltipMode: 'performance-equity',
         markerEnabled: false,
+        yAxisOpposite: true,
+        yAxisMin: min,
+        yAxisMax: max,
+        chartSpacing: [4, 2, 2, 2],
         yAxisGridLineWidth: 0,
         lineColor: '#089981',
         positiveColor: '#089981',
@@ -704,13 +764,36 @@ export class BacktestWorkbench {
           },
         ],
       });
-      void enhanceReportCharts(chart);
+      void enhanceReportCharts(chart).then(() => this.syncDockChartLayout());
     }
     if (!chart.isConnected) this.dockMetrics.appendChild(chart);
+    this.syncDockChartLayout();
+  }
+
+  private updateCollapsedNet(report: BacktestReport): void {
+    const card = dockMetricCards(report)[0];
+    setDockMetricAmount(this.collapsedNet, card.value, report.currency?.trim().toUpperCase() || 'USD');
+    this.collapsedNet.setAttribute('aria-label', `Net Profit ${card.value}`);
+    this.collapsedNet.className = `quant-backtest-dock-collapsed-net quant-backtest-tone-${card.tone}`;
+  }
+
+  private syncDockChartLayout(): void {
+    if (this.destroyed) return;
+    const chart = this.dockMetrics.querySelector<HTMLElement>('.quant-backtest-dock-sparkline');
+    if (!chart) return;
+    const hidden = this.dockHeight < CHART_HIDDEN_BELOW;
+    if (hidden && chart.contains(this.element.ownerDocument.activeElement)) {
+      this.separator.focus({ preventScroll: true });
+    }
+    chart.hidden = hidden;
+    chart.inert = hidden;
+    const host = chart.querySelector<HTMLElement>('[data-quant-report-chart]');
+    if (host) setReportChartLayout(host, { hideAxes: this.dockHeight < AXES_HIDDEN_BELOW });
   }
 
   /** Update forming-bar values and chart data without replacing the Dock DOM. */
   private updateLiveDock(report: BacktestReport): boolean {
+    this.updateCollapsedNet(report);
     const cards = [...this.dockMetrics.querySelectorAll<HTMLElement>('.quant-backtest-dock-kpi')];
     const nextCards = dockMetricCards(report);
     if (cards.length !== nextCards.length) return false;
@@ -719,7 +802,7 @@ export class BacktestWorkbench {
       const row = card.querySelector<HTMLElement>('.quant-backtest-dock-value-row');
       const amount = row?.querySelector<HTMLElement>('strong');
       if (!row || !amount) return;
-      amount.textContent = next.value;
+      setDockMetricAmount(amount, next.value, report.currency?.trim().toUpperCase() || 'USD');
       amount.className = '';
       amount.classList.add(`quant-backtest-tone-${next.tone}`);
       const existingSecondary = row.querySelector<HTMLElement>('small');
@@ -753,12 +836,7 @@ export class BacktestWorkbench {
       });
     });
     const renderPoints = downsampleReportChartPoints(points, MAX_DOCK_RENDER_POINTS);
-    return updateReportChart(host, {
-      kind: 'area',
-      label: 'Cumulative P&L',
-      points: renderPoints,
-      tooltipPoints: points,
-    });
+    return updateReportChartPoints(host, renderPoints, points);
   }
 
   private toggleCollapsed(): void {
@@ -785,10 +863,10 @@ export class BacktestWorkbench {
     const label = this.collapsed ? 'Expand backtest summary' : 'Collapse backtest summary';
     this.collapseButton.setAttribute('aria-label', label);
     this.collapseButton.title = label;
-    this.collapseButton.replaceChildren(svgIcon(this.element.ownerDocument, this.collapsed ? 'chevron-up' : 'chevron-down'));
+    this.collapseButton.replaceChildren(dockIcon(this.element.ownerDocument, this.collapsed ? 'chevron-up' : 'chevron-down'));
     this.dock.setAttribute('aria-expanded', String(!this.collapsed));
     if (this.collapsed) {
-      // The reference collapsed state is a 28px header-only row. Keep the
+      // The reference collapsed state keeps the summary header. Keep the
       // separator out of the tab order and accessibility tree while that row
       // is active; its previous height is retained and restored on expand.
       this.separator.tabIndex = -1;
@@ -798,7 +876,7 @@ export class BacktestWorkbench {
       this.separator.tabIndex = 0;
       this.separator.removeAttribute('aria-hidden');
       this.separator.removeAttribute('aria-disabled');
-      this.separator.setAttribute('aria-keyshortcuts', 'ArrowUp ArrowDown Home End');
+      this.separator.setAttribute('aria-keyshortcuts', 'ArrowUp ArrowDown Shift+ArrowUp Shift+ArrowDown Home End');
     }
   }
 
@@ -826,10 +904,12 @@ export class BacktestWorkbench {
     const startY = event.clientY;
     const startHeight = this.dockHeight;
     const move = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== event.pointerId) return;
       const next = startHeight + (startY - moveEvent.clientY);
       this.setDockHeight(next);
     };
-    const end = () => {
+    const end = (endEvent?: PointerEvent) => {
+      if (endEvent && endEvent.pointerId !== event.pointerId) return;
       if (!reflowSuspended) return;
       reflowSuspended = false;
       view.removeEventListener('pointermove', move);
@@ -840,6 +920,9 @@ export class BacktestWorkbench {
       } catch {
         // Ignore teardown races from a removed separator or DOM shim.
       } finally {
+        if (!this.destroyed && this.dockHeight < CHART_HIDDEN_BELOW) {
+          this.setDockHeight(this.minDockHeight);
+        }
         resumeReportChartReflow();
         this.resizeCleanup = null;
         this.persistDockPreferences();
@@ -853,21 +936,22 @@ export class BacktestWorkbench {
 
   private resizeFromKeyboard(event: KeyboardEvent): void {
     if (this.collapsed) return;
+    const step = event.shiftKey ? 48 : 16;
     if (event.key === 'ArrowUp') {
       event.preventDefault();
-      this.setDockHeight(this.dockHeight + 16);
+      this.setDockHeight(this.dockHeight + step);
       this.persistDockPreferences();
     } else if (event.key === 'ArrowDown') {
       event.preventDefault();
-      this.setDockHeight(this.dockHeight - 16);
+      this.setDockHeight(this.dockHeight - step);
       this.persistDockPreferences();
     } else if (event.key === 'Home') {
       event.preventDefault();
-      this.setDockHeight(this.minDockHeight);
+      this.setDockHeight(this.effectiveMaxDockHeight());
       this.persistDockPreferences();
     } else if (event.key === 'End') {
       event.preventDefault();
-      this.setDockHeight(this.maxDockHeight);
+      this.setDockHeight(this.minDockHeight);
       this.persistDockPreferences();
     }
   }
@@ -879,6 +963,7 @@ export class BacktestWorkbench {
     this.separator.setAttribute('aria-valuemin', String(this.minDockHeight));
     this.separator.setAttribute('aria-valuemax', String(effectiveMax));
     this.separator.setAttribute('aria-valuenow', String(Math.round(this.dockHeight)));
+    this.syncDockChartLayout();
     this.notifyLayout();
   }
 
@@ -899,7 +984,10 @@ export class BacktestWorkbench {
   }
 
   private viewportHeight(): number {
-    return Math.max(this.minDockHeight, Math.floor((this.element.ownerDocument.defaultView?.innerHeight ?? 900) * 0.75));
+    const availableHeight = this.element.parentElement?.clientHeight
+      || this.element.ownerDocument.defaultView?.innerHeight
+      || 900;
+    return Math.max(this.minDockHeight, Math.round(availableHeight * 0.75));
   }
 
   private effectiveMaxDockHeight(): number {

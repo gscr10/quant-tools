@@ -208,11 +208,16 @@ export class LowerTimeframeFetchCache {
         symbol: string,
         timeframe: string,
         range: LowerTimeframeFetchRange,
+        expectedRequest?: Promise<OHLCV[]>,
     ): boolean {
         this.evictExpired();
         const providerId = this.providerIds.get(fetchSeries);
         if (providerId === undefined) return false;
-        return this.entries.delete(lowerTimeframeFetchKey(providerId, symbol, timeframe, range));
+        const key = lowerTimeframeFetchKey(providerId, symbol, timeframe, range);
+        // Broker validation can finish after a newer request has replaced the
+        // same window. A late failed run owns only the request it consumed.
+        if (expectedRequest && this.entries.get(key)?.promise !== expectedRequest) return false;
+        return this.entries.delete(key);
     }
 
     /**
@@ -696,9 +701,14 @@ export async function resolveBarMagnifier(
     fetchSeries: FetchSeries | undefined,
     supplied?: PineBarMagnifierOptions,
     lowerTimeframeFetchCache?: LowerTimeframeFetchCache,
-): Promise<{ input: BarMagnifierInput; status?: BarMagnifierStatus }> {
+): Promise<{ input: BarMagnifierInput; status?: BarMagnifierStatus; discardCachedWindow?: () => void }> {
     const requested = supplied?.requested ?? boolProp(ind, props, 'use_bar_magnifier');
     const lowerTimeframe = supplied?.lowerTimeframe ?? barMagnifierTimeframe(market.timeframe);
+    // Freeze availability against the parent snapshot before awaiting a child
+    // request. A slow fetch must not upgrade tentative OHLC from the original
+    // execution into confirmed historical data. Explicit offline replay may
+    // supply its own fixed cutoff, which travels identically through Worker.
+    const asOf = supplied?.asOf ?? Date.now();
     if (!requested) return { input: { requested: false }, status: undefined };
     if (supplied?.live) {
         return {
@@ -725,6 +735,7 @@ export async function resolveBarMagnifier(
 
     let lowerBars: OHLCV[] = [];
     let fallback: BarMagnifierFallbackReason | undefined;
+    let discardCachedWindow: (() => void) | undefined;
     if (Array.isArray(supplied?.bars)) {
         lowerBars = suppliedChildBars(supplied.bars);
         // An explicitly supplied empty array is different from an omitted
@@ -752,9 +763,15 @@ export async function resolveBarMagnifier(
                 to: last,
                 limit: childFetchLimit(bars.length, market.timeframe, lowerTimeframe),
             };
-            const fetched = await (lowerTimeframeFetchCache
+            const pending = lowerTimeframeFetchCache
                 ? lowerTimeframeFetchCache.fetch(fetchSeries, market.symbol, lowerTimeframe, range)
-                : fetchSeries(market.symbol, lowerTimeframe, range));
+                : fetchSeries(market.symbol, lowerTimeframe, range);
+            if (lowerTimeframeFetchCache) {
+                discardCachedWindow = () => {
+                    lowerTimeframeFetchCache.invalidateWindow(fetchSeries, market.symbol, lowerTimeframe, range, pending);
+                };
+            }
+            const fetched = await pending;
             // The transport contract is typed as OHLCV[], but provider
             // adapters are external boundaries and historically have returned
             // undefined/null (or another malformed value) on failures. Keep
@@ -774,9 +791,10 @@ export async function resolveBarMagnifier(
     } else if (!supplied?.bars) {
         fallback = 'lower-data-unavailable';
     }
-    const input: BarMagnifierInput = { requested: true, lowerTimeframe, bars: childInputBars(lowerBars) };
+    const input: BarMagnifierInput = { requested: true, lowerTimeframe, asOf, bars: childInputBars(lowerBars) };
     return {
         input,
+        ...(discardCachedWindow ? { discardCachedWindow } : {}),
         ...(supplied?.status
             ? { status: supplied.status }
             : fallback
@@ -822,6 +840,11 @@ export async function runPineStatic(opts: {
     // visible window; a no-op for scripts that don't reference those built-ins.
     if (visibleRange) pine.setVisibleRange(visibleRange.left, visibleRange.right);
     const ctx = (await pine.run(ind)) as PineCtx;
+    // Finite OHLC rows alone do not prove complete intrabar coverage. PineTS
+    // validates the full parent/child window; if it falls back, the next user
+    // retry or precision toggle must be allowed to fetch repaired children
+    // immediately instead of reusing the incomplete payload until its TTL.
+    if (ctx.executionPrecision?.requested && !ctx.executionPrecision.applied) precision.discardCachedWindow?.();
     // A static invocation is one immutable report run. Stamp before callers emit
     // its model so ScriptRun/context reads observe the same identity.
     stampReportIdentity(ctx, nextReportRunId(instanceId), 1);
@@ -1277,6 +1300,7 @@ function syminfoFor(market: ExecutionMarket): Record<string, unknown> {
 }
 
 interface PineCtx {
+    executionPrecision?: BarMagnifierStatus;
     alerts?: RawAlert[];
     warnings?: RawWarning[];
 }

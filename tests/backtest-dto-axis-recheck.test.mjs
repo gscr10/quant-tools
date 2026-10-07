@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createBacktestReport } from '../src/domain/backtesting.ts';
-import { formatReportAxisValue } from '../src/features/backtesting/highcharts-renderer.ts';
+import { formatPerformanceAxisValue, formatReportAxisValue } from '../src/features/backtesting/highcharts-renderer.ts';
 
 test('O03: currency and numeric axis text discard artifacts without modifying source values', () => {
   const value = 2.9999999999999716;
@@ -21,6 +21,44 @@ test('O03: small adjacent money ticks, tiny negative values and signed zero stay
   assert.equal(formatReportAxisValue(-2.9999999999999716, true), '-3');
   assert.equal(formatReportAxisValue(1.000000000001, true, 1e-12), '1.000000000001');
   assert.equal(formatReportAxisValue(1.000000000002, true, 1e-12), '1.000000000002');
+});
+
+test('D10: equity/Dock axis notation matches the reference positive, negative and zero thresholds', () => {
+  // The original getChartOptions axis uses String(value), independently
+  // executed from the reference module. These are axis labels, not table
+  // amounts, whose scientific threshold and fractional padding differ.
+  for (const [value, expected] of [
+    [0, '0'], [-0, '0'], [2e-8, '2e-8'], [-2e-8, '-2e-8'],
+    [1e-7, '1e-7'], [-1e-7, '-1e-7'],
+    [9.99999999999e-7, '9.99999999999e-7'], [-9.99999999999e-7, '-9.99999999999e-7'],
+    [1e-6, '0.000001'], [-1e-6, '-0.000001'],
+    [1.00000000001e-6, '0.00000100000000001'], [-1.00000000001e-6, '-0.00000100000000001'],
+    [1.23456e-7, '1.23456e-7'], [-1.23456e-7, '-1.23456e-7'],
+    [-1e-15, '-1e-15'], [Number.MIN_VALUE, '5e-324'], [-Number.MIN_VALUE, '-5e-324'],
+    [1234.567, '1234.567'], [1e20, '100000000000000000000'], [1e21, '1e+21'],
+  ]) {
+    assert.equal(formatPerformanceAxisValue(value, false), expected, String(value));
+  }
+});
+
+test('D10: shortest notation preserves local rounding, narrow tick precision and nonfinite protection', () => {
+  assert.equal(formatPerformanceAxisValue(2.9999999999999716, false), '3');
+  assert.equal(formatPerformanceAxisValue(-2.9999999999999716, false), '-3');
+  assert.equal(formatPerformanceAxisValue(9.999999999999997e-7, false), '0.000001');
+  assert.equal(formatPerformanceAxisValue(1.000000000001, false, 1e-12), '1.000000000001');
+  assert.equal(formatPerformanceAxisValue(1.000000000002, false, 1e-12), '1.000000000002');
+  for (const value of [NaN, Infinity, -Infinity]) {
+    assert.equal(formatPerformanceAxisValue(value, false), '—');
+  }
+});
+
+test('D10: compact Analysis/Simulation axes keep decimal and suffix formatting', () => {
+  for (const [value, expected] of [
+    [0, '0'], [-0, '0'], [2e-8, '0.00000002'], [-2e-8, '-0.00000002'],
+    [999, '999'], [1000, '1k'], [-1500, '-1.5k'],
+    [1e6, '1M'], [2.5e9, '2.5G'], [-1.25e12, '-1.25T'],
+  ]) assert.equal(formatPerformanceAxisValue(value, true), expected, String(value));
+  assert.equal(formatPerformanceAxisValue(1000.000000001, true, 1e-9), '1.000000000001k');
 });
 
 const base = () => ({ key: { cellId: 'audit', indicatorId: 'dto' } });

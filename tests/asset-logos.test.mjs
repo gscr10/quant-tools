@@ -28,3 +28,11 @@ test('provider image and inline Viewer geometry share the original local vectors
     assert.equal(resolveLocalSymbolIcon({ticker:asset+'USDT'}), url);
   }
 });
+
+test('unknown Viewer assets retain a deterministic initials fallback', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/features/backtesting/backtest-viewer.ts', import.meta.url), 'utf8');
+  assert.match(source, /if \(!geometry\) \{/);
+  assert.match(source, /fallback\.textContent = asset\.trim\(\)\.slice\(0, 2\)\.toUpperCase\(\) \|\| '•'/);
+  assert.match(source, /fallback\.setAttribute\('fill', 'currentColor'\)/);
+});

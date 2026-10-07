@@ -295,6 +295,10 @@ export interface BacktestReport {
   source?: string;
   status?: BacktestStatus;
   range?: BacktestRange;
+  /** Closed-trade activity shown in Dock/Viewer; does not narrow loaded history.
+   * null hides the label when the accepted ledger has no closed activity.
+   * undefined preserves the range fallback for older host integrations. */
+  activityRange?: BacktestRange | null;
   history?: BacktestHistoryCoverage;
   currency?: string;
   /** IANA timezone used for calendar/day buckets when exposed by the adapter. */
@@ -352,6 +356,8 @@ export interface BacktestWorkbenchPort {
   onDockPreferencesChange?: (preferences: BacktestDockPreferences) => void;
   onTradeLocate?: (trade: BacktestTrade, side: 'entry' | 'exit') => void;
   onSimulationChange?: (change: BacktestSimulationChange) => void;
+  /** Simulation controls are local to one mounted report tab, not workspace preferences. */
+  onSimulationSessionEnd?: (key: NonNullable<BacktestReport['key']>) => void;
   onRetry?: () => void;
   /** Read and commit the selected strategy's Inputs/Properties settings. */
   settings?: BacktestSettingsPort;

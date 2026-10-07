@@ -5,7 +5,7 @@ import { calculateOrderQty, parseDirection, roundToMintick } from '../utils';
 import { Order } from '../types';
 import { Series } from '../../../Series';
 import { parseArgsForPineParams } from '../../utils';
-import { markOrderCancelled, recordOrderCreated } from '../ledger';
+import { markOrderCancelled, markOrderRejected, recordOrderCreated } from '../ledger';
 
 /**
  * Pine signature for strategy.order():
@@ -125,6 +125,11 @@ export function order(context: any) {
             oca_type: ocaType as 'cancel' | 'reduce' | 'none' | undefined,
             comment: commentValue,
         };
+
+        if (context.strategy.risk_halted || context.strategy._risk_intraday_halted) {
+            markOrderRejected(context, orderObj, 'risk_rule');
+            return orderObj;
+        }
 
         // As with `strategy.entry`, a pending `strategy.order` is identified by
         // its order ID. Re-issuing the same ID modifies the outstanding order;

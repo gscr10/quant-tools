@@ -247,7 +247,8 @@ export function sortBacktestTrades(
   return sortBacktestTradeEntries(trades, sort).map(({ trade }) => trade);
 }
 
-/** Stable sort that retains source indices for paged/virtualized consumers. */
+/** The reference retains its Trade # descending order when another column
+ * has equal values. Keep source order only for genuinely duplicate numbers. */
 export function sortBacktestTradeEntries(
   trades: readonly BacktestTrade[],
   sort: BacktestTradeSort = DEFAULT_TRADE_SORT,
@@ -259,6 +260,10 @@ export function sortBacktestTradeEntries(
         tradeSortValue(left.trade, sort.key, left.sourceIndex),
         tradeSortValue(right.trade, sort.key, right.sourceIndex),
         sort.direction,
-      ) || left.sourceIndex - right.sourceIndex
+      ) || (sort.key === 'number' ? 0 : compareSortValues(
+        tradeSortValue(left.trade, 'number', left.sourceIndex),
+        tradeSortValue(right.trade, 'number', right.sourceIndex),
+        -1,
+      )) || left.sourceIndex - right.sourceIndex
     ))
 }

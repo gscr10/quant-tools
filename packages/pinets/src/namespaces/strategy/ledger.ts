@@ -11,6 +11,9 @@ export interface StrategyLedger {
 interface FillDetails {
     price: number;
     qty: number;
+    /** Deferred broker checkpoints retain their original economic timestamp
+     * while barIndex continues to identify the bar booking the operation. */
+    time?: number;
     /** Requested/capped quantity for the order.  For dynamic exits this is
      * resolved at the first real fill; it is not inferred from `order.qty`
      * because Pine close/exit orders may leave that field at zero. */
@@ -230,6 +233,9 @@ export function recordOrderCreated(context: any, order: Order): string | undefin
     const orderId = ensureOrderLedgerId(context, order);
     captureOrderRelations(context, order);
     if (!eventAlreadyRecorded(strategy, orderId, 'created')) {
+        if (order.bar === context.idx && Number.isFinite(context._barMagnifierPricePoint)) {
+            order._queued_price_point = context._barMagnifierPricePoint;
+        }
         strategy._order_events!.push(baseOrderEvent(context, order, 'created', {
             barIndex: order.bar,
             time: order.time,
@@ -305,7 +311,7 @@ export function recordFillEvent(context: any, order: Order, details: FillDetails
         orderId,
         sourceOrderId: order.id,
         barIndex: currentBar(context),
-        time: currentTime(context),
+        time: details.time ?? currentTime(context),
         direction: details.direction ?? (Number(order.direction) || 0),
         qty,
         price: Number(details.price),
@@ -339,14 +345,14 @@ export function markOrderFilled(context: any, order: Order, details?: FillDetail
     if (details) {
         order.fill_price = details.price;
         order.fill_bar = currentBar(context);
-        order.fill_time = currentTime(context);
+        order.fill_time = details.time ?? currentTime(context);
         if (details.record !== false) recordFillEvent(context, order, details);
     }
     const orderId = ensureOrderLedgerId(context, order);
     if (!eventAlreadyRecorded(strategy, orderId, 'filled')) {
         strategy._order_events!.push(baseOrderEvent(context, order, 'filled', {
             barIndex: currentBar(context),
-            time: currentTime(context),
+            time: details?.time ?? currentTime(context),
             fillPrice: details?.price,
             fillQty: details?.qty,
             direction: details?.direction,

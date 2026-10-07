@@ -61,6 +61,13 @@ export interface BarMagnifierStatus {
 export interface BarMagnifierInput {
     readonly requested?: boolean;
     readonly lowerTimeframe?: string;
+    /**
+     * Snapshot time in epoch milliseconds, captured before fetching children.
+     * A child ending after this instant is still forming for this run even if
+     * the network response arrives after its close. Omit for timeless offline
+     * inputs; Vela-PineTS supplies the execution request's current timestamp.
+     */
+    readonly asOf?: number;
     readonly bars?: readonly {
         readonly openTime: number;
         readonly closeTime?: number;

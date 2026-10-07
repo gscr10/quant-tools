@@ -4,10 +4,13 @@
 Requires Python Playwright. The runner starts and stops Vite dev by default;
 pass ``--preview`` after building to exercise production assets. Set
 CHROMIUM_EXECUTABLE when Chromium is not installed in a standard macOS path.
+The default desktop scope retains compact windows and keyboard/focus checks;
+``--scope full`` also runs deferred phone layout and cross-device focus cases.
 """
 
 from __future__ import annotations
 
+import argparse
 import base64
 from datetime import datetime
 import json
@@ -35,6 +38,7 @@ BTCUSDT_FIXTURE_URL = (
     f"http://{HOST}:{PORT}/tests/fixtures/backtest-btcusdt.html"
 )
 SERVER_SCRIPT = "preview" if "--preview" in sys.argv[1:] else "dev"
+ACCEPTANCE_SCOPE = "desktop"
 WORKSPACE_STORAGE_KEY = "quant-tools:workspace:v2"
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
@@ -541,6 +545,12 @@ def visible_button(page: Page, text: str):
 
 
 def observe_page_errors(page: Page, errors: list[str], prefix: str = "") -> None:
+    # ResizeObserver loop failures can be dispatched as window ErrorEvents
+    # without a Playwright pageerror (especially in production without Vite).
+    # Surface them through the same console audit; do not cancel the event.
+    page.add_init_script("""window.addEventListener('error', event => {
+      if (event instanceof ErrorEvent) console.error('window ErrorEvent: ' + event.message);
+    });""")
     page.on("pageerror", lambda error: errors.append(f"{prefix}page: {error}"))
     page.on(
         "console",
@@ -811,7 +821,7 @@ def verify_simulation_workspace(
     assert any(label.startswith("Actual ") for label in kpi_labels)
 
     chart_titles = simulation.locator(
-        ".quant-backtest-simulation-chart-panel h4"
+        ".quant-backtest-simulation-chart-panel h3"
     ).all_text_contents()
     assert chart_titles[0:2] == [
         "Simulated Net Profit Paths",
@@ -863,7 +873,7 @@ def verify_simulation_workspace(
             """
             (node) => ({
               titles: [...node.querySelectorAll(
-                '.quant-backtest-simulation-chart-panel h4',
+                '.quant-backtest-simulation-chart-panel h3',
               )].map((title) => title.textContent?.trim()),
               hosts: node.querySelectorAll(
                 '.quant-backtest-simulation-chart-host',
@@ -894,12 +904,24 @@ def verify_simulation_workspace(
     ).count() == 0
     for index in range(chart_hosts.count()):
         host = chart_hosts.nth(index)
-        assert host.get_attribute("role") == "img"
+        is_curve = "quant-backtest-simulation-paths-host" in (host.get_attribute("class") or "")
+        assert host.get_attribute("role") == ("group" if is_curve else "img")
         assert (host.get_attribute("aria-label") or "").strip()
         root = host.locator("svg.highcharts-root")
         assert root.count() == 1
         assert (root.get_attribute("aria-label") or "").strip()
         assert root.locator("desc[data-quant-report-description]").count() == 1
+        if is_curve:
+            navigation = host.locator('[data-quant-report-curve]')
+            assert navigation.count() == 1
+            assert navigation.get_attribute("tabindex") == "0"
+            navigation.focus()
+            page.keyboard.press("End")
+            assert navigation.get_attribute("data-quant-report-curve-index") == str(
+                int(navigation.get_attribute("data-quant-report-curve-count")) - 1
+            )
+            page.keyboard.press("Escape")
+            assert viewer.is_visible()
     paths_host = simulation.locator(".quant-backtest-simulation-paths-host")
     assert paths_host.locator(
         ".highcharts-series.highcharts-arearange-series"
@@ -1035,6 +1057,67 @@ def verify_simulation_workspace(
           && document.querySelector('#quant-backtest-simulation-preserve')?.disabled === false
         """
     )
+    # A variation edit enables the following Preserve control only after the
+    # input blurs. Tab must recompute the dialog order after that redraw, and
+    # Escape must still close the modal from the replacement control.
+    variation.focus()
+    variation.fill("35")
+    page.keyboard.press("Tab")
+    page.wait_for_function(
+        """
+        () => document.activeElement?.dataset.simulationFocus === 'settings:preserve'
+          && document.querySelector('#quant-backtest-simulation-variation')?.value === '35'
+        """
+    )
+    page.keyboard.press("Escape")
+    simulation.locator(".quant-backtest-simulation-settings").wait_for(state="detached")
+    settings_trigger.click()
+    settings_dialog = simulation.locator(
+        ".quant-backtest-simulation-settings-dialog"
+    )
+    settings_dialog.wait_for(state="visible")
+    variation = settings_dialog.locator("#quant-backtest-simulation-variation")
+    variation.fill("10")
+    variation.dispatch_event("change")
+    page.wait_for_function(
+        """
+        () => document.querySelector('#quant-backtest-simulation-variation')?.value === '10'
+          && document.querySelector('#quant-backtest-simulation-preserve')?.disabled === false
+        """
+    )
+    # A zero-variation input disables Preserve.  Submitting a non-default
+    # value with Tab commits on blur and redraws the report; the rebuilt
+    # Preserve control must receive focus so Escape still reaches the Viewer.
+    variation.fill("0")
+    variation.dispatch_event("change")
+    page.wait_for_function(
+        "() => document.querySelector('#quant-backtest-simulation-preserve')?.disabled === true"
+    )
+    variation = settings_dialog.locator("#quant-backtest-simulation-variation")
+    variation.fill("35")
+    variation.press("Tab")
+    page.wait_for_function(
+        """
+        () => document.activeElement?.dataset.simulationFocus === 'settings:preserve'
+          && document.querySelector('.quant-backtest-simulation-settings-dialog')
+            ?.contains(document.activeElement) === true
+          && document.querySelector('#quant-backtest-simulation-preserve')?.disabled === false
+        """
+    )
+    page.keyboard.press("Escape")
+    settings_dialog.wait_for(state="detached")
+    page.wait_for_function(
+        "() => document.activeElement?.dataset.simulationSettingsTrigger === 'desktop'"
+    )
+    settings_trigger.click()
+    settings_dialog = simulation.locator(".quant-backtest-simulation-settings-dialog")
+    settings_dialog.wait_for(state="visible")
+    variation = settings_dialog.locator("#quant-backtest-simulation-variation")
+    variation.fill("10")
+    variation.dispatch_event("change")
+    page.wait_for_function(
+        "() => document.querySelector('#quant-backtest-simulation-preserve')?.disabled === false"
+    )
     preserve = settings_dialog.locator("#quant-backtest-simulation-preserve")
     assert not preserve.is_disabled()
     preserve.check()
@@ -1120,7 +1203,15 @@ def verify_simulation_workspace(
               },
             },
           });
-          runs.focus();
+          // Desktop now presents the numeric select through the accessible
+          // runs combobox. Focus the actual user control before this bounded
+          // pending-state injection; the permanent Simulation component E2E
+          // separately performs trusted pointer/keyboard option selection.
+          const runsControl = panel.querySelector('[data-simulation-focus="settings:runs"]');
+          if (!(runsControl instanceof HTMLElement)) {
+            throw new Error('Focusable Simulation runs control is unavailable');
+          }
+          runsControl.focus();
           runs.value = '2500';
           runs.dispatchEvent(new Event('change', { bubbles: true }));
           return capture();
@@ -1184,7 +1275,7 @@ def verify_simulation_workspace(
     page.wait_for_function(
         """
         () => document.activeElement?.dataset.simulationFocus === 'settings:runs'
-          && document.activeElement?.value === '2500'
+          && document.querySelector('#quant-backtest-simulation-runs')?.value === '2500'
         """
     )
 
@@ -1285,7 +1376,7 @@ def verify_simulation_workspace(
     outcome_modes = outcome_panel.locator(
         '[role="group"][aria-label="Outcome Distribution (USD)"]'
     )
-    drawdown_title = drawdown_panel.locator("h4").inner_text()
+    drawdown_title = drawdown_panel.get_by_role("heading", level=3).inner_text()
     drawdown_modes = drawdown_panel.locator(
         f'[role="group"][aria-label="{drawdown_title}"]'
     )
@@ -2216,9 +2307,19 @@ def verify_backtest_workspace(
         "Default precision",
         "High precision",
     ]
+    def choose_precision(label):
+        # The real app injects Vela's visible select list. Interact with it
+        # rather than bypassing it through the hidden native form model.
+        trigger = settings.get_by_role('combobox', name='Backtest precision', exact=True)
+        trigger.click()
+        settings.get_by_role('listbox', name='Backtest precision', exact=True).get_by_role(
+            'option', name=label, exact=True,
+        ).click()
+        assert trigger.inner_text() == label
+
     assert precision_select.input_value() == "false"
     page.evaluate("window.__quantWorkerAudit?.reset?.()")
-    precision_select.select_option("true")
+    choose_precision("High precision")
     assert page.evaluate(
         "window.__quantWorkerAudit?.summary?.().byKind?.update ?? 0"
     ) == 0
@@ -2239,7 +2340,7 @@ def verify_backtest_workspace(
     )
     assert precision_select.input_value() == "false"
     page.evaluate("window.__quantWorkerAudit?.reset?.()")
-    precision_select.select_option("true")
+    choose_precision("High precision")
     settings.locator(
         ".quant-backtest-settings-actions .quant-backtest-button",
         has_text="Reset",
@@ -2263,7 +2364,7 @@ def verify_backtest_workspace(
     precision_select = settings.locator(
         '.quant-backtest-settings-field[data-setting-key="use_bar_magnifier"] select'
     )
-    precision_select.select_option("true")
+    choose_precision("High precision")
     settings.locator(
         ".quant-backtest-settings-actions .quant-backtest-button-primary"
     ).click()
@@ -2290,7 +2391,7 @@ def verify_backtest_workspace(
     )
     assert precision_select.input_value() == "true"
     page.evaluate("window.__quantWorkerAudit?.reset?.()")
-    precision_select.select_option("false")
+    choose_precision("Default precision")
     settings.locator(
         ".quant-backtest-settings-actions .quant-backtest-button-primary"
     ).click()
@@ -2529,6 +2630,26 @@ def verify_backtest_workspace(
         assert root.count() == 1
         assert (root.get_attribute("aria-label") or "").strip()
         assert root.locator("desc[data-quant-report-description]").count() == 1
+
+    # Highcharts is loaded without its optional accessibility module. The
+    # local renderer must still expose point-level keyboard navigation and the
+    # same tooltip path used by pointer hover. This exercises the upgraded
+    # chart DOM rather than relying on the SVG fallback title element.
+    analysis_points = analysis_page.locator(
+        ".quant-backtest-analysis-chart-host [data-quant-report-point]"
+    )
+    assert analysis_points.count() > 0
+    first_analysis_point = analysis_points.first
+    assert first_analysis_point.get_attribute("tabindex") == "0"
+    first_analysis_point.focus()
+    assert page.evaluate(
+        "document.activeElement?.getAttribute('data-quant-report-point')"
+    ) == "0"
+    page.keyboard.press("ArrowRight")
+    assert page.evaluate(
+        "document.activeElement?.getAttribute('data-quant-report-point')"
+    ) == "1"
+    page.locator(".highcharts-tooltip").wait_for(state="visible")
     analysis_series = analysis_page.evaluate(
         """
         (node) => Object.fromEntries([
@@ -2926,42 +3047,54 @@ def verify_backtest_workspace(
                 average_trades_value
                 - (sum(day_trade_counts) / len(day_trade_counts))
             ) <= 0.01
-            overflow_probes: dict[int, dict[str, int] | None] = {}
-            for viewport_width in (1025, 1024, 901, 900, 768, 767, 700, 641, 640):
+            overflow_probes: dict[int, dict] = {}
+            calendar_widths = (1025, 1024, 901, 900, 768, 767, 700, 641, 640)
+            if ACCEPTANCE_SCOPE == "full":
+                calendar_widths += (390, 360)
+            for viewport_width in calendar_widths:
                 page.set_viewport_size({"width": viewport_width, "height": 900})
-                calendar.locator(
-                    ".quant-backtest-calendar-day-pnl "
-                    ".quant-backtest-calendar-amount"
-                ).first.wait_for(state="visible")
+                page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
                 overflow_probes[viewport_width] = calendar.evaluate(
                     """
                     (node) => {
-                      const amount = node.querySelector(
-                        '.quant-backtest-calendar-day-pnl '
-                        + '.quant-backtest-calendar-amount',
-                      );
-                      if (!amount) return null;
-                      const original = amount.textContent;
-                      amount.textContent = '+999,999.99';
-                      const cell = amount.closest('.quant-backtest-calendar-day');
-                      const result = cell
-                        ? {
-                            clientWidth: cell.clientWidth,
-                            scrollWidth: cell.scrollWidth,
+                      const overflow = [], amounts = [];
+                      for (const pnl of node.querySelectorAll('.quant-backtest-calendar-day-pnl')) {
+                        const cell = pnl.closest('.quant-backtest-calendar-day').getBoundingClientRect();
+                        let visible = '';
+                        for (const part of pnl.querySelectorAll('span')) {
+                          if (part.children.length || !part.getClientRects().length) continue;
+                          visible += part.textContent;
+                          const range = document.createRange();
+                          range.selectNodeContents(part);
+                          for (const rect of range.getClientRects()) {
+                            if (rect.width && (rect.left < cell.left - 1 || rect.right > cell.right + 1)) {
+                              overflow.push({text:part.textContent,left:rect.left,right:rect.right,
+                                cellLeft:cell.left,cellRight:cell.right});
+                            }
                           }
-                        : null;
-                      amount.textContent = original;
-                      return result;
+                        }
+                        amounts.push(visible);
+                      }
+                      return {overflow, amounts,
+                        documentOverflow:document.documentElement.scrollWidth
+                          > document.documentElement.clientWidth};
                     }
                     """
                 )
             page.set_viewport_size({"width": 1440, "height": 900})
             for viewport_width, overflow_probe in overflow_probes.items():
-                assert overflow_probe is not None, viewport_width
-                assert (
-                    overflow_probe["scrollWidth"]
-                    <= overflow_probe["clientWidth"]
-                ), (viewport_width, overflow_probe)
+                # Match component styles while adapting to local space:
+                # visible numbers must stay inside their own day, including
+                # phones. Full values remain available from the day button.
+                assert overflow_probe["amounts"], (viewport_width, overflow_probe)
+                assert all(any(c.isdigit() for c in value) for value in overflow_probe["amounts"]), (
+                    viewport_width, overflow_probe,
+                )
+                assert not overflow_probe["overflow"], (viewport_width, overflow_probe)
+                assert not overflow_probe["documentOverflow"], (viewport_width, overflow_probe)
+            assert page.evaluate(
+                "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+            )
 
     viewer.locator(".quant-backtest-viewer-back").click()
     viewer.wait_for(state="hidden")
@@ -3171,7 +3304,7 @@ def verify_g3a_workbench_fixture(browser) -> None:
         "'[aria-controls=\"quant-backtest-dock-content\"]');"
         " const separator = document.querySelector("
         "'[aria-label=\"Resize backtest summary\"]');"
-        " return dock.getBoundingClientRect().height <= 29"
+        " return Math.round(dock.getBoundingClientRect().height) === 45"
         " && control.getAttribute('aria-expanded') === 'false'"
         " && separator.tabIndex === -1"
         " && separator.getAttribute('aria-hidden') === 'true'"
@@ -3227,10 +3360,15 @@ def verify_g3a_workbench_fixture(browser) -> None:
     assert int(separator.get_attribute("aria-valuenow")) == max(104, before_arrow - 16)
     page.keyboard.press("ArrowUp")
     assert int(separator.get_attribute("aria-valuenow")) == before_arrow
+    page.keyboard.press("Shift+ArrowUp")
+    assert int(separator.get_attribute("aria-valuenow")) == min(int(separator.get_attribute("aria-valuemax")), before_arrow + 48)
+    page.keyboard.press("Shift+ArrowDown")
+    assert int(separator.get_attribute("aria-valuenow")) == before_arrow
+    # Current reference Dock moves the top edge: Home expands, End minimizes.
     page.keyboard.press("Home")
-    assert int(separator.get_attribute("aria-valuenow")) == 104
-    page.keyboard.press("End")
     assert separator.get_attribute("aria-valuenow") == separator.get_attribute("aria-valuemax")
+    page.keyboard.press("End")
+    assert int(separator.get_attribute("aria-valuenow")) == 104
     separator.dblclick()
     assert separator.get_attribute("aria-valuenow") == "280"
 
@@ -3369,7 +3507,14 @@ def verify_simulation_fixture(browser) -> dict[str, object]:
     viewer.wait_for(state="visible")
     tabs = viewer.locator(".quant-backtest-tab")
     desktop_audit = verify_simulation_workspace(page, viewer, tabs, [])
-    mobile_audit = verify_simulation_mobile_settings(page, viewer)
+    # Desktop settings/Worker progress, focus preservation and modal isolation
+    # remain in verify_simulation_workspace. This optional case specifically
+    # crosses into the phone Drawer and back; it is deferred by SCOPE-07.
+    mobile_audit = (
+        verify_simulation_mobile_settings(page, viewer)
+        if ACCEPTANCE_SCOPE == "full"
+        else {"status": "deferred", "reason": "SCOPE-07 phone Drawer and cross-device focus"}
+    )
     empty_state_audit = verify_simulation_empty_states(page)
     after = page.evaluate("window.__simulationFixture.state()")
 
@@ -3384,7 +3529,10 @@ def verify_simulation_fixture(browser) -> dict[str, object]:
         "listSnapshotsCount": 1,
         "emittedEventCount": 0,
     }
-    assert after["simulationChangeCount"] == 12, after
+    # The focus regression exercises two additional variation transitions
+    # (10→0→35 and the restored 35→10 value) before the original pending-run
+    # contract, so the fixture records five extra valid updates.
+    assert after["simulationChangeCount"] == 17, after
     assert after["report"]["runId"] == before["report"]["runId"]
     assert after["report"]["revision"] == before["report"]["revision"]
     assert after["report"]["status"] == "ready"
@@ -3526,6 +3674,14 @@ def verify_btcusdt_fixture(browser) -> dict[str, object]:
         ".quant-backtest-kpi-label", has_text="Net Profit"
     ).count() == 1
     assert "-1.68 USD" in performance.inner_text()
+    performance_text = performance.inner_text()
+    # Risk-adjusted rows intentionally retain ratio precision instead of the
+    # two-decimal currency formatter used by the rest of the table.
+    assert "Calmar Ratio" in performance_text
+    assert "-7.841" in performance_text, performance_text
+    assert "Sharpe Ratio" in performance_text
+    assert "0.000" in performance_text, performance_text
+    assert "Sortino Ratio" in performance_text
 
     # Analysis: freeze the reference population and the three chart surfaces.
     tabs.filter(has_text="Trades Analysis").click()
@@ -3541,6 +3697,32 @@ def verify_btcusdt_fixture(browser) -> dict[str, object]:
     assert analysis_tables.nth(0).locator("tbody tr").count() == 10
     assert analysis_tables.nth(1).locator("tbody tr").count() == 9
     assert analysis.locator(".quant-backtest-analysis-winrate-legend-item").count() >= 2
+
+    # Highcharts is upgraded in the real production fixture as well as in the
+    # renderer contract tests.  Each rendered point must remain keyboard
+    # reachable without adding a visible control to the reference layout, and
+    # focus must expose the same tooltip path as pointer hover.
+    page.wait_for_function(
+        """() => document.querySelectorAll(
+          '.quant-backtest-analysis-chart-host [data-quant-report-point]',
+        ).length > 0"""
+    )
+    analysis_points = analysis.locator("[data-quant-report-point]")
+    assert analysis_points.count() > 0
+    first_point = analysis_points.first
+    first_point.focus()
+    assert page.evaluate(
+        "document.activeElement?.getAttribute('data-quant-report-point')"
+    ) == "0"
+    page.wait_for_function(
+        """() => [...document.querySelectorAll('.highcharts-tooltip')]
+          .some(node => getComputedStyle(node).visibility !== 'hidden'
+            && node.textContent?.trim())"""
+    )
+    first_point.press("ArrowRight")
+    assert page.evaluate(
+        "document.activeElement?.getAttribute('data-quant-report-point')"
+    ) == "1"
 
     # Log: all three deterministic trades and stable descending trade numbers.
     tabs.filter(has_text="Trades Log").click()
@@ -3943,6 +4125,8 @@ def run_browser_regression() -> None:
             "E2E audit: "
             + json.dumps(
                 {
+                    "scope": ACCEPTANCE_SCOPE,
+                    "phoneLayout": "included" if ACCEPTANCE_SCOPE == "full" else "deferred (SCOPE-07)",
                     "luxalgoRequests": len(luxalgo_requests),
                     "blockedExternalRequests": len(blocked_requests),
                     "marketRequests": len(market_requests),
@@ -3969,7 +4153,8 @@ def run_browser_regression() -> None:
             else None
         )
         if SERVER_SCRIPT == "dev":
-            verify_simulation_fixture(browser)
+            simulation_audit = verify_simulation_fixture(browser)
+            print("Simulation fixture audit: " + json.dumps(simulation_audit, sort_keys=True))
             verify_g3a_workbench_fixture(browser)
         if btcusdt_audit is not None:
             print("BTCUSDT fixture audit: " + json.dumps(btcusdt_audit, sort_keys=True))
@@ -3977,6 +4162,18 @@ def run_browser_regression() -> None:
 
 
 def main() -> int:
+    global SERVER_SCRIPT, ACCEPTANCE_SCOPE
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--preview", action="store_true", help="exercise production assets after ensuring the build is current")
+    parser.add_argument("--scope", choices=("desktop", "full"), default="desktop",
+                        help="desktop (default) or full retained phone layout/Drawer matrix")
+    args = parser.parse_args()
+    SERVER_SCRIPT = "preview" if args.preview else "dev"
+    ACCEPTANCE_SCOPE = args.scope
+    print("E2E scope: " + ACCEPTANCE_SCOPE + (
+        "; phone layout and phone Drawer checks deferred (SCOPE-07)"
+        if ACCEPTANCE_SCOPE == "desktop" else "; retained phone regression included"
+    ), flush=True)
     if SERVER_SCRIPT == "preview":
         ensure_preview_build()
     server = subprocess.Popen(

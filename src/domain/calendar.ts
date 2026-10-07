@@ -76,7 +76,22 @@ export function calendarDateParts(
   if (timestamp === null) return null;
   const date = new Date(timestamp);
   if (Number.isNaN(date.valueOf())) return null;
-  const parts = Object.fromEntries(calendarFormatter(timezone)
+  // UTC is the default report timezone. Its calendar fields are already
+  // available without the allocation-heavy Intl.formatToParts path, which
+  // otherwise dominates every 100k-trade Performance/Calendar projection.
+  // Named regional zones still use Intl, preserving DST and historic offsets.
+  const normalizedTimezone = normalizeCalendarTimezone(timezone);
+  if (normalizedTimezone === 'UTC' || normalizedTimezone === 'Etc/UTC'
+    || normalizedTimezone === 'Etc/GMT' || normalizedTimezone === 'GMT') {
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth() + 1;
+    const day = date.getUTCDate();
+    return Object.freeze({
+      key: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+      year, month, day, weekday: date.getUTCDay(),
+    });
+  }
+  const parts = Object.fromEntries(calendarFormatter(normalizedTimezone)
     .formatToParts(date)
     .map((part) => [part.type, part.value]));
   const year = Number(parts.year);

@@ -18,6 +18,14 @@
   font-weight: 700;
 }
 
+/* The Workbench may also be mounted without the host application's reset. */
+.quant-backtest-workbench,
+.quant-backtest-workbench *,
+.quant-backtest-workbench *::before,
+.quant-backtest-workbench *::after {
+  box-sizing: border-box;
+}
+
 .quant-backtest-workbench {
   --quant-backtest-bg: var(--vela-surface, #151619);
   --quant-backtest-surface: var(--vela-surface-elev, #1c1d20);
@@ -69,6 +77,7 @@
 
 .quant-backtest-workbench[hidden],
 .quant-backtest-dock[hidden],
+.quant-backtest-icon-button[hidden],
 .quant-backtest-viewer[hidden] {
   display: none !important;
 }
@@ -94,13 +103,21 @@
 }
 
 .quant-backtest-settings {
+  --quant-backtest-fg: #d1d4dc;
+  --quant-backtest-fg-bright: #f0f3fa;
+  /* Essential control edges must remain distinguishable from the dialog;
+   * the subtler panel/divider token is only decorative. */
+  --quant-backtest-control-border: color-mix(in srgb, var(--quant-backtest-fg-bright) 45%, var(--quant-backtest-bg));
   position: absolute;
   z-index: 8;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-bottom: var(--quant-backtest-settings-dock-inset, 0px);
+  background: transparent;
   pointer-events: auto;
+  font: 14px / 21px sans-serif;
 }
 
 .quant-backtest-settings[hidden] {
@@ -113,7 +130,7 @@
   width: 100%;
   height: 100%;
   border: 0;
-  background: rgba(0, 0, 0, 0.58);
+  background: transparent;
   cursor: default;
 }
 
@@ -121,25 +138,26 @@
   position: relative;
   z-index: 1;
   display: flex;
-  width: min(520px, calc(100% - 32px));
-  max-height: min(700px, calc(100% - 32px));
+  width: min(380px, calc(100% - 32px));
+  max-height: 82%;
   flex-direction: column;
   overflow: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--quant-backtest-border-strong);
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--quant-backtest-bg);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
 .quant-backtest-settings-header {
   display: flex;
   flex-shrink: 0;
-  align-items: center;
-  gap: 12px;
-  min-height: 48px;
-  padding: 0 14px 0 18px;
-  border-bottom: 1px solid var(--quant-backtest-border);
+  align-items: flex-start;
+  min-height: 66px;
+  padding: 16px 20px 20px;
+  cursor: move;
+  touch-action: none;
+  user-select: none;
 }
 
 .quant-backtest-settings-heading {
@@ -154,15 +172,15 @@
   overflow: hidden;
   margin: 0;
   color: var(--quant-backtest-fg-bright);
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .quant-backtest-settings-heading span {
-  color: var(--quant-backtest-fg-muted);
-  font-size: 10px;
+  display: none;
 }
 
 .quant-backtest-settings-close {
@@ -170,10 +188,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  min-height: 28px;
+  width: 30px;
+  height: 30px;
   flex: none;
-  padding: 0 6px;
+  padding: 0;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -189,6 +207,10 @@
   color: var(--quant-backtest-fg-bright);
 }
 
+.quant-backtest-settings-close .quant-backtest-icon {
+  stroke-width: 1.2;
+}
+
 .quant-backtest-settings-close:disabled,
 .quant-backtest-settings-actions button:disabled {
   opacity: 0.5;
@@ -199,21 +221,21 @@
   display: flex;
   flex-shrink: 0;
   align-items: stretch;
-  gap: 18px;
-  min-height: 40px;
-  padding: 0 18px;
+  gap: 12px;
+  min-height: 30px;
+  padding: 0 20px;
   border-bottom: 1px solid var(--quant-backtest-border);
 }
 
 .quant-backtest-settings-tab {
   position: relative;
   appearance: none;
-  min-width: 56px;
-  padding: 0 2px;
+  padding: 0 0 8px;
+  margin-bottom: -1px;
   border: 0;
   background: transparent;
   color: var(--quant-backtest-fg-muted);
-  font: inherit;
+  font: 600 13px / 20px sans-serif;
   cursor: pointer;
 }
 
@@ -223,32 +245,41 @@
 }
 
 .quant-backtest-settings-tab.active {
-  color: var(--quant-backtest-accent);
+  color: var(--quant-backtest-fg);
   font-weight: 600;
 }
 
 .quant-backtest-settings-tab.active::after {
   position: absolute;
   right: 0;
-  bottom: -1px;
+  bottom: 0;
   left: 0;
   height: 2px;
   border-radius: 2px 2px 0 0;
-  background: var(--quant-backtest-accent);
+  background: var(--quant-backtest-fg-bright);
   content: '';
 }
 
 .quant-backtest-settings-form {
   min-height: 0;
   flex: 1;
-  padding: 16px 18px 20px;
+  padding: 16px 20px;
   overflow: auto;
   overscroll-behavior: contain;
 }
 
+.quant-backtest-settings-form > form {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(100px, 1fr);
+  align-items: center;
+  align-content: start;
+  gap: 16px;
+}
+
 .quant-backtest-settings-group {
+  display: contents;
   min-width: 0;
-  margin: 0 0 16px;
+  margin: 0;
   padding: 0;
   border: 0;
 }
@@ -257,7 +288,8 @@
   margin-bottom: 0;
 }
 
-.quant-backtest-settings-group legend {
+.quant-backtest-settings-group-title {
+  grid-column: 1 / -1;
   width: 100%;
   margin-bottom: 8px;
   padding: 0;
@@ -269,14 +301,76 @@
 }
 
 .quant-backtest-settings-field {
-  display: grid;
-  grid-template-columns: minmax(130px, 0.9fr) minmax(0, 1.1fr);
+  display: contents;
+  color: var(--quant-backtest-fg);
+  font-size: 14px;
+}
+
+.quant-backtest-settings-inline {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  min-height: 34px;
-  margin-bottom: 8px;
-  color: var(--quant-backtest-fg-muted);
-  font-size: 11px;
+  gap: 16px;
+  min-width: 0;
+}
+
+.quant-backtest-settings-inline > .quant-backtest-settings-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.quant-backtest-settings-field[data-field-type='text_area'] {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+}
+
+.quant-backtest-settings-temporal { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.quant-backtest-settings-combo { position: relative; display: inline-flex; flex: 0 1 auto; min-width: 0; }
+.quant-backtest-settings-combo-time { width: 86px; }
+.quant-backtest-settings-combo-date { width: 128px; }
+.quant-backtest-settings-field .quant-backtest-settings-combo > input[type='text'] { width: 100%; padding-right: 26px; }
+.quant-backtest-settings-combo > button {
+  position: absolute; inset: 0 0 0 auto; width: 26px; display: flex; align-items: center;
+  justify-content: center; padding: 0; border: 0; background: transparent; color: inherit; opacity: .55; cursor: pointer;
+}
+.quant-backtest-settings-combo > button svg { width: 14px; height: 14px; }
+.quant-backtest-settings-combo > button:hover { opacity: .9; }
+.quant-backtest-settings-input-popover {
+  background: var(--quant-backtest-bg); color: var(--quant-backtest-fg); z-index: 10;
+}
+.quant-backtest-settings-calendar { padding: 10px 12px; font-size: 14px; }
+.quant-backtest-settings-calendar-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.quant-backtest-settings-calendar-head > span { flex: 1; display: flex; justify-content: center; gap: 2px; }
+.quant-backtest-settings-calendar button {
+  padding: 0; border: 0; border-radius: 4px; background: transparent; color: inherit; cursor: pointer; font: inherit;
+}
+.quant-backtest-settings-calendar button:hover { background: var(--quant-backtest-hover); }
+.quant-backtest-settings-calendar button:focus-visible { outline: 2px solid var(--quant-backtest-fg-muted); outline-offset: -2px; }
+.quant-backtest-settings-calendar-head > button { width: 24px; height: 24px; font-size: 22px; }
+.quant-backtest-settings-calendar-head > button svg { width: 14px; height: 14px; vertical-align: middle; }
+.quant-backtest-settings-calendar-head > span > button { padding: 2px 6px; font-weight: 600; }
+.quant-backtest-settings-calendar-week,
+.quant-backtest-settings-calendar-grid { display: grid; grid-template-columns: repeat(7, 28px); gap: 2px; }
+.quant-backtest-settings-calendar-week { margin-bottom: 4px; color: var(--quant-backtest-fg-muted); font-size: 11px; text-align: center; line-height: 20px; }
+.quant-backtest-settings-calendar-grid > * { width: 28px; height: 28px; }
+.quant-backtest-settings-calendar-cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 208px; }
+.quant-backtest-settings-calendar-cells > button { height: 36px; }
+.quant-backtest-settings-calendar [data-checked='true'] { background: var(--quant-backtest-hover); }
+.quant-backtest-settings-calendar [data-today='true'] { box-shadow: inset 0 0 0 1px var(--quant-backtest-border-strong); }
+.quant-backtest-settings-calendar [data-outside] { opacity: .45; }
+.quant-backtest-settings-calendar [hidden] { display: none !important; }
+.quant-backtest-settings-color { display: inline-flex; }
+.quant-backtest-settings-color-trigger {
+  width: 26px; height: 26px; padding: 3px; border: 1px solid var(--quant-backtest-control-border);
+  border-radius: 4px; background: transparent; cursor: pointer;
+}
+.quant-backtest-settings-color-trigger > span {
+  display: block; width: 100%; height: 100%; border-radius: 3px;
+  background-image: conic-gradient(#888 25%, #fff 0 50%, #888 0 75%, #fff 0); background-size: 8px 8px;
 }
 
 .quant-backtest-settings-label {
@@ -284,17 +378,28 @@
   text-overflow: ellipsis;
 }
 
+.quant-backtest-settings-hint {
+  display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+  flex: 0 0 auto; padding: 0; border: 0; border-radius: 50%; background: transparent;
+  color: var(--quant-backtest-fg-muted); cursor: help; vertical-align: middle; margin-left: 6px;
+  background: var(--quant-backtest-hover);
+}
+.quant-backtest-settings-hint svg { width: 18px; height: 18px; }
+.quant-backtest-settings-inline > .quant-backtest-settings-hint { margin-left: auto; }
+.quant-backtest-settings-hint-text { max-width: min(280px, calc(100vw - 64px)); padding: 8px 10px; white-space: pre-wrap; font-size: 12px; }
+
 .quant-backtest-settings-field input:not([type='checkbox']),
 .quant-backtest-settings-field select,
 .quant-backtest-settings-field textarea {
-  width: 100%;
+  width: 100px;
+  max-width: 100%;
   min-width: 0;
-  min-height: 30px;
-  padding: 5px 8px;
-  border: 1px solid var(--quant-backtest-border-strong);
-  border-radius: 5px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--quant-backtest-control-border);
+  border-radius: 6px;
   outline: none;
-  background: var(--quant-backtest-surface);
+  background: transparent;
   color: var(--quant-backtest-fg-bright);
   font: inherit;
 }
@@ -305,7 +410,169 @@
 }
 
 .quant-backtest-settings-field textarea {
+  width: 100%;
+  padding: 8px;
   resize: vertical;
+}
+
+.quant-backtest-settings-field[data-execution-precision-setting] {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 155px);
+  align-items: center;
+  gap: 16px;
+}
+
+.quant-backtest-settings-field[data-execution-precision-setting] select {
+  width: 100%;
+}
+
+.quant-backtest-settings-select,
+.quant-backtest-settings-number {
+  position: relative;
+  display: inline-block;
+  justify-self: start;
+  width: 100px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.quant-backtest-settings-field[data-execution-precision-setting] .quant-backtest-settings-select {
+  width: 100%;
+}
+
+.quant-backtest-settings-field .quant-backtest-settings-select-native {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.quant-backtest-settings-select-trigger {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 26px 0 8px;
+  border: 1px solid var(--quant-backtest-control-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--quant-backtest-fg-bright);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quant-backtest-settings-select-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quant-backtest-settings-select-trigger > .quant-backtest-settings-control-icon {
+  position: absolute;
+  right: 8px;
+  display: flex;
+  opacity: 0.55;
+}
+
+.quant-backtest-settings-select-trigger .quant-backtest-settings-control-icon svg,
+.quant-backtest-settings-number-step .quant-backtest-settings-control-icon svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.quant-backtest-settings-select-trigger:hover:not(:disabled),
+.quant-backtest-settings-number input:hover:not(:disabled) {
+  border-color: var(--quant-backtest-fg-muted);
+}
+
+.quant-backtest-settings-select-trigger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.quant-backtest-settings .quant-backtest-settings-select-menu {
+  z-index: 9 !important;
+  padding: 7px;
+  border: 1px solid var(--quant-backtest-border-strong);
+  border-radius: 0 6px 6px 6px;
+  box-shadow: none;
+}
+
+.quant-backtest-settings-select-trigger[aria-expanded='true'] {
+  border-bottom-color: transparent;
+  border-radius: 6px 6px 0 0;
+  background: var(--quant-backtest-hover);
+}
+
+.quant-backtest-settings-select-trigger[aria-expanded='true'] > .quant-backtest-settings-control-icon {
+  transform: rotate(180deg);
+}
+
+.quant-backtest-settings-select-menu .vela-select-item {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font: 12px / 24px -apple-system, system-ui, "Segoe UI", sans-serif;
+}
+
+.quant-backtest-settings-select-menu .vela-select-item[data-checked] {
+  background: rgba(255, 255, 255, 0.0382353);
+}
+
+.quant-backtest-settings-select-menu .vela-select-item:focus-visible {
+  outline: 1px solid var(--vela-fg-bright);
+  outline-offset: -2px;
+  background: var(--vela-hover);
+}
+
+.quant-backtest-settings-number input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.quant-backtest-settings-number input::-webkit-inner-spin-button,
+.quant-backtest-settings-number input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.quant-backtest-settings-number:hover input {
+  padding-right: 26px;
+}
+
+.quant-backtest-settings-number-steps {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: none;
+  width: 22px;
+  padding: 2px 6px 2px 0;
+  flex-direction: column;
+}
+
+.quant-backtest-settings-number:hover .quant-backtest-settings-number-steps {
+  display: flex;
+}
+
+.quant-backtest-settings-number-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--quant-backtest-fg-muted);
+  cursor: pointer;
+}
+
+.quant-backtest-settings-number-step:hover:not(:disabled) {
+  background: var(--quant-backtest-hover);
+  color: var(--quant-backtest-fg-bright);
 }
 
 .quant-backtest-settings-field input:focus,
@@ -315,13 +582,43 @@
 }
 
 .quant-backtest-settings-checkbox {
+  appearance: none;
   justify-self: start;
-  width: 16px;
-  height: 16px;
-  accent-color: var(--quant-backtest-accent);
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  border: 1px solid var(--quant-backtest-control-border);
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.quant-backtest-settings-checkbox:checked {
+  border-color: var(--quant-backtest-fg-bright);
+  background-color: var(--quant-backtest-fg-bright);
+}
+
+.quant-backtest-settings-checkbox:checked::after {
+  display: block;
+  width: 12px;
+  height: 12px;
+  margin: 3px;
+  background: var(--quant-backtest-bg);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.2 8.1 6.3 11.2'/%3E%3Cpath d='M6.3 11.2 12.8 4.7'/%3E%3C/svg%3E") center / contain no-repeat;
+  content: '';
+}
+
+.quant-backtest-settings-checkbox:hover:not(:disabled) {
+  border-color: var(--quant-backtest-fg-muted);
+}
+
+.quant-backtest-settings-checkbox:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .quant-backtest-settings-empty {
+  grid-column: 1 / -1;
   margin: 16px 0;
   color: var(--quant-backtest-fg-muted);
   text-align: center;
@@ -334,13 +631,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 52px;
-  padding: 8px 14px 10px 18px;
+  min-height: 67px;
+  padding: 16px 20px;
   border-top: 1px solid var(--quant-backtest-border);
 }
 
 .quant-backtest-settings-status {
-  flex: 1 1 180px;
+  flex: 1 1 100%;
   min-width: 0;
   margin: 0;
   color: var(--quant-backtest-fg-muted);
@@ -350,6 +647,10 @@
   white-space: normal;
 }
 
+.quant-backtest-settings-status:empty {
+  display: none;
+}
+
 .quant-backtest-settings-status.error {
   flex-basis: 100%;
   color: var(--quant-backtest-negative);
@@ -357,10 +658,63 @@
 
 .quant-backtest-settings-actions {
   display: flex;
-  flex-shrink: 0;
-  gap: 6px;
+  flex: 1 1 100%;
+  gap: 12px;
   flex-wrap: wrap;
   margin-left: auto;
+}
+
+.quant-backtest-settings-actions > button:first-child {
+  margin-right: auto;
+}
+
+.quant-backtest-settings-actions .quant-backtest-button {
+  min-height: 34px;
+  padding: 0 11px;
+  border-color: var(--quant-backtest-border-strong);
+  color: var(--quant-backtest-fg);
+  font: inherit;
+}
+
+.quant-backtest-settings-actions .quant-backtest-button-primary {
+  border-color: var(--quant-backtest-fg-bright);
+  background: var(--quant-backtest-fg-bright);
+  color: var(--quant-backtest-bg);
+}
+
+@media (max-width: 640px) {
+  .quant-backtest-settings {
+    padding-bottom: 0;
+  }
+
+  .quant-backtest-settings-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .quant-backtest-settings-header {
+    min-height: 76px;
+    cursor: default;
+  }
+
+  .quant-backtest-settings-close {
+    width: 40px;
+    height: 40px;
+  }
+
+  .quant-backtest-settings-group {
+    grid-template-columns: minmax(0, 1fr) 100px;
+  }
+
+  .quant-backtest-settings-field input:not([type='checkbox']),
+  .quant-backtest-settings-field select,
+  .quant-backtest-settings-field textarea {
+    font-size: 16px;
+    line-height: 24px;
+  }
 }
 
 .quant-backtest-dock {
@@ -414,19 +768,33 @@
 }
 
 .quant-backtest-dock.is-collapsed {
-  height: var(--quant-backtest-dock-collapsed-height, 28px);
-  min-height: var(--quant-backtest-dock-collapsed-height, 28px);
+  height: var(--quant-backtest-dock-collapsed-height, 45px);
+  min-height: var(--quant-backtest-dock-collapsed-height, 45px);
   box-shadow: none;
 }
 
 .quant-backtest-dock.is-collapsed .quant-backtest-dock-header {
-  min-height: var(--quant-backtest-dock-collapsed-height, 28px);
+  min-height: 0;
+  flex: 1;
+  padding: 8px 12px;
   border-bottom: 0;
 }
 
-.quant-backtest-dock.is-collapsed .quant-backtest-dock-identity,
-.quant-backtest-dock.is-collapsed .quant-backtest-dock-actions > *:not(:first-child) {
+.quant-backtest-dock.is-collapsed [aria-label='Open strategy settings'] {
   display: none;
+}
+
+.quant-backtest-dock-collapsed-net {
+  display: none;
+  flex: none;
+  border-left: 1px solid var(--quant-backtest-border);
+  padding-left: 8px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.quant-backtest-dock.is-collapsed .quant-backtest-dock-collapsed-net {
+  display: inline;
 }
 
 .quant-backtest-dock-separator {
@@ -489,6 +857,23 @@
   align-items: center;
   min-height: 28px;
   gap: 8px;
+}
+
+.quant-backtest-dock-header {
+  flex: none;
+  min-height: 40px;
+  padding: 12px 12px 0;
+  border-bottom: 0;
+}
+
+.quant-backtest-dock-identity {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.quant-backtest-dock-title {
+  flex: 0 1 auto;
 }
 
 .quant-backtest-viewer-market {
@@ -573,6 +958,11 @@
 
 .quant-backtest-viewer-heading h2 {
   flex: 0 1 auto;
+}
+
+.quant-backtest-dock-title {
+  font-weight: 600;
+  line-height: 20px;
 }
 
 .quant-backtest-dock-range,
@@ -662,6 +1052,9 @@
 .quant-backtest-control select:focus-visible,
 .quant-backtest-settings-tab:focus-visible,
 .quant-backtest-settings-close:focus-visible,
+.quant-backtest-settings-select-trigger:focus-visible,
+.quant-backtest-settings-color-trigger:focus-visible,
+.quant-backtest-settings-combo > button:focus-visible,
 .quant-backtest-settings-field input:focus-visible,
 .quant-backtest-settings-field select:focus-visible,
 .quant-backtest-settings-field textarea:focus-visible {
@@ -705,23 +1098,36 @@
 
 .quant-backtest-dock-metrics {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
-  gap: 22px;
+  flex: 1;
+  min-height: 0;
+  gap: 12px;
   width: 100%;
   min-width: 0;
-  padding: 16px;
+  padding: 12px;
   overflow: hidden;
+}
+
+.quant-backtest-dock-kpi-strip {
+  display: flex;
+  flex: none;
+  gap: 16px;
+  min-width: 0;
+  width: 100%;
+  overflow-x: auto;
 }
 
 .quant-backtest-dock-kpi {
   display: flex;
+  flex: 1 0 90px;
   min-width: 90px;
   flex-direction: column;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
 }
 
-.quant-backtest-dock-kpi > span,
+.quant-backtest-dock-kpi > span:not(.quant-backtest-dock-value-row),
 .quant-backtest-kpi-label {
   color: var(--quant-backtest-fg-muted);
   font-size: 10px;
@@ -741,19 +1147,40 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
+  line-height: 20px;
   white-space: nowrap;
+}
+
+.quant-backtest-dock-value-row > strong {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.quant-backtest-dock-kpi > span:not(.quant-backtest-dock-value-row) {
+  font-weight: 500;
+  line-height: 15px;
+  letter-spacing: 0.05em;
+}
+
+.quant-backtest-dock-currency {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
 }
 
 .quant-backtest-dock-value-secondary {
   color: var(--quant-backtest-fg-bright);
   font-size: 10px;
+  line-height: 15px;
 }
 
 .quant-backtest-dock-sparkline {
   display: flex;
   width: 100%;
   min-width: 0;
-  min-height: 96px;
+  min-height: 0;
   flex: 1;
   align-items: center;
   justify-content: stretch;
@@ -766,7 +1193,25 @@
 .quant-backtest-dock-sparkline svg {
   width: 100%;
   height: 100%;
-  min-height: 96px;
+  min-height: 0;
+}
+
+.quant-backtest-dock-sparkline[hidden] {
+  display: none !important;
+}
+
+.quant-backtest-dock-empty {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.quant-backtest-dock-empty > strong {
+  color: var(--quant-backtest-fg-bright);
+  font-size: 14px;
+  font-weight: 500;
 }
 
 /* Size the flex child from the Dock, never from Highcharts' previous SVG
@@ -775,8 +1220,8 @@
 .quant-backtest-dock-sparkline > .quant-backtest-chart-host {
   flex: 1 1 0;
   width: 100%;
-  height: 164px;
-  min-height: 164px;
+  height: 100%;
+  min-height: 0;
 }
 
 .quant-backtest-sparkline-line {
@@ -811,13 +1256,22 @@
   flex-shrink: 0;
   width: 28px;
   min-height: 28px;
-  padding-inline: 4px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: 0;
   border-radius: 5px;
   background: transparent;
   color: var(--quant-backtest-fg-muted);
   font: inherit;
   cursor: pointer;
+}
+
+.quant-backtest-viewer-back .quant-backtest-icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
 }
 
 .quant-backtest-viewer-header {
@@ -967,8 +1421,10 @@
 }
 
 .quant-backtest-viewer-panel {
+  --quant-backtest-bg: lab(7.23454% 0.112057 -2.28281);
   min-height: 0;
   flex: 1;
+  background: var(--quant-backtest-bg);
   overflow: auto;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
@@ -1060,8 +1516,7 @@
     padding-top: 16px;
   }
 
-  /* Simulation's toolbar begins eight pixels below the tab rail in the
-   * native workspace. */
+  /* Keep the compact Simulation toolbar aligned with the tab rail. */
   .quant-backtest-page.quant-backtest-simulation {
     padding-top: 8px;
   }
@@ -1298,8 +1753,17 @@
 
 .quant-backtest-performance-card .quant-backtest-metric-table thead th {
   font-size: 14px;
+  font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
+}
+
+.quant-backtest-performance-card .quant-backtest-metric-table tbody th:not([scope="rowgroup"]) {
+  font-weight: 400;
+}
+
+.quant-backtest-performance-card .quant-backtest-metric-unit {
+  line-height: 16px;
 }
 
 .quant-backtest-performance-card .quant-backtest-metric-table tbody tr.quant-backtest-metric-group th {
@@ -1471,6 +1935,12 @@
   stroke: var(--quant-backtest-border-strong);
 }
 
+.quant-backtest-performance .quant-backtest-chart-host .highcharts-tooltip-box {
+  fill: #1a1a1b;
+  fill-opacity: 1;
+  stroke: rgb(255 255 255 / 10%);
+}
+
 .quant-backtest-winrate-chart-host {
   height: 210px;
 }
@@ -1550,6 +2020,10 @@
 
 .quant-backtest-chart-category-label {
   font-size: 11px;
+}
+
+.quant-backtest-metric-unit {
+  font-size: 12px;
 }
 
 .quant-backtest-metric-table,
@@ -1722,7 +2196,7 @@
 }
 
 .quant-backtest-analysis-tooltip {
-  min-width: 180px;
+  padding: 8px;
   color: var(--quant-backtest-fg-bright);
   font-size: 12px;
 }
@@ -1734,22 +2208,22 @@
 }
 
 .quant-backtest-analysis-tooltip-trade {
-  gap: 8px;
+  gap: 6px;
+  margin-bottom: 8px;
   color: var(--quant-backtest-fg-muted);
 }
 
 .quant-backtest-analysis-tooltip-direction {
-  padding: 1px 6px;
-  border: 1px solid;
+  padding: 2px 6px;
   border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 400;
   line-height: 16px;
 }
 
 .quant-backtest-analysis-tooltip-pnl {
-  gap: 6px;
-  margin-top: 8px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .quant-backtest-analysis-tooltip-dot {
@@ -1761,18 +2235,82 @@
 
 .quant-backtest-analysis-tooltip-pnl-label {
   color: var(--quant-backtest-fg-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .quant-backtest-analysis-tooltip-pnl strong {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .quant-backtest-analysis-tooltip-time {
-  margin-top: 8px;
   color: var(--quant-backtest-fg-muted);
   font-size: 11px;
+}
+
+.quant-backtest-equity-tooltip {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quant-backtest-equity-tooltip-trade,
+.quant-backtest-equity-tooltip-pnl,
+.quant-backtest-bucket-tooltip-pnl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quant-backtest-equity-tooltip-trade {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.quant-backtest-equity-tooltip-direction {
+  padding: 2px 4px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.quant-backtest-equity-tooltip-label,
+.quant-backtest-equity-tooltip-time {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 12px;
+}
+
+.quant-backtest-equity-tooltip-value,
+.quant-backtest-bucket-tooltip-value {
+  color: #fff;
+  font-weight: 500;
+}
+
+.quant-backtest-bucket-tooltip {
+  padding: 8px;
+}
+
+.quant-backtest-bucket-tooltip-date {
+  margin-bottom: 6px;
+  color: #a1a1aa;
+  font-size: 11px;
+}
+
+.quant-backtest-bucket-tooltip-pnl {
+  margin-bottom: 6px;
+}
+
+.quant-backtest-bucket-tooltip-label,
+.quant-backtest-bucket-tooltip-count {
+  color: var(--quant-backtest-fg-muted);
+  font-size: 11px;
+}
+
+.quant-backtest-bucket-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 2px;
 }
 
 .quant-backtest-analysis-distribution-host {
@@ -1780,6 +2318,7 @@
 }
 
 .quant-backtest-analysis-winrate-body {
+  position: relative;
   display: flex;
   min-height: 180px;
   align-items: center;
@@ -1789,9 +2328,18 @@
 
 .quant-backtest-analysis-donut {
   position: relative;
-  width: min(240px, 72%);
-  min-width: 180px;
+  width: 100%;
+  min-width: 0;
   height: 180px;
+}
+
+.quant-backtest-analysis-donut .quant-backtest-analysis-fallback-chart {
+  width: calc(100% - 80px);
+}
+
+.quant-backtest-analysis-winrate-body:has(.highcharts-container) .quant-backtest-analysis-donut-center,
+.quant-backtest-analysis-winrate-body:has(.highcharts-container) .quant-backtest-analysis-winrate-legend {
+  display: none;
 }
 
 .quant-backtest-analysis-donut-host {
@@ -1809,7 +2357,7 @@
 .quant-backtest-analysis-donut-center {
   position: absolute;
   top: 50%;
-  left: 50%;
+  left: calc(50% - 40px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1833,6 +2381,8 @@
 }
 
 .quant-backtest-analysis-winrate-legend {
+  position: absolute;
+  right: 0;
   display: flex;
   min-width: 92px;
   flex-direction: column;
@@ -2040,13 +2590,16 @@
 
 .quant-backtest-log-toolbar {
   margin-left: auto;
+  gap: 8px;
 }
 
 .quant-backtest-log-card {
+  flex: 1;
   min-width: 0;
   box-sizing: border-box;
-  padding: 16px;
-  border: 1px solid var(--quant-backtest-border);
+  padding: 0 16px 8px;
+  border: 0;
+  box-shadow: 0 0 0 1px rgb(250 250 250 / 10%);
   border-radius: 8px;
   background: transparent;
 }
@@ -2089,6 +2642,37 @@
   color: var(--quant-backtest-fg-bright);
 }
 
+/* Measured against the current reference Log/Calendar switch. Scope these
+ * dimensions to this toolbar; other segmented controls have their own size. */
+.quant-backtest-log-toolbar .quant-backtest-segmented {
+  height: 36px;
+  padding: 3px;
+  border: 0;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 5%);
+}
+
+.quant-backtest-log-toolbar .quant-backtest-segment {
+  width: 34px;
+  min-width: 34px;
+  height: 29px;
+  min-height: 29px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.quant-backtest-log-toolbar .quant-backtest-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.quant-backtest-log-toolbar [data-trade-view] .quant-backtest-icon {
+  stroke-width: 2;
+}
+
 .quant-backtest-table-wrap {
   max-width: 100%;
   overflow: auto;
@@ -2121,9 +2705,56 @@
   min-width: 1040px;
 }
 
+/*
+ * The live desktop reference uses one stable geometry when all optional log
+ * columns are present (Trade #, Entry, Exit, Size, Net P&L, MFE, MAE and
+ * Cumulative P&L).  Keep this opt-in so reports that omit Size or excursions
+ * retain their content-sized columns.  The rule is deliberately desktop-only:
+ * narrow workspaces must keep the table scroller rather than forcing eight
+ * columns into the viewport.
+ */
+@media (min-width: 1024px) {
+  .quant-backtest-trade-table[data-trade-layout='full'] {
+    width: 1080.875px;
+    min-width: 1080.875px;
+    table-layout: fixed;
+  }
+
+  .quant-backtest-trade-table[data-trade-layout='full'] col:nth-child(1) {
+    width: 100.171875px;
+  }
+
+  .quant-backtest-trade-table[data-trade-layout='full'] col:nth-child(2),
+  .quant-backtest-trade-table[data-trade-layout='full'] col:nth-child(3) {
+    width: 225.640625px;
+  }
+
+  .quant-backtest-trade-table[data-trade-layout='full'] col:nth-child(4) {
+    width: 57.34375px;
+  }
+
+  .quant-backtest-trade-table[data-trade-layout='full'] col:nth-child(5) {
+    width: 120.25px;
+  }
+
+  .quant-backtest-trade-table[data-trade-layout='full'] col:nth-child(6) {
+    width: 112.59375px;
+  }
+
+  .quant-backtest-trade-table[data-trade-layout='full'] col:nth-child(7) {
+    width: 118.296875px;
+  }
+
+  .quant-backtest-trade-table[data-trade-layout='full'] col:nth-child(8) {
+    width: 120.9375px;
+  }
+}
+
 .quant-backtest-sort {
-  min-height: 22px;
+  min-height: 20px;
   padding: 0;
+  border: 0;
+  gap: 4px;
   color: inherit;
   font-size: inherit;
   font-weight: inherit;
@@ -2181,6 +2812,20 @@
   font-variant-numeric: tabular-nums;
 }
 
+.quant-backtest-trade-money-gap {
+  /* Preserve the plain-text separator; the currency margin supplies the
+   * measured 4px gap independently of the font's space glyph advance. */
+  font-size: 0;
+  line-height: 0;
+}
+
+.quant-backtest-trade-currency {
+  margin-left: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
 .quant-backtest-locate {
   width: 24px;
   min-width: 24px;
@@ -2207,12 +2852,12 @@
 
 .quant-backtest-direction-long {
   background: color-mix(in srgb, var(--quant-backtest-positive) 20%, transparent);
-  color: var(--quant-backtest-positive) !important;
+  color: color-mix(in srgb, var(--quant-backtest-positive) 80%, white) !important;
 }
 
 .quant-backtest-direction-short {
   background: color-mix(in srgb, var(--quant-backtest-negative) 20%, transparent);
-  color: var(--quant-backtest-negative) !important;
+  color: color-mix(in srgb, var(--quant-backtest-negative) 80%, white) !important;
 }
 
 /*
@@ -2232,8 +2877,17 @@
 
 /* The reference log's content card uses the standard 16px inline gutter. */
 .quant-backtest-trades-log {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  padding-top: 16px;
   padding-right: 16px;
+  padding-bottom: 16px;
   padding-left: 16px;
+}
+
+.quant-backtest-viewer-panel:has(.quant-backtest-trades-log) {
+  scrollbar-gutter: auto;
 }
 
 .quant-backtest-trade-table th,
@@ -2262,6 +2916,12 @@
   letter-spacing: normal;
   line-height: 20px;
   text-transform: none;
+  white-space: normal;
+}
+
+.quant-backtest-trade-table thead th:nth-child(n + 4) .quant-backtest-sort {
+  width: 100%;
+  justify-content: flex-end;
 }
 
 .quant-backtest-trade-table tbody th {
@@ -2272,6 +2932,10 @@
 
 .quant-backtest-trade-table .quant-backtest-trade-number {
   width: 1%;
+}
+
+.quant-backtest-trade-table .quant-backtest-direction-badge {
+  font-weight: 400;
 }
 
 .quant-backtest-trade-table tbody td {
@@ -2301,14 +2965,25 @@
 
 .quant-backtest-calendar {
   width: 100%;
+  max-width: 100%;
+  container: quant-calendar / inline-size;
+}
+
+.quant-backtest-calendar-compact {
+  display: none;
 }
 
 .quant-backtest-calendar-empty {
-  margin: 0 0 16px;
-  color: var(--quant-backtest-fg-muted);
-  font-size: 13px;
-  line-height: 18px;
-  text-align: center;
+  /* Reference empty months retain the grid and summary at the same height.
+   * Keep the helpful live announcement without adding a visible extra row. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .quant-backtest-calendar-heading {
@@ -2326,6 +3001,7 @@
 }
 
 .quant-backtest-calendar-nav {
+  position: relative;
   display: inline-grid;
   width: 32px;
   height: 32px;
@@ -2335,7 +3011,53 @@
   background: transparent;
   place-items: center;
   color: var(--quant-backtest-fg-muted);
+  font-family: inherit;
   cursor: pointer;
+}
+
+.quant-backtest-calendar-tooltip {
+  position: absolute;
+  z-index: 5;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  width: max-content;
+  padding: 13px;
+  transform: translateX(-50%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 12px;
+  background: #151618;
+  color: #fafafa;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.55;
+  white-space: nowrap;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease, visibility 0s;
+}
+
+.quant-backtest-calendar-tooltip::after {
+  position: absolute;
+  bottom: -4px;
+  left: calc(50% - 4px);
+  width: 8px;
+  height: 8px;
+  transform: rotate(45deg);
+  border-radius: 2px;
+  background: #fafafa;
+  content: '';
+}
+
+.quant-backtest-calendar-nav:not([data-tooltip-dismissed]):hover .quant-backtest-calendar-tooltip,
+.quant-backtest-calendar-nav:not([data-tooltip-dismissed]):focus .quant-backtest-calendar-tooltip {
+  visibility: visible;
+  opacity: 1;
+  transition-delay: 500ms;
+}
+
+.quant-backtest-calendar-nav:not([data-tooltip-dismissed]):focus .quant-backtest-calendar-tooltip {
+  transition-delay: 0s;
 }
 
 .quant-backtest-calendar-nav:hover,
@@ -2345,7 +3067,7 @@
 }
 
 .quant-backtest-calendar-nav:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--quant-backtest-accent) 70%, transparent);
+  outline: 2px solid var(--quant-backtest-accent);
   outline-offset: 1px;
 }
 
@@ -2389,6 +3111,8 @@
 }
 
 .quant-backtest-calendar-day {
+  position: relative;
+  box-sizing: border-box;
   display: flex;
   height: 96px;
   min-width: 0;
@@ -2400,6 +3124,50 @@
   border-radius: 8px;
   background: rgba(38, 38, 38, 0.3);
   transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.quant-backtest-calendar-day-toggle {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.quant-backtest-calendar-day-toggle:focus-visible {
+  outline: 2px solid var(--quant-backtest-fg-bright);
+  outline-offset: -3px;
+}
+
+.quant-backtest-calendar-day-summary {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--quant-backtest-border);
+  border-radius: 8px;
+  background: var(--quant-backtest-surface-soft);
+}
+
+.quant-backtest-calendar-day-summary[hidden] {
+  display: none;
+}
+
+.quant-backtest-calendar-day-summary-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--quant-backtest-fg-bright);
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.quant-backtest-calendar-day-summary > button {
+  flex-shrink: 0;
 }
 
 .quant-backtest-calendar-day.is-profit {
@@ -2462,12 +3230,14 @@
 
 .quant-backtest-calendar-currency {
   font-size: 12px;
+  line-height: 16px;
   text-transform: uppercase;
 }
 
 .quant-backtest-calendar-day-meta {
   color: var(--quant-backtest-fg-muted);
   font-size: 12px;
+  line-height: 16px;
 }
 
 .quant-backtest-calendar-summary {
@@ -2491,6 +3261,7 @@
 .quant-backtest-calendar-summary-label {
   color: var(--quant-backtest-fg-muted);
   font-size: 12px;
+  line-height: 16px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -2629,11 +3400,11 @@
 .quant-backtest-simulation-help-trigger {
   appearance: none;
   display: inline-grid;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   place-items: center;
   padding: 0;
-  border: 1px solid var(--quant-backtest-fg-muted);
+  border: 0;
   border-radius: 50%;
   outline: 0;
   background: transparent;
@@ -2642,7 +3413,17 @@
   font-size: 10px;
   line-height: 1;
   cursor: help;
-  opacity: 0.78;
+  opacity: 0.7;
+}
+
+.quant-backtest-simulation-help-trigger svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .quant-backtest-simulation-help-trigger:hover,
@@ -2666,6 +3447,9 @@
 
 .quant-backtest-simulation-help-tooltip {
   position: absolute;
+  /* Help is read-only text; a focused tooltip must not intercept the next
+   * pointer action on a control below it. */
+  pointer-events: none;
   z-index: 20;
   top: calc(100% + 7px);
   left: 50%;
@@ -2691,7 +3475,7 @@
   display: inline-flex;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--quant-backtest-border-strong);
+  border: 1px solid var(--quant-backtest-border);
   border-radius: 6px;
 }
 
@@ -2834,8 +3618,8 @@
   gap: 12px;
 }
 
-.quant-backtest-simulation-chart-panel h4,
-.quant-backtest-simulation-streaks h4 {
+.quant-backtest-simulation-chart-panel h3,
+.quant-backtest-simulation-streaks h3 {
   margin: 0;
   color: var(--quant-backtest-fg-bright);
   font-size: 14px;
@@ -2868,11 +3652,14 @@
 }
 
 .quant-backtest-simulation-band {
-  stroke: none;
+  stroke: var(--quant-backtest-fg-muted);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 
 .quant-backtest-simulation-band-outer {
   fill: rgba(113, 113, 122, 0.15);
+  stroke-dasharray: 3 1;
 }
 
 .quant-backtest-simulation-band-inner {
@@ -2938,10 +3725,14 @@
   border-top: 2px dashed var(--quant-backtest-fg-muted);
 }
 
-.quant-backtest-simulation-legend-bands {
-  border-radius: 2px;
-  background: var(--quant-backtest-fg-muted);
-  opacity: 0.8;
+.quant-backtest-simulation-legend-band-inner,
+.quant-backtest-simulation-legend-band-outer {
+  height: 0 !important;
+  border-top: 1px solid var(--quant-backtest-fg-muted);
+}
+
+.quant-backtest-simulation-legend-band-outer {
+  border-top-style: dashed;
 }
 
 .quant-backtest-simulation-distributions {
@@ -3214,6 +4005,206 @@
   display: none;
 }
 
+/* A desktop-created control keeps its presentation if its window is resized
+ * while open. Compact-window creation still uses the native select. */
+  .quant-backtest-simulation-runs {
+    position: relative;
+  }
+
+  .quant-backtest-simulation-runs-native {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .quant-backtest-simulation-runs-trigger {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--quant-backtest-border-strong);
+    border-radius: 5.76px;
+    background: transparent;
+    color: var(--quant-backtest-fg-bright);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .quant-backtest-simulation-runs-trigger > svg {
+    opacity: 0.5;
+  }
+
+  .quant-backtest-simulation-runs-menu {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    left: 4px;
+    width: 128px;
+    box-sizing: border-box;
+    padding: 0;
+    border: 1px solid var(--quant-backtest-border);
+    border-radius: 5.76px;
+    background: var(--quant-backtest-bg);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+  }
+
+  .quant-backtest-simulation-runs-menu[hidden] {
+    display: none;
+  }
+
+  .quant-backtest-simulation-runs-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    height: 32px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 4.32px;
+    background: transparent;
+    color: var(--quant-backtest-fg-bright);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .quant-backtest-simulation-runs-option:hover,
+  .quant-backtest-simulation-runs-option:focus {
+    background: var(--quant-backtest-hover);
+    outline: none;
+  }
+
+  .quant-backtest-simulation-runs-trigger:focus-visible {
+    outline: 2px solid var(--quant-backtest-fg-muted);
+    outline-offset: 2px;
+  }
+
+/* The native desktop modal presents the explanations as help tooltips.
+ * Keep the longer field descriptions for the existing compact-window sheet. */
+@media (min-width: 1024px) {
+  .quant-backtest-simulation-settings-dialog {
+    border: 0;
+    border-radius: 18.72px;
+    background: var(--quant-backtest-bg);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 5%);
+  }
+
+  .quant-backtest-simulation-settings-header {
+    display: block;
+    padding: 24px 24px 0;
+  }
+
+  .quant-backtest-simulation-settings-header h3 {
+    line-height: 16px;
+  }
+
+  .quant-backtest-simulation-settings-header p {
+    margin-top: 8px;
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .quant-backtest-simulation-settings-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+  }
+
+  .quant-backtest-simulation-settings-body {
+    padding-top: 24px;
+  }
+
+  .quant-backtest-simulation-settings-fields {
+    gap: 16px;
+  }
+
+  .quant-backtest-simulation-settings-field {
+    gap: 12px;
+  }
+
+  .quant-backtest-simulation-settings-field > .quant-backtest-simulation-field-label {
+    color: var(--quant-backtest-fg-bright);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 19.25px;
+  }
+
+  .quant-backtest-simulation-settings-hint {
+    display: none;
+  }
+
+  .quant-backtest-simulation-settings-field select {
+    min-height: 36px;
+    height: 36px;
+    border-radius: 5.76px;
+    background: transparent;
+    font-size: 14px;
+  }
+
+  .quant-backtest-simulation-variation input[type='number'] {
+    box-sizing: border-box;
+    width: 96px;
+    min-height: 32px;
+    height: 32px;
+    border-radius: 7.2px;
+    background: rgb(255 255 255 / 4.5%);
+    font-size: 12px;
+  }
+
+  .quant-backtest-simulation-preserve {
+    box-sizing: border-box;
+    min-height: 44px;
+    gap: 12px;
+    padding: 12px;
+    border: 0;
+    border-radius: 10.08px;
+    background: color-mix(in srgb, var(--quant-backtest-surface) 20%, transparent);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 5%);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+  }
+
+  .quant-backtest-simulation-preserve input {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    width: 32px;
+    height: 18.4px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid transparent;
+    background: rgb(255 255 255 / 12%);
+  }
+
+  .quant-backtest-simulation-preserve input::after {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    background: var(--quant-backtest-fg);
+  }
+
+  .quant-backtest-simulation-preserve input:checked::after {
+    transform: translateX(14px);
+  }
+
+  .quant-backtest-simulation-preserve input:disabled {
+    opacity: 0.5;
+  }
+
+  .quant-backtest-simulation-preserve > span {
+    display: block;
+  }
+
+  .quant-backtest-simulation-preserve > span > .quant-backtest-simulation-settings-hint {
+    display: none;
+  }
+}
+
 .quant-backtest-comparison-cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3249,20 +4240,6 @@
   }
 }
 
-@media (max-width: 1024px) {
-  .quant-backtest-calendar-day-pnl {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0;
-    font-size: 12px;
-  }
-
-  .quant-backtest-calendar-day-pnl .quant-backtest-calendar-currency {
-    font-size: 10px;
-  }
-
-}
-
 @media (max-width: 900px) {
   .quant-backtest-summary-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3283,15 +4260,89 @@
   }
 }
 
-@media (max-width: 767px) {
-  .quant-backtest-calendar {
-    overflow-x: auto;
-  }
-
+/* A Calendar embedded in a narrow workspace column needs the same readable
+ * compact values as a phone. Size against the component's own container,
+ * not the browser viewport or an unrelated reference-site sidebar. */
+@container quant-calendar (max-width: 560px) {
   .quant-backtest-calendar-heading,
   .quant-backtest-calendar-grid,
   .quant-backtest-calendar-summary {
-    min-width: 760px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .quant-backtest-calendar-grid {
+    gap: 4px;
+    overflow: hidden;
+  }
+
+  .quant-backtest-calendar-day {
+    height: 112px;
+    padding: 8px 2px;
+    overflow: hidden;
+  }
+
+  .quant-backtest-calendar-day-pnl {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .quant-backtest-calendar-day-pnl > .quant-backtest-calendar-amount,
+  .quant-backtest-calendar-day-pnl > .quant-backtest-calendar-currency,
+  .quant-backtest-calendar-full {
+    display: none;
+  }
+
+  .quant-backtest-calendar-compact {
+    display: inline;
+  }
+
+  .quant-backtest-calendar-compact-pnl {
+    display: inline-flex;
+    width: 100%;
+    align-items: baseline;
+    flex-wrap: wrap;
+    vertical-align: top;
+  }
+
+  .quant-backtest-calendar-compact-number,
+  .quant-backtest-calendar-compact-scale {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .quant-backtest-calendar-compact-scale {
+    font-size: 12px;
+    line-height: 16px;
+  }
+
+  .quant-backtest-calendar-day-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .quant-backtest-calendar-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 16px 12px;
+    gap: 16px 12px;
+  }
+
+  .quant-backtest-calendar-summary-value {
+    flex-wrap: wrap;
+  }
+}
+
+@container quant-calendar (max-width: 320px) {
+  .quant-backtest-calendar-grid {
+    gap: 1px;
+  }
+
+  .quant-backtest-calendar-day {
+    padding-inline: 1px;
   }
 }
 
@@ -3304,7 +4355,8 @@
   .quant-backtest-viewer-header {
     height: auto;
     min-height: 0;
-    padding: 8px 58px 0 24px;
+    /* Reserve both trailing controls (favorite and close), plus a gap. */
+    padding: 8px 80px 0 24px;
   }
 
   .quant-backtest-dock-metrics {
@@ -3339,6 +4391,12 @@
     padding-right: 0;
   }
 
+  .quant-backtest-viewer-heading h2 {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   .quant-backtest-viewer-header > .quant-backtest-icon-button,
   .quant-backtest-viewer-header > .quant-backtest-favorite {
     position: absolute;
@@ -3348,6 +4406,7 @@
 
   .quant-backtest-viewer-header > .quant-backtest-favorite {
     right: 48px;
+    top: 9.5px;
   }
 
   .quant-backtest-viewer-header > .quant-backtest-icon-button {
@@ -3366,15 +4425,16 @@
 
   .quant-backtest-tabs {
     gap: 16px;
-    min-height: 50px;
-    height: 50px;
+    min-height: 51px;
+    height: 51px;
     margin-top: 8px;
     padding-inline: 24px;
     align-items: stretch;
   }
 
   .quant-backtest-tab {
-    max-width: 88px;
+    max-width: none;
+    flex-shrink: 1;
     align-items: center;
     padding-bottom: 8px;
     text-align: center;
@@ -3396,6 +4456,7 @@
   }
 
   .quant-backtest-trades-log {
+    padding-top: 8px;
     padding-right: 24px;
     padding-left: 24px;
   }
@@ -3447,12 +4508,12 @@
   }
 
   .quant-backtest-log-toolbar {
-    width: 100%;
-    margin-left: 0;
+    width: auto;
+    margin-left: auto;
   }
 
   .quant-backtest-log-toolbar .quant-backtest-segmented {
-    margin-right: auto;
+    margin-right: 0;
   }
 
   .quant-backtest-summary-grid,
@@ -3461,6 +4522,12 @@
   .quant-backtest-simulation-stats,
   .quant-backtest-calendar-summary {
     grid-template-columns: 1fr 1fr;
+  }
+
+  /* The reference Calendar keeps its four summary metrics in one row on
+   * phones.  Only the other report grids collapse to two columns here. */
+  .quant-backtest-calendar-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .quant-backtest-simulation-controls {

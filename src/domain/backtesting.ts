@@ -11,6 +11,18 @@ import type { BacktestExecutionSnapshot } from './ports/backtest-results.ts';
 
 export const BACKTEST_SCHEMA_VERSION = 1 as const;
 
+// Only arrays produced by our recursively copied/frozen report factory are
+// trusted. Object.isFrozen(array) alone says nothing about mutable elements,
+// getters or nested provider fields and must never authorize memoization.
+const immutableReportLedgers = new WeakSet<readonly unknown[]>();
+const immutableReports = new WeakSet<object>();
+const ownedImmutableDtos = new WeakSet<object>();
+const reportPopulationCache = new WeakMap<readonly unknown[], {
+  readonly epsilon: number;
+  readonly includeOpen: boolean;
+  readonly value: TradePopulations;
+}>();
+
 export type BacktestStatus =
   | 'waiting-data'
   | 'compiling'
@@ -449,6 +461,10 @@ function cloneAndFreeze<T>(value: T, seen = new WeakMap<object, unknown>(), path
     throw new TypeError(`Unsupported report DTO value at ${path}`);
   }
   if (value === null || typeof value !== 'object') return value;
+  // Previously validated domain-owned data is already isolated from callers.
+  // Reusing it avoids cloning raw ledger metadata again while finalizing the
+  // same report. Never infer this ownership from Object.isFrozen alone.
+  if (ownedImmutableDtos.has(value)) return value;
   const prototype = Object.getPrototypeOf(value);
   if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) {
     throw new TypeError(`Unsupported report DTO object at ${path}; normalize to plain data first`);
@@ -470,7 +486,9 @@ function cloneAndFreeze<T>(value: T, seen = new WeakMap<object, unknown>(), path
       value: copied, enumerable: descriptor.enumerable, configurable: key !== 'length', writable: true,
     });
   });
-  return Object.freeze(target) as T;
+  Object.freeze(target);
+  ownedImmutableDtos.add(target);
+  return target as T;
 }
 
 /**
@@ -482,7 +500,17 @@ function cloneAndFreeze<T>(value: T, seen = new WeakMap<object, unknown>(), path
 export function createBacktestReport(init: BacktestReportInit): BacktestReport {
   // Validate/copy before any normalizer spreads or reads provider properties.
   init = cloneAndFreeze(init);
-  const normalizedTrades = normalizeTrades(init.trades ?? []);
+  const normalizedTrades = Object.freeze((init.trades ?? [])
+    .map(trade => {
+      const row = Object.freeze(normalizeTrade(trade));
+      ownedImmutableDtos.add(row);
+      return row;
+    }));
+  ownedImmutableDtos.add(normalizedTrades);
+  // Their nested data comes exclusively from the validated/deep-frozen init.
+  // Population selectors can therefore reuse these normalized rows while
+  // assembling the report, rather than producing a second normalized copy.
+  immutableReportLedgers.add(normalizedTrades);
   const populations = selectTradePopulations(normalizedTrades);
   const normalizedOrders = normalizeOrders(init.orders ?? []);
   const normalizedFills = normalizeFills(init.fills ?? []);
@@ -521,7 +549,15 @@ export function createBacktestReport(init: BacktestReportInit): BacktestReport {
     provenance: freezeProvenance(init.provenance),
     availability: init.availability,
   } satisfies BacktestReport;
-  return cloneAndFreeze(report);
+  const frozen = cloneAndFreeze(report);
+  immutableReportLedgers.add(frozen.trades);
+  immutableReports.add(frozen);
+  return frozen;
+}
+
+/** Proof of factory ownership; shallow Object.freeze is not sufficient. */
+export function isImmutableBacktestReport(value: object): value is BacktestReport {
+  return immutableReports.has(value);
 }
 
 function freezeProvenance(provenance: BacktestProvenance | undefined): BacktestProvenance | undefined {
@@ -628,6 +664,7 @@ export function normalizeExitPrice(value: unknown, exitTime: number | null): num
 }
 
 function normalizeDirection(value: unknown): TradeDirection {
+  if (value === 'long' || value === 'short' || value === 'unknown') return value;
   const direction = String(value ?? '').trim().toLowerCase();
   if (direction === 'short' || direction === 'sell' || direction === '-1') return 'short';
   if (direction === 'long' || direction === 'buy' || direction === '1') return 'long';
@@ -838,7 +875,9 @@ export function isTradeClosed(trade: Trade): boolean {
 
 export function tradeNetPnl(trade: Trade): number | null {
   const source = trade as unknown as Record<string, unknown>;
-  const candidates = [source.netPnl, source.pnl, source.profit, source.realizedPnl];
+  const direct = finiteNumber(source.netPnl);
+  if (direct !== null) return Object.is(direct, -0) ? 0 : direct;
+  const candidates = [source.pnl, source.profit, source.realizedPnl];
   for (const value of candidates) {
     const numeric = finiteNumber(value);
     if (numeric !== null) return Object.is(numeric, -0) ? 0 : numeric;
@@ -919,19 +958,23 @@ export function selectTradePopulations(
   trades: readonly unknown[],
   options: PopulationSelectorOptions = {},
 ): TradePopulations {
-  const normalized = [...normalizeTrades(trades)];
+  const trusted = immutableReportLedgers.has(trades);
+  const epsilon = Math.max(0, options.breakevenEpsilon ?? 1e-8);
+  const includeOpen = options.includeOpenInAnalysis !== false;
+  const cached = trusted ? reportPopulationCache.get(trades) : undefined;
+  if (cached && cached.epsilon === epsilon && cached.includeOpen === includeOpen) return cached.value;
+  const normalized = trusted ? trades as readonly NormalizedTrade[] : normalizeTrades(trades);
   const closedTrades = normalized.filter(isTradeClosed);
   const openTrades = normalized.filter(isTradeOpen);
   const analysisRows = options.includeOpenInAnalysis === false ? closedTrades : normalized;
   const simulationPopulation = closedTrades.filter((trade) => tradeNetPnl(trade) !== null);
-  const epsilon = Math.max(0, options.breakevenEpsilon ?? 1e-8);
   const classify = (trade: NormalizedTrade): 'win' | 'loss' | 'even' => {
     const pnl = tradeNetPnl(trade) ?? 0;
     if (pnl > epsilon) return 'win';
     if (pnl < -epsilon) return 'loss';
     return 'even';
   };
-  return {
+  const value = {
     allTrades: Object.freeze(normalized),
     closedTrades: Object.freeze(closedTrades),
     openTrades: Object.freeze(openTrades),
@@ -943,6 +986,15 @@ export function selectTradePopulations(
     losingTrades: Object.freeze(closedTrades.filter((trade) => classify(trade) === 'loss')),
     breakevenTrades: Object.freeze(closedTrades.filter((trade) => classify(trade) === 'even')),
   };
+  if (trusted) {
+    Object.freeze(value);
+    // Every member array contains only the already owned normalized rows.
+    // The report factory may retain these exact immutable populations.
+    Object.values(value).forEach(array => ownedImmutableDtos.add(array));
+    ownedImmutableDtos.add(value);
+    reportPopulationCache.set(trades, { epsilon, includeOpen, value });
+  }
+  return value;
 }
 
 /** Compatibility aliases used by feature adapters. */

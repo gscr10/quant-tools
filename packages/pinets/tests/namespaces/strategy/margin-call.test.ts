@@ -123,6 +123,41 @@ describe('processMarginCall — partial liquidation (TV 4× rule)', () => {
         processMarginCall(context);
         expect(context.strategy.closedtrades.length).toBe(1);
     });
+
+    it('keeps a 0% margin position while equity is non-negative', () => {
+        // margin=0 means unlimited leverage, so the required collateral is
+        // zero. A positive/zero equity account must not be liquidated merely
+        // because the notional is larger than the account balance.
+        const context = makeContext(
+            { open: 101000, high: 110000, low: 99000, close: 105000 },
+            { initial_capital: 200000, margin_short: 0 },
+        );
+        openShort(context, 5, 100000);
+
+        processMarginCall(context);
+
+        expect(context.strategy.closedtrades).toHaveLength(0);
+        expect(context.strategy.opentrades).toHaveLength(1);
+        expect(context.strategy.position_size).toBe(-5);
+    });
+
+    it('liquidates a 0% margin position only after equity crosses below zero', () => {
+        // With no collateral requirement the broker can carry the position
+        // through a zero equity point, but once equity is negative it still
+        // must enforce the 0% maintenance threshold. The 4x cover is infinite
+        // at a zero denominator and is capped at the complete position.
+        const context = makeContext(
+            { open: 101000, high: 130000, low: 99000, close: 125000 },
+            { initial_capital: 100000, margin_short: 0 },
+        );
+        openShort(context, 5, 100000);
+
+        processMarginCall(context);
+
+        expect(context.strategy.closedtrades).toHaveLength(1);
+        expect(Math.abs(context.strategy.closedtrades[0]!.size)).toBe(5);
+        expect(context.strategy.position_size).toBe(0);
+    });
 });
 
 describe('processStrategyOrders — reversal close leg survives margin rejection', () => {

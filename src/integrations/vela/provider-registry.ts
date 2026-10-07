@@ -361,7 +361,7 @@ function prepareProvider<T extends DataProvider>(
   // provider from parking a bare symbol without truncating normal cold loads.
   const guarded = guardProviderIndex(
     guardProviderSubscription(
-      guardProviderHistory(guardProviderNetwork(provider, kind, options)),
+      guardProviderHistory(guardProviderNetwork(provider, kind, options), kind),
       kind,
     ),
     kind,

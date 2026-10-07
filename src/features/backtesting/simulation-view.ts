@@ -1,3 +1,5 @@
+import { backtestIcon } from './backtest-icons.ts';
+import { formatBacktestPerformanceValue } from './backtest-format.ts';
 import type {
   BacktestReport,
   BacktestSimulation,
@@ -19,6 +21,14 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const PROFIT_COLOR = '#089981';
 const LOSS_COLOR = '#f23645';
 const NEUTRAL_COLOR = '#71717a';
+// Opaque boundaries stay legible over the layered translucent bands. The
+// original fills and every simulated value are retained.
+const PATH_BOUNDARY_COLOR = '#a1a1aa';
+// Text is drawn on the elevated #1c1d20 label surface. The reference's
+// neutral/red series colors measure 3.49:1/4.33:1 there, below small-text AA.
+// Preserve graph colors while using readable annotation colors.
+const NEUTRAL_TEXT_COLOR = '#a1a1aa';
+const LOSS_TEXT_COLOR = '#f5404e';
 const RUN_OPTIONS = [250, 1_000, 2_500] as const;
 const DRAWDOWN_PRESETS = [1.5, 2, 3] as const;
 
@@ -68,26 +78,7 @@ function button(doc: Document, label: string, className: string): HTMLButtonElem
 }
 
 function settingsIcon(doc: Document): SVGSVGElement {
-  const svg = svgElement(doc, 'svg');
-  // Match the reference's Lucide `settings-2` glyph: the two circular
-  // sliders are part of the icon, not plus-shaped bars.  Keeping this local
-  // avoids pulling an icon package into the backtest chunk.
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.classList.add('quant-backtest-icon');
-  ['M5 7h14', 'M5 17h14'].forEach((pathData) => {
-    const path = svgElement(doc, 'path');
-    path.setAttribute('d', pathData);
-    svg.appendChild(path);
-  });
-  for (const [cx, cy] of [[9, 7], [15, 17]]) {
-    const circle = svgElement(doc, 'circle');
-    circle.setAttribute('cx', String(cx));
-    circle.setAttribute('cy', String(cy));
-    circle.setAttribute('r', '2');
-    svg.appendChild(circle);
-  }
-  return svg;
+  return backtestIcon(doc, 'settings-2');
 }
 
 function settingsHint(doc: Document, text: string): HTMLElement {
@@ -99,7 +90,20 @@ function settingsHint(doc: Document, text: string): HTMLElement {
 function help(doc: Document, label: string, copy: string): HTMLElement {
   helpSequence += 1;
   const wrapper = element(doc, 'span', 'quant-backtest-simulation-help');
-  const trigger = button(doc, '?', 'quant-backtest-simulation-help-trigger');
+  const trigger = button(doc, '', 'quant-backtest-simulation-help-trigger');
+  const glyph = svgElement(doc, 'svg');
+  glyph.setAttribute('viewBox', '0 0 24 24');
+  glyph.setAttribute('aria-hidden', 'true');
+  glyph.setAttribute('focusable', 'false');
+  const ring = svgElement(doc, 'circle');
+  ring.setAttribute('cx', '12'); ring.setAttribute('cy', '12'); ring.setAttribute('r', '10');
+  glyph.appendChild(ring);
+  for (const d of ['M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3', 'M12 17h.01']) {
+    const path = svgElement(doc, 'path');
+    path.setAttribute('d', d);
+    glyph.appendChild(path);
+  }
+  trigger.appendChild(glyph);
   const tooltip = element(doc, 'span', 'quant-backtest-simulation-help-tooltip');
   tooltip.id = `quant-backtest-simulation-help-${helpSequence}`;
   tooltip.setAttribute('role', 'tooltip');
@@ -180,12 +184,9 @@ function formatValue(value: number, maximumFractionDigits = 2): string {
 }
 
 function formatMoney(value: number): string {
-  const normalized = finite(value);
-  const magnitude = Math.abs(normalized);
-  if (magnitude >= 1_000_000_000) return `${(normalized / 1_000_000_000).toFixed(1)}b`;
-  if (magnitude >= 1_000_000) return `${(normalized / 1_000_000).toFixed(1)}m`;
-  if (magnitude >= 1_000) return normalized.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  return normalized.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  // Simulation and Performance use the same reference value formatter:
+  // retain cents, sub-unit precision and uppercase million suffixes.
+  return formatBacktestPerformanceValue(finite(value));
 }
 
 function formatRatio(value: number): string {
@@ -378,11 +379,12 @@ function settingsFields(
   onChange: (change: BacktestSimulationChange) => void,
 ): HTMLElement {
   const fields = element(doc, 'div', 'quant-backtest-simulation-settings-fields');
-  const runsField = element(doc, 'label', 'quant-backtest-simulation-settings-field');
+  const runsField = element(doc, 'div', 'quant-backtest-simulation-settings-field');
   runsField.appendChild(fieldLabel(doc, 'Simulations', HELP.runs));
   runsField.appendChild(settingsHint(doc, 'Number of alternative histories to simulate.'));
   const runs = element(doc, 'select');
   runs.id = 'quant-backtest-simulation-runs';
+  runs.setAttribute('aria-label', 'Simulations');
   runs.dataset.simulationFocus = 'settings:runs';
   RUN_OPTIONS.forEach((value) => {
     const option = element(doc, 'option');
@@ -399,7 +401,7 @@ function settingsFields(
     runs.appendChild(option);
   }
   runs.addEventListener('change', () => onChange({ runs: Number(runs.value) }));
-  runsField.appendChild(runs);
+  runsField.appendChild(simulationRunsControl(doc, runs));
 
   const variationField = element(doc, 'label', 'quant-backtest-simulation-settings-field');
   variationField.appendChild(fieldLabel(doc, 'Random P&L variation', HELP.variation));
@@ -439,6 +441,90 @@ function settingsFields(
   preserveField.append(preserve, preserveText);
   fields.append(runsField, variationField, preserveField);
   return fields;
+}
+
+/** Desktop presentation of the native value model. Keep the popup inside the
+ * modal, so report replacement and destroy cannot leave a portal or listener. */
+function simulationRunsControl(doc: Document, model: HTMLSelectElement): HTMLElement {
+  if (!doc.defaultView?.matchMedia('(min-width: 1024px)').matches) return model;
+  const wrapper = element(doc, 'div', 'quant-backtest-simulation-runs');
+  model.classList.add('quant-backtest-simulation-runs-native');
+  model.tabIndex = -1;
+  model.setAttribute('aria-hidden', 'true');
+  delete model.dataset.simulationFocus;
+  const trigger = button(doc, model.value, 'quant-backtest-simulation-runs-trigger');
+  trigger.dataset.simulationFocus = 'settings:runs';
+  trigger.setAttribute('role', 'combobox');
+  trigger.setAttribute('aria-label', 'Simulations');
+  trigger.setAttribute('aria-haspopup', 'listbox');
+  trigger.setAttribute('aria-expanded', 'false');
+  const caption = element(doc, 'span');
+  caption.textContent = model.value;
+  trigger.replaceChildren(caption, backtestIcon(doc, 'chevron-down'));
+  const menu = element(doc, 'div', 'quant-backtest-simulation-runs-menu');
+  menu.id = 'quant-backtest-simulation-runs-options';
+  menu.setAttribute('role', 'listbox');
+  menu.setAttribute('aria-label', 'Simulations');
+  menu.hidden = true;
+  const close = (restore = true): void => {
+    menu.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.removeAttribute('aria-controls');
+    if (restore && trigger.isConnected) trigger.focus({ preventScroll: true });
+  };
+  const options = [...model.options].map((option) => {
+    const choice = button(doc, `${Number(option.value).toLocaleString('en-US')} runs`, 'quant-backtest-simulation-runs-option');
+    choice.tabIndex = -1;
+    choice.setAttribute('role', 'option');
+    choice.setAttribute('aria-selected', String(option.selected));
+    if (option.selected) {
+      const check = svgElement(doc, 'svg');
+      check.setAttribute('viewBox', '0 0 24 24');
+      check.setAttribute('aria-hidden', 'true');
+      check.classList.add('quant-backtest-icon');
+      const path = svgElement(doc, 'path');
+      path.setAttribute('d', 'M20 6 9 17l-5-5');
+      check.appendChild(path); choice.appendChild(check);
+    }
+    choice.addEventListener('click', () => {
+      model.value = option.value;
+      close();
+      model.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    menu.appendChild(choice);
+    return choice;
+  });
+  const open = (): void => {
+    menu.hidden = false;
+    menu.style.top = `${-Math.max(0, model.selectedIndex) * 32}px`;
+    trigger.setAttribute('aria-expanded', 'true');
+    trigger.setAttribute('aria-controls', menu.id);
+    options[Math.max(0, model.selectedIndex)]?.focus({ preventScroll: true });
+  };
+  model.addEventListener('change', () => { caption.textContent = model.value; });
+  trigger.addEventListener('click', () => menu.hidden ? open() : close());
+  trigger.addEventListener('keydown', (event) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    open();
+    if (event.key === 'Home') options[0]?.focus();
+    if (event.key === 'End') options.at(-1)?.focus();
+  });
+  menu.addEventListener('keydown', (event) => {
+    if (event.key === 'Tab') { close(); return; }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); return; }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault(); event.stopPropagation();
+    const current = options.indexOf(doc.activeElement as HTMLButtonElement);
+    const index = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1
+      : (current + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+    options[index]?.focus();
+  });
+  wrapper.addEventListener('focusout', (event) => {
+    if (event.relatedTarget instanceof Node && !wrapper.contains(event.relatedTarget)) close(false);
+  });
+  wrapper.append(model, trigger, menu);
+  return wrapper;
 }
 
 function mobileControlFields(
@@ -510,8 +596,11 @@ function settingsOverlay(
   title.id = 'quant-backtest-simulation-settings-title';
   title.textContent = 'Simulation settings';
   description.textContent = 'How many runs to simulate, and how much to vary each trade.';
+  description.id = 'quant-backtest-simulation-settings-description';
+  dialog.setAttribute('aria-describedby', description.id);
   heading.append(title, description);
-  const close = button(doc, '×', 'quant-backtest-simulation-settings-close');
+  const close = button(doc, '', 'quant-backtest-simulation-settings-close');
+  close.appendChild(backtestIcon(doc, 'close'));
   close.setAttribute('aria-label', 'Close simulation settings');
   close.dataset.simulationFocus = 'settings:close';
   close.addEventListener('click', onClose);
@@ -523,6 +612,13 @@ function settingsOverlay(
   );
   dialog.append(handle, header, body);
   overlay.append(backdrop, dialog);
+  overlay.addEventListener('pointerdown', (event) => {
+    const expanded = dialog.querySelector<HTMLButtonElement>(
+      '.quant-backtest-simulation-runs-trigger[aria-expanded="true"]',
+    );
+    if (expanded && event.target instanceof Node
+      && !expanded.parentElement?.contains(event.target)) expanded.click();
+  }, true);
   return overlay;
 }
 
@@ -679,7 +775,7 @@ function chartPanel(
 ): HTMLElement {
   const panel = element(doc, 'section', 'quant-backtest-simulation-chart-panel');
   const header = element(doc, 'header');
-  const title = element(doc, 'h4');
+  const title = element(doc, 'h3');
   title.textContent = titleText;
   header.appendChild(title);
   if (actions) header.appendChild(actions);
@@ -744,10 +840,11 @@ function pathChart(
       name: '5–95% band',
       kind: 'arearange',
       points: outer,
-      color: NEUTRAL_COLOR,
+      color: PATH_BOUNDARY_COLOR,
       fillColor: 'rgba(113, 113, 122, 0.15)',
-      lineWidth: 0,
-      enableMouseTracking: false,
+      lineWidth: 1,
+      dashStyle: 'ShortDash',
+      enableMouseTracking: true,
       markerEnabled: false,
       zIndex: 1,
     },
@@ -755,10 +852,10 @@ function pathChart(
       name: '25–75% band',
       kind: 'arearange',
       points: inner,
-      color: NEUTRAL_COLOR,
+      color: PATH_BOUNDARY_COLOR,
       fillColor: 'rgba(113, 113, 122, 0.30)',
-      lineWidth: 0,
-      enableMouseTracking: false,
+      lineWidth: 1,
+      enableMouseTracking: true,
       markerEnabled: false,
       zIndex: 2,
     },
@@ -766,7 +863,7 @@ function pathChart(
       name: 'Median simulation',
       kind: 'line',
       points: median,
-      color: NEUTRAL_COLOR,
+      color: PATH_BOUNDARY_COLOR,
       dashStyle: 'Dash',
       lineWidth: 1.5,
       markerEnabled: false,
@@ -803,7 +900,8 @@ function pathChart(
   [
     ['actual', 'Actual backtest'],
     ['median', 'Median simulation'],
-    ['bands', '25–75% / 5–95% bands'],
+    ['band-inner', '25–75% band'],
+    ['band-outer', '5–95% band'],
   ].forEach(([kind, label]) => {
     const item = element(doc, 'span');
     const swatch = element(doc, 'i', `quant-backtest-simulation-legend-${kind}`);
@@ -827,6 +925,7 @@ function distributionChart(
     readonly splitAt: number;
     readonly belowColor: string;
     readonly aboveColor: string;
+    readonly actualLabelColor: string;
     readonly xAxisTitle: string;
     readonly valueUnit: ReportChartValueUnit;
     readonly currency?: string;
@@ -914,7 +1013,7 @@ function distributionChart(
       labelUseHTML: true,
       labelX: -5,
       labelY: 26,
-      labelColor: NEUTRAL_COLOR,
+      labelColor: NEUTRAL_TEXT_COLOR,
       labelBackgroundColor: 'var(--quant-backtest-surface)',
       labelPadding: '1px 4px',
       labelBorderRadius: '3px',
@@ -931,7 +1030,7 @@ function distributionChart(
       labelUseHTML: true,
       labelX: 5,
       labelY: 26,
-      labelColor: NEUTRAL_COLOR,
+      labelColor: NEUTRAL_TEXT_COLOR,
       labelBackgroundColor: 'var(--quant-backtest-surface)',
       labelPadding: '1px 4px',
       labelBorderRadius: '3px',
@@ -949,7 +1048,7 @@ function distributionChart(
       labelUseHTML: true,
       labelX: 5,
       labelY: 12,
-      labelColor: options.actual >= 0 ? options.aboveColor : options.belowColor,
+      labelColor: options.actualLabelColor,
       labelBackgroundColor: 'var(--quant-backtest-surface)',
       labelPadding: '1px 4px',
       labelBorderRadius: '3px',
@@ -1003,9 +1102,12 @@ function distributionChart(
 
 function streaks(doc: Document, simulation: BacktestSimulation): HTMLElement {
   const panel = element(doc, 'section', 'quant-backtest-simulation-streaks');
-  const title = element(doc, 'h4');
+  const title = element(doc, 'h3');
   title.textContent = 'Streaks & Recovery';
   const scroll = element(doc, 'div');
+  scroll.tabIndex = 0;
+  scroll.setAttribute('role', 'region');
+  scroll.setAttribute('aria-label', 'Streaks and recovery table');
   const table = element(doc, 'table');
   const head = element(doc, 'thead');
   const headerRow = element(doc, 'tr');
@@ -1156,6 +1258,7 @@ export function renderSimulationView(options: SimulationViewOptions): HTMLElemen
       splitAt: 0,
       belowColor: LOSS_COLOR,
       aboveColor: PROFIT_COLOR,
+      actualLabelColor: simulation.actual.finalPnl >= 0 ? PROFIT_COLOR : LOSS_TEXT_COLOR,
       xAxisTitle: `Final net profit (${reportCurrency(report)})`,
       valueUnit: 'currency',
       currency: reportCurrency(report),
@@ -1176,6 +1279,7 @@ export function renderSimulationView(options: SimulationViewOptions): HTMLElemen
     splitAt: percentUnit ? simulation.metrics.p95DrawdownPercent / 100 : simulation.metrics.p95Drawdown,
     belowColor: 'rgba(242, 54, 69, 0.4)',
     aboveColor: LOSS_COLOR,
+    actualLabelColor: LOSS_TEXT_COLOR,
     xAxisTitle: percentUnit
       ? `${simulation.usesMae ? 'Open max' : 'Max'} drawdown (% of peak equity)`
       : `${simulation.usesMae ? 'Open max' : 'Max'} drawdown (${reportCurrency(report)})`,

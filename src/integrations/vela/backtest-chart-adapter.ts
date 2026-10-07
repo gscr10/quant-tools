@@ -1,123 +1,117 @@
-import { timeframeToMs } from '@luxalgo/vela';
+import { registerNativeIndicator, unregisterNativeIndicator, timeframeToMs } from '@luxalgo/vela';
+import type { IndicatorHandle, NativeIndicatorContext } from '@luxalgo/vela';
 import type { VelaWorkspace } from '@luxalgo/vela/workspace';
-import type { BacktestExecutionFocus } from '../../domain/ports/workspace-port.ts';
+import { BACKTEST_EXECUTION_HIGHLIGHT_TYPE, type BacktestExecutionFocus } from '../../domain/ports/workspace-port.ts';
 
-/**
- * The native Vela renderer exposes a public `highlights` feature: a list of
- * time bands painted behind the candles.  It is the only public, renderer
- * agnostic way to make a located fill stand out.  Keep the band deliberately
- * translucent so the real strategy trade marker remains visible above it.
- *
- * This is a chart-level highlight, not a claim that Vela selected an internal
- * trade marker.  Vela 0.7.x does not expose a marker-id selection API; callers
- * still get the exact crosshair/price line through `setExternalCrosshair`.
- */
-const ENTRY_HIGHLIGHT_COLOR = 'rgba(37, 99, 235, 0.18)';
-const EXIT_HIGHLIGHT_COLOR = 'rgba(239, 68, 68, 0.18)';
+const activeHighlights = new WeakMap<VelaWorkspace, () => void>();
 
-interface HighlightBand {
-  readonly from: number;
-  readonly to: number;
-  readonly color: string;
+/** Release the transient annotation before Workspace persistence/teardown. */
+export function clearBacktestExecutionFocus(workspace: VelaWorkspace): void {
+  activeHighlights.get(workspace)?.();
 }
 
-/** The last band installed for each cell, so a second locate replaces it. */
-const activeTradeHighlights = new WeakMap<VelaWorkspace, Map<string, HighlightBand>>();
-
-function isHighlightBand(value: unknown): value is HighlightBand {
-  if (!value || typeof value !== 'object') return false;
-  const band = value as Partial<HighlightBand>;
-  const from = band.from;
-  const to = band.to;
-  return typeof from === 'number'
-    && typeof to === 'number'
-    && Number.isFinite(from)
-    && Number.isFinite(to)
-    && to > from
-    && typeof band.color === 'string';
-}
-
-function sameHighlight(a: HighlightBand, b: HighlightBand): boolean {
-  return a.from === b.from && a.to === b.to && a.color === b.color;
-}
-
-/**
- * Add a narrow public highlight band for the located execution.  Unsupported
- * renderers simply skip this step; range/crosshair focus remains useful on
- * those backends.  Reading the existing feature before writing it preserves
- * host-provided highlight bands (for example session shading).
- */
-function highlightExecution(
-  workspace: VelaWorkspace,
-  cellId: string,
-  timeframe: string,
-  input: BacktestExecutionFocus,
-): void {
-  const chart = workspace.cell(cellId)?.chart;
-  if (!chart) return;
-  const renderer = chart.renderer;
-  if (typeof renderer.supports !== 'function'
-    || !renderer.supports('highlights')
-    || typeof renderer.get !== 'function'
-    || typeof renderer.set !== 'function') return;
-
-  const duration = timeframeToMs(timeframe);
-  const to = input.time <= Number.MAX_SAFE_INTEGER - duration
-    ? input.time + duration
-    : input.time;
-  if (!Number.isFinite(input.time) || !Number.isFinite(to) || to <= input.time) return;
-
-  const previous = activeTradeHighlights.get(workspace)?.get(cellId);
-  const current = renderer.get('highlights');
-  const bands = Array.isArray(current)
-    ? current.filter(isHighlightBand).map((band) => ({
-      from: band.from,
-      to: band.to,
-      color: band.color,
-    }))
-    : [];
-  const retained = previous === undefined
-    ? bands
-    : bands.filter((band) => !sameHighlight(band, previous));
-  const band: HighlightBand = {
-    from: input.time,
-    to,
-    color: input.side === 'entry' ? ENTRY_HIGHLIGHT_COLOR : EXIT_HIGHLIGHT_COLOR,
+function highlightExecution(workspace: VelaWorkspace, input: BacktestExecutionFocus): void {
+  const cell = workspace.cell(input.cellId);
+  if (!cell) return;
+  const chart = cell.chart;
+  let handle: IndicatorHandle | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let closed = false;
+  const unsubs: (() => void)[] = [];
+  const clear = (): void => {
+    if (closed) return;
+    closed = true;
+    if (timer !== undefined) clearTimeout(timer);
+    for (const unsubscribe of unsubs) unsubscribe();
+    if (activeHighlights.get(workspace) === cleanup) activeHighlights.delete(workspace);
+    try {
+      if (handle) {
+        // Vela records raw native removals in the shell's undo stack. A timed
+        // navigation annotation is not a user edit and must not consume Undo.
+        if (cell.history) cell.history.silently(() => handle?.remove());
+        else handle.remove();
+      }
+    } catch { /* Chart may already be gone. */ }
+    try { chart.renderer.setExternalCrosshair(null); } catch { /* Optional renderer seam. */ }
   };
-  renderer.set('highlights', [...retained, band]);
-
-  let byCell = activeTradeHighlights.get(workspace);
-  if (!byCell) {
-    byCell = new Map();
-    activeTradeHighlights.set(workspace, byCell);
+  const cleanup = (): void => clear();
+  activeHighlights.set(workspace, cleanup);
+  const direction = input.direction === 'short' ? 'Short' : input.direction === 'long' ? 'Long' : '';
+  const date = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC', month: 'short', day: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date(input.time));
+  const text = `Trade #${input.tradeNumber ?? ''} · ${direction} ${input.side}\n${date}`;
+  // Vela captures the descriptor synchronously. Register it only for this
+  // instance so the transient type never remains in the indicator catalog.
+  registerNativeIndicator({
+    type: BACKTEST_EXECUTION_HIGHLIGHT_TYPE,
+    title: 'Backtest trade highlight',
+    paneHint: 'price', overlay: true, legend: false, multiInstance: true,
+    inputsSchema: () => [], defaultInputs: () => ({}),
+    create: () => {
+      let context: NativeIndicatorContext | null = null;
+      const paint = (): void => {
+        if (!context || closed) return;
+        context.emit({ labels: [{
+          id: 'backtest-trade-highlight', paneId: 'price', xloc: 'bar_time',
+          x: input.time, y: input.price ?? 0, yloc: 'abovebar', text,
+          style: 'label_down', color: '#2962ff', textColor: '#ffffff',
+          size: 'small', textAlign: 'center', fontFamily: 'default', overlay: true,
+        }], lines: [] });
+        context.setStatus('idle');
+      };
+      return {
+        start: (value) => { context = value; paint(); }, onBars: paint,
+        onViewport: () => undefined, setInputs: () => undefined,
+        suspend: () => undefined, resume: paint,
+        stop: () => { context = null; clear(); },
+      };
+    },
+  });
+  try {
+    handle = chart.addNativeIndicator(BACKTEST_EXECUTION_HIGHLIGHT_TYPE);
+    unsubs.push(chart.on('load:start', cleanup), chart.on('market:changed', cleanup));
+    unsubs.push(chart.on('indicator:removed', ({ id }) => { if (id === input.indicatorId) cleanup(); }));
+    unsubs.push(workspace.on('cell:active', ({ id }) => { if (id !== input.cellId) cleanup(); }));
+    timer = setTimeout(cleanup, 4_000);
+  } catch {
+    clear();
+    // An unsupported annotation backend does not undo successful navigation.
+  } finally {
+    unregisterNativeIndicator(BACKTEST_EXECUTION_HIGHLIGHT_TYPE);
   }
-  byCell.set(cellId, band);
 }
 
-/**
- * Public Vela chart seam used by the Backtesting feature's locate controls.
- * Keeping this in a narrow integration module makes it testable without
- * loading the application's `.pine` manifest and prevents feature code from
- * reaching into renderer internals.
- */
+/** Public chart navigation, bound to the market that produced the report. */
 export function focusBacktestExecution(
   workspace: VelaWorkspace,
   input: BacktestExecutionFocus,
 ): boolean {
   const cell = workspace.cell(input.cellId);
-  if (!cell || !Number.isFinite(input.time)) return false;
-
+  if (!cell || !Number.isFinite(input.time) || !Number.isFinite(new Date(input.time).getTime())) return false;
+  const market = cell.chart.market;
+  // market is the REQUESTED identity and changes before async history finishes.
+  // The shell cell can still expose the old symbol during that interval.
+  if (input.symbol !== undefined && input.symbol !== (market?.symbol ?? cell.symbol)) return false;
+  if (input.timeframe !== undefined && input.timeframe !== (market?.timeframe ?? cell.timeframe)) return false;
+  if (typeof cell.chart.indicators === 'function'
+    && !cell.chart.indicators().some((handle) => handle.id === input.indicatorId)) return false;
+  const half = 60 * timeframeToMs(market?.timeframe ?? cell.timeframe);
+  if (!Number.isFinite(half) || half <= 0) return false;
   workspace.setActiveCell(input.cellId);
-  const current = cell.chart.getVisibleRange();
-  const span = current && current.to > current.from
-    ? current.to - current.from
-    : 86_400_000;
-  const half = Math.max(span * 0.35, 60_000);
+  // Navigate before mutating the previous execution annotation.  A chart
+  // range failure must be transaction-like: it cannot clear the old marker
+  // (which can trigger a Vela context/revision update) and then leave the
+  // report changed even though no new location was applied.
   cell.chart.setVisibleRange({ from: input.time - half, to: input.time + half });
+  clearBacktestExecutionFocus(workspace);
+  highlightExecution(workspace, input);
   if (cell.chart.renderer.supportsExternalCrosshair) {
-    cell.chart.renderer.setExternalCrosshair(input.time, input.price ?? null);
+    try {
+      cell.chart.renderer.setExternalCrosshair(input.time, Number.isFinite(input.price) ? input.price : null);
+    } catch { /* Viewport and label still identify the execution. */ }
   }
-  highlightExecution(workspace, input.cellId, cell.timeframe, input);
   cell.focus();
   return true;
 }
