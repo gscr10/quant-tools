@@ -1,6 +1,6 @@
 # Backtest Workspace Parity Matrix
 
-> 最新对齐批次（2026-10-07）：H-09共享Tab滚动196/196、S-11 Simulation挂载生命周期216/216、D-10实际小值轴8个图表/28个标签、ENG-10脚本错误双引擎64项、STG-03/06恢复合同及LC-07/NR-05故障隔离198项通过；根652/652、类型、构建、生产主E2E及工程门禁通过。K线空最新页缓存保护/连续性定向31项通过。证据为本地忽略目录 `audit-evidence/2026-10-07-tab-parity-closure/`、`2026-10-07-real-script-error-final/`、`2026-10-07-storage-restoration-final/`、`2026-10-07-workspace-fault-isolation-final/`。当前范围与各批次边界见[需求状态表](BACKTEST_REQUIREMENTS_STATUS.md)，本次没有重跑全量视觉/长时/读屏。
+> 最新对齐批次（2026-10-07）：H-09共享Tab滚动196/196、S-11 Simulation挂载生命周期216/216、D-10实际小值轴8个图表/28个标签、ENG-10脚本错误双引擎64项、STG-03/06恢复合同及LC-07/NR-05故障隔离198项通过；根653/653、类型、构建、生产主E2E及工程门禁通过。K线空最新页缓存保护/连续性定向31项通过。证据为本地忽略目录 `audit-evidence/2026-10-07-tab-parity-closure/`、`2026-10-07-real-script-error-final/`、`2026-10-07-storage-restoration-final/`、`2026-10-07-workspace-fault-isolation-final/`。当前范围与各批次边界见[需求状态表](BACKTEST_REQUIREMENTS_STATUS.md)，本次没有重跑全量视觉/长时/读屏。
 
 > 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。此前完整本地门禁保持原时点；本轮未改视觉基线，VoiceOver与参考交互差异仍开放。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
 
@@ -86,7 +86,7 @@
 | L-DOM | [`src/features/backtesting/trade-analysis-view.ts`](../../../src/features/backtesting/trade-analysis-view.ts)、[`trade-calendar-view.ts`](../../../src/features/backtesting/trade-calendar-view.ts)、[`simulation-view.ts`](../../../src/features/backtesting/simulation-view.ts) | 三个专用 View 的结构和语义 | 参考站未冻结字段的相等性 |
 | L-DOMAIN | [`src/domain/backtesting.ts`](../../../src/domain/backtesting.ts)、[`backtest-metrics.ts`](../../../src/domain/backtest-metrics.ts)、[`backtest-simulation.ts`](../../../src/domain/backtest-simulation.ts) | 纯 selector、人口、公式、不可用值和 deterministic simulation | 参考站未知公式或撮合精度 |
 | L-APP | [`src/app/backtest-controller.ts`](../../../src/app/backtest-controller.ts)、[`backtest-feature.ts`](../../../src/app/backtest-feature.ts) | Adapter/Controller 生命周期、报告映射、故障隔离和多 Cell 选择 | 底层 broker 的真实成交语义 |
-| A-UNIT | `npm test`当前652/652；651及更早总数为历史批次，专项目录日志另存 | 纯函数、契约、DOM源码合同和状态机的已覆盖断言 | 没有被覆盖的视觉、真实浏览器、多浏览器和大数据行为；单测不能替代专项直接证据 |
+| A-UNIT | `npm test`当前653/653；652及更早总数为历史批次，专项目录日志另存 | 纯函数、契约、DOM源码合同和状态机的已覆盖断言 | 没有被覆盖的视觉、真实浏览器、多浏览器和大数据行为；单测不能替代专项直接证据 |
 | A-OLD | `npm run test:regression:existing`（当前 `22/22`，[`tests/architecture.test.mjs`](../../../tests/architecture.test.mjs)、[`tests/storage.test.mjs`](../../../tests/storage.test.mjs)） | 原有架构、Storage 和旧快照的代码级回归 | 工具栏每个点击的完整 DOM/视觉基线 |
 | A-E2E | `npm run test:e2e` / `npm run test:e2e:prod`，[`tests/e2e_app.py`](../../../tests/e2e_app.py) | 当前 fixture 的 DOM、请求、Storage、Simulation、部分响应式和组合 smoke；`npm run test:e2e:cross-browser` 另证 BTCUSDT fixture 的 Chromium/Firefox/WebKit | 完整参考截图差分、VoiceOver、长时资源计数和完整应用跨浏览器视觉行为 |
 | R-DOCK | 本地忽略 `audit-evidence/2026-10-07-dock-components/README.md` | 原始参考组件/本地Chromium/Firefox同DTO两宽度，328主配对+65最终touchup=393项；computed样式、实际tooltip/折叠/拖拽/键盘 | 两阶段源码时点明确；保留tiny轴等值记法及可读主题差异，不等于全工作区通过 |

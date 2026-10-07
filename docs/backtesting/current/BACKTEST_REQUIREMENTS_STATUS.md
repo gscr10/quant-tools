@@ -1,8 +1,8 @@
 # 回测工作区需求状态表
 
-> 2026-10-07 继续复核：在当前工作树重新执行 `npm test`（652/652）、Vela-PineTS（310/310）、TypeScript、生产构建、bundle/依赖/仓库/dist/release 门禁及 `npm run test:e2e:prod`，均通过。真实 Provider 低周期/跨周期检查 `tests/e2e_history_real.py` 的 16 个场景和双引擎主动手势分页 `tests/e2e_history_gestures.py` 的 26 个场景均通过；未发现新的业务回归。此记录只更新验证时点，不改变手机、Safari、线上部署、Replay、桌面 VoiceOver 等既有范围决定。
+> 2026-10-07 继续复核：在当前工作树重新执行 `npm test`（653/653）、Vela-PineTS（310/310）、TypeScript、生产构建、bundle/依赖/仓库/dist/release 门禁及 `npm run test:e2e:prod`，均通过。真实 Provider 低周期/跨周期检查 `tests/e2e_history_real.py` 的 16 个场景和双引擎主动手势分页 `tests/e2e_history_gestures.py` 的 26 个场景均通过；未发现新的业务回归。此记录只更新验证时点，不改变手机、Safari、线上部署、Replay、桌面 VoiceOver 等既有范围决定。
 
-> 最新对齐批次（2026-10-07）：H-09改为共享Tab滚动/实际高度夹紧，受控56项、真实dev70项及prod70项通过；S-11离开Simulation后恢复默认并按策略身份取消旧任务，浏览器216/216通过；D-10极小轴科学记数已对齐，8个实际surface/28个SVG标签通过。随后真实脚本错误重试/首次错误处理已修，Adapter32/32、相关Controller/History121/121及双引擎真实4/4通过；旧Workspace恢复两浏览器各三阶段通过；故障隔离8/8场景、198/198检查通过。K线空最新页缓存保护/连续性定向31项通过。Adapter/持久化修改后的根测试为652/652，类型、构建、生产主E2E和工程门禁已通过。证据在忽略目录 `audit-evidence/2026-10-07-tab-parity-closure/`、`2026-10-07-real-script-error-final/`、`2026-10-07-storage-restoration-final/`、`audit-evidence/2026-10-07-workspace-fault-isolation-final/`；旧per-Tab/保留参数/极小轴差异不再列为未完成，下面更早批次保留时点。本地提交已建立，远端 BUILD-03 以本次提交的 Actions 为准。
+> 最新对齐批次（2026-10-07）：H-09改为共享Tab滚动/实际高度夹紧，受控56项、真实dev70项及prod70项通过；S-11离开Simulation后恢复默认并按策略身份取消旧任务，浏览器216/216通过；D-10极小轴科学记数已对齐，8个实际surface/28个SVG标签通过。随后真实脚本错误重试/首次错误处理已修，Adapter32/32、相关Controller/History121/121及双引擎真实4/4通过；旧Workspace恢复两浏览器各三阶段通过；故障隔离8/8场景、198/198检查通过。K线空最新页缓存保护/连续性定向31项通过。Adapter/持久化修改后的根测试为653/653，类型、构建、生产主E2E和工程门禁已通过。证据在忽略目录 `audit-evidence/2026-10-07-tab-parity-closure/`、`2026-10-07-real-script-error-final/`、`audit-evidence/2026-10-07-storage-restoration-final/`、`audit-evidence/2026-10-07-workspace-fault-isolation-final/`；旧per-Tab/保留参数/极小轴差异不再列为未完成，下面更早批次保留时点。本地提交已建立，远端 BUILD-03 以本次提交的 Actions 为准。
 
 > 2026-10-07 后续两项修复：pointer hover提示时Escape曾误关Viewer；Analysis点选Escape曾blur到BODY。现先隐藏提示、保留Tab/所选点焦点，Home继续导航；无提示时正常退出。两浏览器Simulation164/164、Performance/Analysis独立66/66及Analysis永久212/212通过，原失败均保留；最后源码根639/639、类型、新构建/生产主E2E及包体/独立性检查通过。证据在本地忽略目录 `audit-evidence/2026-10-07-pointer-tooltip-escape/`、`2026-10-07-shared-tooltip-escape/`；不是全量视觉或VoiceOver复验。并纠正旧golden/HMR/图例待办、参考状态误述和补丁/rollback范围冲突。
 
@@ -20,7 +20,7 @@
 
 当前进展：非 OCA 跨订单顺序、形成中 K 线风险回滚、归档输入离线重放三项已有新构建证据；Margin call 审计缺失和实时 closeTime 遗漏已修。Calendar 跨格金额重叠已修为七列内可读缩写，并提供触摸/键盘可打开的完整日值；同输入参考组件差分和实际交互矩阵分别留证，不将 DOM 激活采集冒充真实 pointer 验收。全部工作区组件/状态尚未统一关闭。完整 Workspace 两小时实测仍限定其冻结生产构建、Chromium 和真实 Hyperliquid 范围，不扩大为全部设备、最新未提交源码或线上部署。
 
-复核对象：`task/p1-priority`，当前提交 `56dd147`。需求口径、代码实现和验收结果分别记录；末尾列明已取得证据及其时点，不用既往测试数字证明最新工作树整体通过。
+复核对象：`task/p1-priority`，当前提交 `4d9cd53`。需求口径、代码实现和验收结果分别记录；末尾列明已取得证据及其时点，不用既往测试数字证明最新工作树整体通过。
 
 较早 Log 卡片边框与视觉基线批次已核对坐标轴抗锯齿、Return-to-chart 图标和卡片填充高度，并通过当时的视觉/a11y、根测试、类型、构建及开发/生产 E2E。其后又有控件、Calendar、Performance 和性能修改；旧截图通过不覆盖最新源码，本轮最终统一门禁须单独记录，不自动刷新基线。
 
@@ -260,9 +260,9 @@ Settings 的 UI-06/ST-02～04 通过指本地草稿事务合同：修改和 Rese
 | BASE-08 | P0 | Fresh checkout 独立构建和本地预览 | 已完成（本地范围） | install、Fork 构建、TypeScript、Vite build、preview、dist 独立性和生产 E2E 已通过；真实线上部署不在本阶段范围。 |
 | BASE-09 | P0 | 远程仓库瘦身 | 已完成 | 远程只保留业务源码、必要测试和当前文档；审计证据及审计截图、临时日志、dist、node_modules 不进入提交。必要视觉回归基线仍随测试保留，具体排除以 `.gitignore` 和 repository hygiene 为准。 |
 | BASE-10 | P1 | Provider 来源职责清晰 | 已完成 | Binance Spot 是回测基准；Hyperliquid BTC 用于永续/实时恢复；Binance Futures 保留为可选路由，不作为 Spot 阻塞。 |
-| BUILD-01 | P0 | 单元、冒烟、回归和既有功能保护 | 本批列明门禁通过（持续非回归要求） | 最新根652/652、Adapter32/32、相关Controller/History121/121、类型、构建、生产主E2E、依赖/仓库/包体/dist通过；共享滚动196项、Simulation216项、实际轴28标签、脚本错误64项、故障隔离198项及K线连续性31项另有直接证据。此前dev主E2E、桌面32场景/1,792项、Dock632、Summary/Dock键盘176、Settings、Analysis及Log/Calendar专项保持各自时点，未称本轮全部重跑；desktop/laptop已审视觉基线及预算未改，远端CI单列BUILD-03。 |
+| BUILD-01 | P0 | 单元、冒烟、回归和既有功能保护 | 本批列明门禁通过（持续非回归要求） | 最新根653/653、Adapter32/32、相关Controller/History121/121、类型、构建、生产主E2E、依赖/仓库/包体/dist通过；共享滚动196项、Simulation216项、实际轴28标签、脚本错误64项、故障隔离198项及K线连续性31项另有直接证据。此前dev主E2E、桌面32场景/1,792项、Dock632、Summary/Dock键盘176、Settings、Analysis及Log/Calendar专项保持各自时点，未称本轮全部重跑；desktop/laptop已审视觉基线及预算未改，远端CI单列BUILD-03。 |
 | BUILD-02 | P2 | Bundle 体积预算门禁 | 已完成（当前预算） | main/Worker/Highcharts raw/gzip 预算门禁通过；Vite 大 chunk warning 是可选优化项，不阻塞当前本地发布。历史 Parity Matrix 的“新增 bundle ≤100KB gzip”是旧增量阈值，未纳入当前验收预算。 |
-| BUILD-03 | P1 | 最终提交的远端 CI 回归 | 待验收（尚未发布最终提交） | workflow 与本地静态/业务验证已有；最终合并/push 后核对对应提交的 Actions，旧 run 不代替新提交。本次文档复核不自动 commit/push/merge。 |
+| BUILD-03 | P1 | 最终提交的远端 CI 回归 | 进行中（`4d9cd53` 已推送） | workflow、actionlint 和本地静态/业务验证通过；GitHub Actions 已由 `task/p1-priority` 推送触发，待该 run 完成后按同一 SHA 记录结果，旧 run 不代替本次提交。 |
 | STARTUP-01 | P2 | 新页面启动与行情初始化性能 | 已完成（本期有限性能合同） | 默认2,000、渐进历史、Worker/editor懒加载、dev:fast、存储降级/去重已落地；真实冷3+prime1+warm3完整阶段/缓存已验。80次渐进ABBA满足首绘≥20%、报告/暖路径/内存≤10%退化及结果一致预算；另80页资源对照空图-44.05%、SMA-17.50%达到JS gzip≥15%，完整报告/图表及编辑器功能均实际验证。长时资源的本地冻结构建合同已由REL-06单独通过，不宣称全地区/设备或统计SLA。 |
 | PERF-01 | P2 | 大账本、图表与 Simulation 运行期性能 | 已完成（固定 Chromium 生产基准与列明的跨浏览器功能合同） | 独立生产图谱、源码全程稳定，Chromium/Firefox × DPR1/2 的 10k/100k 共 8 场景通过结构/资源检查；固定 Chromium DPR1 冷 selector p95 52.2/399.9ms、分页 41.4/42.2ms，满足原 100/500ms 预算。range 极值/真实多 series tooltip、异常构造清理、10k Worker 371–917ms、progress≥100 后取消/替换/销毁 0–1ms 已验；Chromium 拖拽60.2–60.3FPS、十次开关 retained heap +0.30–0.34MiB、Chart/Observer归零。Firefox 10k分页124ms、100k聚合656/589ms超过 Chromium 对照值，记录为观察，未声明同预算通过；其精确 heap/long-task API 不可用。100k report factory 最慢约1.14s另列，不冒称端到端低于500ms。最新 UI 修改不具有该批相同 SHA；完整 UI/真机归 UI-08/10，不强加未约定的全设备 SLA。 |
 
@@ -323,7 +323,7 @@ Settings 的 UI-06/ST-02～04 通过指本地草稿事务合同：修改和 Rese
 | 历史精度可见状态与成交预期 | 本轮双真实引擎 8/8，页面/外部错误 0，清理后 Canvas/dialog=0 | `tests/e2e_precision_history.py`：forming、完整 closed、历史 cap、inclusive-future 各两引擎。独立 OHLC 预期验证 Entry/Exit/P&L；5,000 子 K 对 2,000 父 K 显示 833/2,000（41.7%）及明确 fallback。受控数据、真实浏览器 Worker；不是在线交易所或最终生产复杂组合。证据：`audit-evidence/2026-10-07-precision-history/`。 |
 | 实际交易所月线、连续性与渲染 | 16 个合同场景通过：15 个完整、1 个真实缺口明确拒绝；4 个实际图表渲染通过 | 修正后的 `tests/e2e_history_real.py` 无行情拦截，在 workspace 存活期间核对 rawBars、可见根数、OHLC/间距、Canvas 绘制并截图。Binance 1m/5m/2h 各 2,000，月线 111；35 次公共行情 HTTP 200，页面错误/请求失败均为 0，销毁后 Canvas=0。Hyperliquid 2021-07-02 缺口直接核实为源缺失。 |
 | 最新受影响单元回归 | 60/60（continuity/cache/progressive/provider-history）；视口/构建协调器 28/28 | 对应各自命令与输入，不与早期同为 60/60 的另一组专项混算；不代替浏览器和在线验收。 |
-| 根/桥接/引擎批次 | 最新根652/652；前一完整本地门禁桥接310/310、matching68/68、有限golden1/1；离线引擎1773+1保留原批次 | 本轮 `npm test` 652/652 通过；最后三项对齐、脚本错误、持久化、故障隔离和K线连续性另有直接证据；不把旧646或原引擎总数称为最新全量复跑。 |
+| 根/桥接/引擎批次 | 最新根653/653；前一完整本地门禁桥接310/310、matching68/68、有限golden1/1；离线引擎1773+1保留原批次 | 本轮 `npm test` 653/653 通过；最后三项对齐、脚本错误、持久化、故障隔离和K线连续性另有直接证据；不把旧646或原引擎总数称为最新全量复跑。 |
 | 本次独立数据/撮合专项复核 | 数据定向54/54；matching68/68；补充风险/重算/费用/跨订单123/123 | 未发现新的确定性业务缺陷，未为通过检查修改业务源码。仅核对应用当前注册的 guarded Binance/Hyperliquid；外部自定义未接 guard 的 Provider 不属于 DATA-11 已验路径。撮合范围仍是 ENGINE-03 有限合同，不扩大为完整 TV/盘口/tick 对账；这些选择集可能重叠，不合计成新的全量测试数。 |
 | TypeScript | 通过 | 根应用与 Vela-PineTS 类型检查。 |
 | 最新生产构建及开发/生产主E2E | 最后Tab/Simulation/极小轴对齐后重建/生产主E2E通过，非法外部/LuxAlgo请求0；共享滚动真实dev/prod各70项 | 最新主日志为 `audit-evidence/2026-10-07-tab-parity-closure/production-e2e.log`；此前开发主E2E与生产32状态保留原时点，不替代VoiceOver或数据/撮合/长时证据。 |
