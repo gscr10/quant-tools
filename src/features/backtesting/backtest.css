@@ -4338,11 +4338,15 @@
 
 @container quant-calendar (max-width: 320px) {
   .quant-backtest-calendar-grid {
-    gap: 1px;
+    /* Keep enough inline room for the 14px compact amount (for example,
+     * -924) in an embedded desktop calendar. The parent grid already owns
+     * the inter-cell spacing at this width, so reclaiming the final pixel
+     * prevents the numeric glyphs from overflowing their cell. */
+    gap: 0;
   }
 
   .quant-backtest-calendar-day {
-    padding-inline: 1px;
+    padding-inline: 0;
   }
 }
 
