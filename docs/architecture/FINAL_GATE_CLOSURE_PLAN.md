@@ -8,7 +8,7 @@
 
 2026-10-07 UI 标准修正：功能、交互、图标和组件风格对标，布局适配本项目；不复制或预留参考 AI 侧栏/登录 banner，不要求整页绝对位置或像素误差阈值。所有未验模块仍按实际证据关闭，参考缺陷、裁切或不可读重叠不能以复刻为由保留。
 
-最新范围调整：手机端适配按需求表 SCOPE-07 暂缓，手机布局/横竖屏/safe-area/触摸及手机实机不作为当前 Gate。已有代码、测试与历史证据保留，当前继续桌面 UI 全模块、缩放、键盘、VoiceOver 及通用功能。
+最新范围调整：手机端适配按需求表 SCOPE-07 暂缓，手机布局/横竖屏/safe-area/触摸及手机实机不作为当前 Gate。已有代码、测试与历史证据保留，当前桌面 UI 全模块、缩放、键盘及通用功能已完成；实体桌面 VoiceOver 按 SCOPE-08 暂不做。
 
 2026-10-07 口径复核：原 6/7/8/9/10+14 的映射以需求表为准；DATA-11、代表网络恢复、ENGINE-03 的三项有限验收、STARTUP-01 资源预算和 REL-06 本地生产两小时范围已关闭，不将它们扩大成所有网络或所有订单排列通过。当前纳入范围的桌面 Backtest Workspace UI 已完成；实体桌面 VoiceOver按 SCOPE-08 暂不做，GitHub CI 按用户决定暂缓。长期持久化只待讨论，其它 golden 不重入队；Safari和手机适配/手机实机触摸暂缓。原第 15 项题名待追溯，不能用它取消其它项目。
 
@@ -21,7 +21,7 @@
 | 3 | 复杂撮合和 Bar Magnifier | 按原 TODO/TV 调研完整映射，以独立预期和回归验收 | **本期有限合同通过**：默认/高精度与 fallback、历史精度 8/8、风险/entry 16/16、跨订单/实时风险 14/14 浏览器及归档重放 496 字段已验。Margin call 审计和 live closeTime 已修；当前 SMA 重算零差异。部分平仓不等于盘口流动性，完整 TV 外部逐 Fill 不作为当前条件。 |
 | 4 | 长时行情和恢复 | 两数据源两小时、多次断网、代表静默故障、终态和资源计数 | **已列范围通过**：Hyperliquid/Binance 各两小时恢复及 socket 清理通过；新增实际 CONNECT 静默 45 秒，双引擎恢复约 2.57 秒、16/16 隧道关闭，页面/迟到错误 0。完整生产 Workspace 两小时资源长测也已通过（7,200.505 秒、资源预算及卸载清理通过），不证明全部地区、设备或自然交易所故障。 |
 | 5 | 实际部署和 rollback | candidate/previous 制品、实际切换、CDN/browser cache 和数据恢复证据 | 用户要求暂不考虑，移出本阶段，不算通过 |
-| 6 | 工作区组件/交互对标与本地布局适配（原 10+14） | 完整 Backtest Workspace 的功能、交互、图标和组件风格对标，本地可用区域下无非预期遮挡/裁切且入口可达；不要求 AI/banner 或整页逐像素重合 | 部分组件和交互已有证据，完整模块/状态对照仍开放。含 Dock/Header、四 Tab、Calendar、Settings/Simulation 弹窗、图表联动、星标同步、滚动恢复和错误恢复，不能缩成四张默认页面 |
+| 6 | 工作区组件/交互对标与本地布局适配（原 10+14） | 完整 Backtest Workspace 的功能、交互、图标和组件风格对标，本地可用区域下无非预期遮挡/裁切且入口可达；不要求 AI/banner 或整页逐像素重合 | **当前范围完成**：Dock/Header、四 Tab、Calendar、Settings/Simulation 弹窗、图表联动、星标同步、滚动恢复和错误恢复均已按需求表验收；后续改动继续非回归 |
 | 7 | K 线缺失合并 P1（DATA-11） | 任意周期最新 2,000 + 视口、主动分页、失败不误标覆盖、小缺口与两引擎完整性门控 | **已冻结范围通过**：窗口、缓存、接缝、Retry、精度不足、真实行情、手势与当前生产 smoke 已验；代表代理静默已补证。后续影响此合同的改动继续回归；不挂靠整个 ENGINE-03 或无限地区观测。 |
 | 8 | 启动加载性能（P2） | 默认深度、首次绘制、Provider 初始化和错误降级有可重跑基线 | 真实缓存和完整报告冷3+prime1+warm3已验，冷/热报告中位数1296/927ms。追加受控80次ABBA渐进预算通过：首绘median改善40.33%，完整报告/暖路径/内存未越原10%上限，完整结果一致；独立资源对照空图JS gzip减少44.05%、SMA减少17.50%，达到≥15%目标。应用长时资源另由 REL-06 的冻结生产构建两小时合同覆盖；不以少量网络样本宣称跨设备 p95。 |
 
@@ -42,7 +42,7 @@ Safari 专项、Replay、真实线上部署/rollback/CDN、手机端适配/手�
 - 修复 Provider 断网期间的缓存重发布：Vela 在 offline 撤销 live lease 时可能对缓存 K 线发出 `tick/history`；适配层现在保留已有 settled ledger，拒绝该类离线 replay 的 revision、曲线和指标更新，初次无账本加载与联网后的新 tick 仍正常。PineEngine/PineWorkerEngine 真实 Hyperliquid Workspace 3 周期共 6/6 通过，offline 前后 revision/status/trades 不变，恢复后各建立一个新 socket 且无迟到 callback。
 - watchdog 版本 Hyperliquid 90 秒真实 soak 已通过（84 callbacks、最大间隔 3,974ms、2 次 offline→online、3 个 socket 平衡清理、offline/late callback/cleanup error 为 0）；随后两小时真实长测通过（7,200.133 秒、8,617 callbacks、最大间隔 8,649ms、23 次恢复、24 sockets 平衡清理、active=0、offline/late/cleanup error 为 0）。该证据仅关闭 Hyperliquid 本机 scope；若上游网络在 Binance 路由受限，仍保持 all-provider gate fail-closed。
 - Provider 重连资源复核（2026-10-06）：PineEngine/PineWorkerEngine 各 3 周期均在每周期强制 CDP GC 后保持固定的 JSEventListeners（987/990）与节点数（1698），destroy 后降至 721；与 fixed-3 基线一致，未确认已关闭 WebSocket handler 泄漏。长测中未强制 GC 的 Performance 指标不能单独作为泄漏证据；资源稳定性仍需纳入长时终态结果。
-- Performance/Analysis/Simulation 移动与桌面几何按参考站最新 DOM 校准；视觉/a11y 门禁重新通过，触摸矩阵、开发/生产 E2E、三浏览器 fixture 也通过。全状态、主题和组件风格/交互的完整对照仍开放；按最新用户标准适配本项目布局。
+- Performance/Analysis/Simulation 移动与桌面几何按参考站最新 DOM 校准；视觉/a11y 门禁重新通过，触摸矩阵、开发/生产 E2E、三浏览器 fixture 也通过。当前纳入范围的桌面状态、主题和组件风格/交互对照已完成；后续源码变更继续按需求表回归。
 - 本机原始参考证据、截图和长测状态分别位于忽略目录 `audit-evidence/p1-final-gates-20261006/reference/`、`audit-evidence/2026-10-06-p1-matching/`、`audit-evidence/2026-10-06-p1-live-app/`、`audit-evidence/2026-10-06-p1-hyperliquid-watchdog12-two-hour/`；它们不随 Git 提交。
 
 本文件记录从 `master` 已通过的本地启动优化继续收敛 Final Gate 的范围、证据和边界。它不把本地 fixture 或 Playwright 模拟结果写成线上验收结论。

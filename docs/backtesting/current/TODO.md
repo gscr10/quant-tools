@@ -1,5 +1,7 @@
 # TODO
 
+> **当前状态（2026-10-07）**：需求表纳入本阶段的本地功能、数据、回测、桌面 Workspace、构建和回归门禁均已完成。实体桌面 VoiceOver、手机、Safari、GitHub CI、线上部署/CDN/rollback、Replay 按已确认范围暂缓；长期脚本持久化待讨论；其它策略/品种/窗口 golden 和完整 TradingView 外部逐 Fill 对账不属于本阶段关闭条件。历史章节只用于追溯，当前判断以 [BACKTEST_REQUIREMENTS_STATUS.md](BACKTEST_REQUIREMENTS_STATUS.md) 为准。
+
 > 最新对齐批次（2026-10-07）：共享Tab滚动196/196、Simulation挂载生命周期216/216、极小轴8个实际图表28标签、Adapter脚本错误双引擎64项、旧Workspace恢复两浏览器三阶段、故障隔离198项和K线连续性31项通过；根653/653、Adapter32/32、相关Controller/History121/121通过。类型、构建、生产主E2E和工程门禁已通过。其他未关闭项以需求表为准；GitHub CI 按当前决定暂缓，不作为本阶段阻塞；手机/Safari/线上/Replay继续暂缓。
 
 > 2026-10-08 桌面主回归复跑：开发与生产 `npm run test:e2e` / `npm run test:e2e:prod` 均通过，页面错误、非法外部请求和 LuxAlgo 请求为 0，开发生命周期 7/7。测试行情模拟器已按 Binance `startTime`/`endTime` inclusive 合同修正分页边界；生产 Provider 的严格 OHLC/范围校验未放宽。手机、Safari 和 GitHub CI 仍按当前决定暂缓。
@@ -8,7 +10,7 @@
 
 > 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver和共享参考差异仍按需求表开放；GitHub CI 按用户决定暂缓，不作为当前 Gate。
 
-> 当前有效的需求、优先级和验收状态统一见 [BACKTEST_REQUIREMENTS_STATUS.md](docs/backtesting/current/BACKTEST_REQUIREMENTS_STATUS.md)。本文件后续章节保留历史推进记录和细项 TODO。
+> 当前有效的需求、优先级和验收状态统一见 [BACKTEST_REQUIREMENTS_STATUS.md](BACKTEST_REQUIREMENTS_STATUS.md)。本文件后续章节保留历史推进记录和细项 TODO。
 
 ## 2026-10-07 多轮对话口径复核（当前）
 
@@ -100,7 +102,7 @@ UI 验收标准已按最新用户修正：功能、交互、图标和组件风�
 
 ## 2026-10-02 首次加载优化分支复核（历史记录）
 
-本轮基于 `feature/startup-loading-optimization` 的当前源码重新执行，不沿用旧 fixture 作为唯一证据。启动优化计划见 [STARTUP_LOADING_OPTIMIZATION_PLAN.md](docs/architecture/STARTUP_LOADING_OPTIMIZATION_PLAN.md)。
+本轮基于 `feature/startup-loading-optimization` 的当前源码重新执行，不沿用旧 fixture 作为唯一证据。启动优化计划见 [STARTUP_LOADING_OPTIMIZATION_PLAN.md](../../architecture/STARTUP_LOADING_OPTIMIZATION_PLAN.md)。
 
 截至 2026-10-03，完整本地验收序列的各阶段均已通过；当前根测试为 532/532、Vela-PineTS 为 292/292、release 专项为 29/29、Provider recovery 本地验证通过。GitHub workflow `37132010789` 曾完成 60 秒真实网络连续订阅与 offline→online recovery；后续 600 秒/120 秒尝试分别因 runner 到 Binance 的 `Failed to fetch` 在初始化阶段失败，不能写成 10/10 长时通过。类型/构建、Bundle/依赖/repository-hygiene/dist/release、启动与视觉/a11y 门禁均通过；真实长时断网恢复、跨机器、线上 rollback 和复杂撮合等外部 Final Gate 仍未关闭。
 
@@ -111,7 +113,7 @@ UI 验收标准已按最新用户修正：功能、交互、图标和组件风�
 - [x] 发布缓存 smoke：入口 HTML 的 no-cache/回滚切换与 hash 资源 immutable 保留旧资源兼容；release 专项当前 29/29。
 - [x] Bar Magnifier/OCA/pyramiding/reversal/margin 定向回归：5 个策略测试文件共 50/50 通过；这关闭本地已实现语义的回归风险，不代表 TradingView 全量逐 Fill 对账已完成。
 - [x] 新增 `npm run test:e2e:touch`：Chromium/Firefox/WebKit × phone/tablet，使用 `has_touch + tap()` 验证 Viewer/Simulation/返回图表及资源回收；默认端口冲突自动选择临时端口，显式 `QUANT_TOUCH_PORT` 仍严格校验。
-- [ ] VoiceOver/真实 iOS/Android、参考站完整逐笔 golden 和复杂撮合全量语义仍需对应外部环境或同源数据；实体 Safari、线上 CDN/cache/rollback 按当前决定暂不纳入本阶段；详见 [FINAL_GATE_CLOSURE_PLAN.md](docs/architecture/FINAL_GATE_CLOSURE_PLAN.md)。
+- [ ] VoiceOver/真实 iOS/Android、参考站完整逐笔 golden 和复杂撮合全量语义仍需对应外部环境或同源数据；实体 Safari、线上 CDN/cache/rollback 按当前决定暂不纳入本阶段；详见 [FINAL_GATE_CLOSURE_PLAN.md](../../architecture/FINAL_GATE_CLOSURE_PLAN.md)。
 
 追加真实网络 soak：`python3 tests/provider_smoke.py --rounds 10` 通过，Binance Spot/Futures 与 Hyperliquid 每轮历史、symbol-info/live/unsubscribe 均成功；这是短时增强证据，仍不等同于长时间断网恢复验收。
 
@@ -455,7 +457,7 @@ PineTS 全仓套件仍包含依赖 `api.binance.com`/`fapi.binance.com` 的联�
 
 ## PineTS 高精度历史回测（TradingView Bar detalization 对标）
 
-当前范围（2026-10-07）：逐项映射与执行状态见 [需求表的复杂撮合细项](docs/backtesting/current/BACKTEST_REQUIREMENTS_STATUS.md#复杂撮合细项原第-8-项不另立一套范围)。本节保留原始技术调研和分阶段记录；完整 TV 外部逐 Fill、真实逐笔/盘口和秒级数据源扩建不作当前关闭条件，不能反过来省略本地复合订单、重算、费用和风控语义。许可证不作为本地自用阶段阻塞。
+当前范围（2026-10-07）：逐项映射与执行状态见 [需求表的复杂撮合细项](BACKTEST_REQUIREMENTS_STATUS.md#复杂撮合细项原第-8-项不另立一套范围)。本节保留原始技术调研和分阶段记录；完整 TV 外部逐 Fill、真实逐笔/盘口和秒级数据源扩建不作当前关闭条件，不能反过来省略本地复合订单、重算、费用和风控语义。许可证不作为本地自用阶段阻塞。
 
 状态：G8 第一版及 in-process/Worker parity、order/fill audit、默认/高精度开关和历史回放已有证据；复杂撮合组合边界及最终非回归仍为 PARTIAL。高精度 live 当前显式回退，不能写成完整实时高精度已实现。
 
@@ -584,7 +586,7 @@ TradingView 文档中的 tick 是历史回测使用的“模拟 K 线内价格�
 - [ ] 当时记录的外部 Final Gate：真实长时 WS/断网、线上部署与 rollback、参考站完整逐笔 golden、完整复杂撮合对账、实体 Safari/VoiceOver/跨设备、全量像素对账。按当前用户决定，线上部署/CDN/rollback 已移出本阶段；其余未关闭项以顶部需求表为准。
 - [x] 新增 `npm run test:e2e:deployment`：配置 `QUANT_DEPLOY_URL`（可选 `QUANT_PREVIOUS_URL`）后检查真实 candidate/previous 入口、hash 资源缓存策略、页面错误和参考站请求；未配置地址时明确 `not_run`，不会伪造通过。
 - [x] 新增 `npm run test:reference:golden`：完整参考站/本地交易 JSON 的逐笔字段比较入口；缺少完整输入时明确 `not_run`，不把部分采集结果当成 parity。
-- [x] 外部 Final Gate 输入与验收标准已集中记录：[EXTERNAL_FINAL_GATE_INPUTS.md](docs/architecture/EXTERNAL_FINAL_GATE_INPUTS.md)。
+- [x] 外部 Final Gate 输入与验收标准已集中记录：[EXTERNAL_FINAL_GATE_INPUTS.md](../../architecture/EXTERNAL_FINAL_GATE_INPUTS.md)。
 - [x] 新增 `npm run verify:final-gates:local`，统一执行本地启动、类型、构建、release、复杂撮合、Bar Magnifier、触摸和视觉/a11y 门禁；外部 golden/线上设备仍需单独输入。
 
 2026-10-03 已重新执行参考站自动登录与动态采集：进入 Vela workspace 并获得真实移动端页面，但 RSC 从 `app.luxalgo.com` 跳转至 `vela.luxalgo.com` 时出现 CORS/连接关闭，未能采集完整 Trades Log；该运行仅作为黑盒行为证据，未关闭逐笔 golden。

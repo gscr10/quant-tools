@@ -27,7 +27,7 @@
 以下事项与架构拆分解耦，不阻塞本计划：
 
 - 自建脚本的服务端/云端持久化：保持“待讨论”，本次只预留 Repository 替换边界。
-- PineTS 高精度回测/Bar Magnifier：继续按 `TODO.md` 独立立项，不混入等价重构。
+- PineTS 高精度回测/Bar Magnifier：继续按 `../backtesting/current/TODO.md` 独立立项，不混入等价重构。
 - 首屏体积和懒加载：在结构改造通过后独立优化。
 - Vela、Vela-PineTS、PineTS 升级或 Fork：按独立依赖升级流程执行。
 
@@ -868,8 +868,8 @@ CI 环境不得依赖 Binance/Hyperliquid 的实时网络稳定性。浏览器�
 
 | 事项 | 当前处理 |
 | --- | --- |
-| 自建脚本长期持久化 | `TODO.md` 保持“待讨论”；本次只保证 Repository 可替换 |
-| PineTS 高精度回测 | 按 `TODO.md` 独立立项和 Fork/Worker 重建边界实施 |
+| 自建脚本长期持久化 | `../backtesting/current/TODO.md` 保持“待讨论”；本次只保证 Repository 可替换 |
+| PineTS 高精度回测 | 按 `../backtesting/current/TODO.md` 独立立项和 Fork/Worker 重建边界实施 |
 | 是否移除 `SavedScript.favorite` | 本次保留兼容镜像，未来通过 schema migration 决定 |
 | 旧 `vela-pine:layout:v1` 删除时间 | 完成 fixture 和兼容窗口确认后单独处理 |
 | Bundle 拆分目标 | Phase 7 经构建分析后设预算 |
@@ -925,4 +925,4 @@ JavaScript 的小幅增长来自显式生命周期、Service/Adapter 边界、�
 - `package-lock.json` 未变化，Vela、Vela-PineTS、PineTS 和其他依赖未升级。
 - 未复制、Fork 或修改 Vela、Vela-PineTS、PineTS 及 `node_modules` 源码。
 - Binance/Hyperliquid Provider、PineWorkerEngine、Workspace key 和全部现有应用存储 key/schema 保持不变。
-- 自建脚本云端持久化和 PineTS 高精度回测仍按 `TODO.md` 独立处理，没有混入本次改造。
+- 自建脚本云端持久化和 PineTS 高精度回测仍按 `../backtesting/current/TODO.md` 独立处理，没有混入本次改造。

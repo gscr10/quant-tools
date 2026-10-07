@@ -15,9 +15,9 @@
 
 | 目录 | 内容 | 提交建议 |
 | --- | --- | --- |
-| `docs/backtesting/` | 当前回测计划、状态入口和验收边界 | GitHub 公开保留 |
+| `docs/backtesting/` | 回测文档导航（README） | GitHub 公开保留 |
 | `docs/forks/` | PineTS/Vela-PineTS fork、版本和构建约定 | GitHub 公开保留 |
-| `docs/backtesting/current/` | 当前回测计划、状态入口和验收边界 | GitHub 公开保留 |
+| `docs/backtesting/current/` | 当前有效的回测需求、计划、状态矩阵和回归基线 | GitHub 公开保留 |
 | `audit-evidence/`、`docs/audit/`、`docs/backtesting/reports/` | 审计截图、原始响应、历史报告和清理记录 | 仅本地/私有归档，不进入 GitHub |
 
 ## GitHub 发布原则
