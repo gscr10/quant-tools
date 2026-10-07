@@ -69,7 +69,7 @@ fresh checkout 不依赖对 `node_modules` 的手工修改。上游来源、tag/
 应用架构调整只作用于项目自身的功能和集成层；本地 fork 的后续差异必须保留
 可审计的上游基线、构建记录和回归证据。
 
-高精度回测引擎改造、云端脚本持久化和进一步的构建体积优化不属于本次等价架构重构，相关事项记录在 [TODO.md](./TODO.md)。
+高精度回测引擎改造、云端脚本持久化和进一步的构建体积优化不属于本次等价架构重构，相关事项记录在 [回测 TODO](./docs/backtesting/current/TODO.md)。
 
 回测当前计划、状态矩阵和回归基线见
 [docs/backtesting/README.md](./docs/backtesting/README.md)。完整文档导航见

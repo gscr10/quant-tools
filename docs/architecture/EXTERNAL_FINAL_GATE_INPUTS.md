@@ -2,7 +2,7 @@
 
 本文件只记录无法在本机自证的验收输入与判定标准。没有对应输入时必须标记 `not_run` 或 `PARTIAL`，不得用本地 fixture 代替。
 
-2026-10-07 当前范围以 [需求状态表](../backtesting/current/BACKTEST_REQUIREMENTS_STATUS.md) 为准：固定 BTCUSDT/15m/SMA 数值窗口、Hyperliquid/Binance 本机两小时及双引擎代表 CONNECT 静默恢复已通过；其余窗口不重入当前队列。线上部署/CDN/rollback、Replay、Safari 专项及手机适配/手机实机触摸暂缓；桌面VoiceOver未验收。以下输入只用于相应未验子项，不要求重新完成已通过窗口或补手机环境。
+2026-10-07 当前范围以 [需求状态表](../backtesting/current/BACKTEST_REQUIREMENTS_STATUS.md) 为准：固定 BTCUSDT/15m/SMA 数值窗口、Hyperliquid/Binance 本机两小时及双引擎代表 CONNECT 静默恢复已通过；当前纳入本阶段的本地功能、桌面 Workspace 和构建门禁已完成。线上部署/CDN/rollback、Replay、Safari、手机适配及实体桌面 VoiceOver 按需求表暂缓；以下输入仅供未来恢复这些范围时使用。
 
 ## 1. 线上部署 / rollback / CDN
 
@@ -58,9 +58,9 @@ npm run test:reference:golden
 
 Comparator 还会在输入阶段拒绝以下不完整证据：缺少或重复的 Trade #、双方都省略的字段、非有限数值，以及无法归一化的数字。未平仓交易的 Exit 字段可以显式为 `null`，但不能省略；方向大小写和数字字符串会按规范归一化。这样可以避免把截断导出或字段缺失误报为 parity。
 
-## 4. 桌面 VoiceOver / 手机专项暂缓
+## 4. 桌面 VoiceOver / 手机专项（当前暂缓）
 
-Safari 专项按 SCOPE-03 暂缓；手机端布局、手机触摸及手机实机专项按用户最新决定 SCOPE-07 暂缓，均不标为通过。当前只继续本节的桌面 VoiceOver，不再等待用户提供手机。
+实体桌面 VoiceOver 按 SCOPE-08 暂缓；Safari 专项按 SCOPE-03 暂缓；手机端布局、手机触摸及手机实机专项按用户最新决定 SCOPE-07 暂缓。三项均不作为当前完成条件，未来恢复范围时再提供对应环境。
 
 2026-10-07 本机能力核对：通过 ApplicationServices 调用 `AXIsProcessTrusted()` 返回 `false`；System Events 只读查询未返回，已终止该次查询。当前工具进程没有可用的系统辅助功能自动化权限，不将浏览器 AX/DOM 检查称为 VoiceOver 已验。当前开发工具路径也未提供 `devicectl`、`xctrace` 或 `adb`；这只说明没有已配置的设备测试入口，不推断用户没有实体设备。未变更系统权限或读屏设置。
 
@@ -68,7 +68,7 @@ Safari 专项按 SCOPE-03 暂缓；手机端布局、手机触摸及手机实机
 
 - 可用的 macOS VoiceOver 环境；手机 iOS/Android 设备输入留待恢复 SCOPE-07 时再使用
 
-当前通过标准：桌面四个 Viewer Tab、Settings、Simulation、返回图表、焦点回收及读屏名称/状态均通过。手机触摸滚动/点击专项暂缓；Playwright WebKit 或浏览器 AX 检查不能代替真实读屏证据。
+恢复本节时的通过标准：桌面四个 Viewer Tab、Settings、Simulation、返回图表、焦点回收及读屏名称/状态均通过。当前不执行实体读屏或手机触摸验收；Playwright WebKit 或浏览器 AX 检查不能代替真实读屏证据。
 
 ## 5. 工作区组件与交互对标、本地布局适配
 
@@ -80,7 +80,7 @@ Safari 专项按 SCOPE-03 暂缓；手机端布局、手机触摸及手机实机
 
 通过标准（2026-10-07 用户修正）：Backtest Workspace 全模块的功能、交互、图标与组件风格一致，整体布局适配本项目可用空间；没有 AI 侧栏/登录 banner，也不留占位。按模块、viewport、状态和交互逐项验证，解释合理伸展/换行等差异，修复遮挡、裁切、不可读重叠和不可达入口。截图差分是诊断工具，不以整页绝对坐标或像素误差百分比作硬门槛；不能只比较 Performance，也不能自动刷新本地基线或将未验条目改为通过。
 
-2026-10-07 固定数值窗口已有完整输入并通过；Hyperliquid/Binance 本机两小时、代表静默恢复及 REL-06 完整生产 Workspace 两小时终态均已完成各自合同。PERF-01 的固定 Chromium 生产预算和列明的跨浏览器功能/资源合同也已通过，计时和设备限制见需求表。桌面 Backtest Workspace 组件/交互对照、本地布局适配和桌面VoiceOver仍开放，整体保持 `PARTIAL`；手机适配/手机实机触摸已暂缓。不能再将所有输入统称未提供，或将已验长测与性能合同重新列为待办。
+2026-10-07 固定数值窗口已有完整输入并通过；Hyperliquid/Binance 本机两小时、代表静默恢复及 REL-06 完整生产 Workspace 两小时终态均已完成各自合同。PERF-01 的固定 Chromium 生产预算和列明的跨浏览器功能/资源合同也已通过，计时和设备限制见需求表。桌面 Backtest Workspace 组件和本地布局适配已按当前标准完成；实体桌面 VoiceOver、手机适配/手机实机触摸暂缓。不能再将已验长测与性能合同重新列为待办。
 
 ## 6. 最近一次真实网络门禁记录（2026-10-03）
 

@@ -780,7 +780,7 @@ interface BacktestChartPort {
 
 ### 8.5 高精度撮合
 
-按现有 [`TODO.md`](../../../TODO.md) 的 Bar detalization 方案实施：
+按现有 [`TODO.md`](TODO.md) 的 Bar detalization 方案实施：
 
 - 默认父周期 OHLC/OLHC 四点路径。
 - 按映射加载低周期 K 线并按时间回放。
