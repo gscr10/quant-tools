@@ -20,7 +20,7 @@
 
 当前进展：非 OCA 跨订单顺序、形成中 K 线风险回滚、归档输入离线重放三项已有新构建证据；Margin call 审计缺失和实时 closeTime 遗漏已修。Calendar 跨格金额重叠已修为七列内可读缩写，并提供触摸/键盘可打开的完整日值；同输入参考组件差分和实际交互矩阵分别留证，不将 DOM 激活采集冒充真实 pointer 验收。全部工作区组件/状态尚未统一关闭。完整 Workspace 两小时实测仍限定其冻结生产构建、Chromium 和真实 Hyperliquid 范围，不扩大为全部设备、最新未提交源码或线上部署。
 
-复核对象：`task/p1-priority`，当前提交 `4d9cd53`。需求口径、代码实现和验收结果分别记录；末尾列明已取得证据及其时点，不用既往测试数字证明最新工作树整体通过。
+复核对象：`task/p1-priority` 当前最新提交（包含本轮生产 E2E 稳定性修复）。需求口径、代码实现和验收结果分别记录；末尾列明已取得证据及其时点，不用既往测试数字证明最新工作树整体通过。
 
 较早 Log 卡片边框与视觉基线批次已核对坐标轴抗锯齿、Return-to-chart 图标和卡片填充高度，并通过当时的视觉/a11y、根测试、类型、构建及开发/生产 E2E。其后又有控件、Calendar、Performance 和性能修改；旧截图通过不覆盖最新源码，本轮最终统一门禁须单独记录，不自动刷新基线。
 
@@ -262,7 +262,7 @@ Settings 的 UI-06/ST-02～04 通过指本地草稿事务合同：修改和 Rese
 | BASE-10 | P1 | Provider 来源职责清晰 | 已完成 | Binance Spot 是回测基准；Hyperliquid BTC 用于永续/实时恢复；Binance Futures 保留为可选路由，不作为 Spot 阻塞。 |
 | BUILD-01 | P0 | 单元、冒烟、回归和既有功能保护 | 本批列明门禁通过（持续非回归要求） | 最新根653/653、Adapter32/32、相关Controller/History121/121、类型、构建、生产主E2E、依赖/仓库/包体/dist通过；共享滚动196项、Simulation216项、实际轴28标签、脚本错误64项、故障隔离198项及K线连续性31项另有直接证据。此前dev主E2E、桌面32场景/1,792项、Dock632、Summary/Dock键盘176、Settings、Analysis及Log/Calendar专项保持各自时点，未称本轮全部重跑；desktop/laptop已审视觉基线及预算未改，远端CI单列BUILD-03。 |
 | BUILD-02 | P2 | Bundle 体积预算门禁 | 已完成（当前预算） | main/Worker/Highcharts raw/gzip 预算门禁通过；Vite 大 chunk warning 是可选优化项，不阻塞当前本地发布。历史 Parity Matrix 的“新增 bundle ≤100KB gzip”是旧增量阈值，未纳入当前验收预算。 |
-| BUILD-03 | P1 | 最终提交的远端 CI 回归 | 进行中（`4d9cd53` 已推送） | workflow、actionlint 和本地静态/业务验证通过；GitHub Actions 已由 `task/p1-priority` 推送触发，待该 run 完成后按同一 SHA 记录结果，旧 run 不代替本次提交。 |
+| BUILD-03 | P1 | 最终提交的远端 CI 回归 | 进行中（最新提交已推送） | workflow、actionlint 和本地静态/业务验证通过；GitHub Actions 已由 `task/p1-priority` 推送触发，待该 run 完成后按同一 SHA 记录结果，旧 run 不代替本次提交。 |
 | STARTUP-01 | P2 | 新页面启动与行情初始化性能 | 已完成（本期有限性能合同） | 默认2,000、渐进历史、Worker/editor懒加载、dev:fast、存储降级/去重已落地；真实冷3+prime1+warm3完整阶段/缓存已验。80次渐进ABBA满足首绘≥20%、报告/暖路径/内存≤10%退化及结果一致预算；另80页资源对照空图-44.05%、SMA-17.50%达到JS gzip≥15%，完整报告/图表及编辑器功能均实际验证。长时资源的本地冻结构建合同已由REL-06单独通过，不宣称全地区/设备或统计SLA。 |
 | PERF-01 | P2 | 大账本、图表与 Simulation 运行期性能 | 已完成（固定 Chromium 生产基准与列明的跨浏览器功能合同） | 独立生产图谱、源码全程稳定，Chromium/Firefox × DPR1/2 的 10k/100k 共 8 场景通过结构/资源检查；固定 Chromium DPR1 冷 selector p95 52.2/399.9ms、分页 41.4/42.2ms，满足原 100/500ms 预算。range 极值/真实多 series tooltip、异常构造清理、10k Worker 371–917ms、progress≥100 后取消/替换/销毁 0–1ms 已验；Chromium 拖拽60.2–60.3FPS、十次开关 retained heap +0.30–0.34MiB、Chart/Observer归零。Firefox 10k分页124ms、100k聚合656/589ms超过 Chromium 对照值，记录为观察，未声明同预算通过；其精确 heap/long-task API 不可用。100k report factory 最慢约1.14s另列，不冒称端到端低于500ms。最新 UI 修改不具有该批相同 SHA；完整 UI/真机归 UI-08/10，不强加未约定的全设备 SLA。 |
 
