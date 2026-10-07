@@ -238,6 +238,10 @@ test('settings UI keeps the reference Ok/reset-defaults/cancel contract and both
   assert.match(source, /Cancel/);
   assert.match(source, /Ok/);
   assert.match(source, /aria-modal', 'true'/);
+  assert.match(source, /create\(doc, 'div', 'quant-backtest-settings-backdrop'\)/);
+  assert.match(source, /backdrop\.setAttribute\('aria-hidden', 'true'\)/);
+  assert.match(source, /status\.setAttribute\('aria-live', this\.errorMessage \? 'assertive' : 'polite'\)/);
+  assert.match(source, /status\.setAttribute\('aria-atomic', 'true'\)/);
   assert.match(source, /Reset defaults is draft-only/);
   assert.match(source, /setError\('Unable to apply settings/);
   assert.match(source, /this\.options\.onApply\(this\.snapshot/);

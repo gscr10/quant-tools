@@ -214,6 +214,11 @@ test('empty-data online Retry does not become a finite offline exception on the 
   await value.setMarket({ symbol: value.market.symbol });
   await value.setMarket({ timeframe: '1' });
   assert.deepEqual(value.calls.at(-1), { timeframe: '1', bars: 2_000, visibleRange: 'ALL' });
+  // The successful identity switch consumes the retry marker. A later
+  // timeframe change must therefore keep Vela's explicit offline contract
+  // instead of treating every future switch as an online retry.
+  await value.setMarket({ timeframe: '5' });
+  assert.deepEqual(value.calls.at(-1), { timeframe: '5' });
   await value.setMarket({ data: [], bars: 37 });
   await value.setMarket({ timeframe: '15' });
   assert.deepEqual(value.calls.at(-1), { timeframe: '15' }, 'unmarked inline EMPTY stays offline');

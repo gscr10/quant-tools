@@ -4,13 +4,13 @@
 
 > 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。此前完整本地门禁保持原时点；本轮未改视觉基线，VoiceOver与参考交互差异仍开放。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
 
-> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver、共享参考差异和最终提交CI仍按需求表开放；当前提交已推送，远端 CI 待该提交结果。
+> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver和共享参考差异仍按需求表开放；GitHub CI 按用户决定暂缓，不作为当前 Gate。
 
 > 最新范围调整：手机端适配/手机实机触摸按需求表 SCOPE-07 暂缓，不再作为当前交付阻塞；已有结果保留。此调整不改变独立运行、桌面功能或通用数据完整性要求。
 
 > UI 当前按[需求表](BACKTEST_REQUIREMENTS_STATUS.md)的“组件对标、布局适配”标准验收，不复制参考 AI 侧栏/登录 banner，也不要求整页逐像素一致；此标准不改变本 Gate 的独立运行要求，不授权运行时加载参考站资源。
 
-> 当前状态及最新验证以 [BACKTEST_REQUIREMENTS_STATUS.md](BACKTEST_REQUIREMENTS_STATUS.md) 为准。DATA-11、REL-01、ENGINE-03、STARTUP-01、REL-06与PERF-01列明范围已有独立证据；PERF-01仅固定Chromium生产预算通过，Firefox超出观察值仍保留。本地strict visual已按原阈值复核通过；本Gate仍不能替代完整UI、真实设备和最终提交CI，下方旧数字只作历史记录。
+> 当前状态及最新验证以 [BACKTEST_REQUIREMENTS_STATUS.md](BACKTEST_REQUIREMENTS_STATUS.md) 为准。DATA-11、REL-01、ENGINE-03、STARTUP-01、REL-06与PERF-01列明范围已有独立证据；PERF-01仅固定Chromium生产预算通过，Firefox超出观察值仍保留。本地strict visual已按原阈值复核通过；本Gate仍不能替代完整UI和真实设备；GitHub CI 按当前决定暂缓，下方旧数字只作历史记录。
 
 > **2026-10-07最新UI构建批次**：根627/627、类型/构建、依赖/仓库/dist及显式bundle预算通过；dev/prod主E2E非法外部请求0、dev生命周期7/7；生产32状态page/window错误与blocked0。本地visual独立审图/DOM A/B后普通strict复验8图diff0，精确ring检查5类负控拒绝，原阈值未放宽、首跑失败保留于 `audit-evidence/2026-10-07-ui-layout-acceptance/`。Settings同源控件、本地SVG未引入参考运行依赖；原参考JS仅留忽略目录用于受控展示验证，不是应用依赖、自然Benchmark或计算golden。原始资料/认证状态不进入部署包；上述结果不代表行情离线、VoiceOver/真机或全UI通过。
 

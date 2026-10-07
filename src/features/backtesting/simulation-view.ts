@@ -579,8 +579,13 @@ function settingsOverlay(
   onClose: () => void,
 ): HTMLElement {
   const overlay = element(doc, 'div', 'quant-backtest-simulation-settings');
-  const backdrop = button(doc, '', 'quant-backtest-simulation-settings-backdrop');
-  backdrop.setAttribute('aria-label', 'Close simulation settings');
+  // This layer only catches pointer clicks outside the dialog. Exposing it as
+  // a button creates a second "Close simulation settings" control in screen
+  // reader navigation (and, unlike the strategy modal, it is tabbable by
+  // default). The dialog's labelled header close button is the sole semantic
+  // close action.
+  const backdrop = element(doc, 'div', 'quant-backtest-simulation-settings-backdrop');
+  backdrop.setAttribute('aria-hidden', 'true');
   backdrop.addEventListener('click', onClose);
   const dialog = element(doc, 'section', 'quant-backtest-simulation-settings-dialog');
   dialog.setAttribute('role', 'dialog');

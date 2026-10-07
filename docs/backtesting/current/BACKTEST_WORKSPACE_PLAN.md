@@ -4,7 +4,7 @@
 
 > 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。此前完整本地门禁保持原时点；本轮未改视觉基线，VoiceOver与参考交互差异仍开放。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
 
-> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver、共享参考差异和最终提交CI仍按需求表开放；当前提交已在本地建立，远端 CI 待本次提交。
+> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver和共享参考差异仍按需求表开放；GitHub CI 按用户决定暂缓，不作为当前 Gate。
 
 > 当前有效的需求、优先级和状态以 [BACKTEST_REQUIREMENTS_STATUS.md](BACKTEST_REQUIREMENTS_STATUS.md) 为准；本文下方的独立审计和历史轮次仅用于追溯。
 
@@ -44,7 +44,7 @@
 >
 > 日期：2026-09-27（历史计划版本；当前状态见顶部需求表及最新批次）
 >
-> 文档状态：实施中；G4b.2/G4b.3 和后续阶段过程保留作历史基线，当前状态只以顶部需求表为准。G8.1（`reportSchemaVersion=4`）下的本期有限引擎合同、固定 `BTCUSDT · 15m · SMA` 数值窗口、K 线合并、代表网络、STARTUP-01、PERF-01 固定生产合同与 REL-06 本地两小时已验；完整工作区字段/组件视觉/交互、最终提交 CI 和真实辅助技术/设备继续推进。长期持久化只待讨论；完整 TV 外部逐 Fill 不作为条件，Safari 专项和线上 rollback 暂缓，不能扩大为取消 VoiceOver/真实设备。
+> 文档状态：实施中；G4b.2/G4b.3 和后续阶段过程保留作历史基线，当前状态只以顶部需求表为准。G8.1（`reportSchemaVersion=4`）下的本期有限引擎合同、固定 `BTCUSDT · 15m · SMA` 数值窗口、K 线合并、代表网络、STARTUP-01、PERF-01 固定生产合同与 REL-06 本地两小时已验；桌面 VoiceOver 和真实辅助技术/设备仍按需求表维护。GitHub CI 按用户决定暂缓，不作为本地交付阻塞。长期持久化只待讨论；完整 TV 外部逐 Fill 不作为条件，Safari 专项和线上 rollback 暂缓。
 >
 > 实施目标：功能完备、前端 UI 与交互一比一对标、运行时完全独立于参考网站
 >
