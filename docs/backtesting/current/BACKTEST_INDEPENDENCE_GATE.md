@@ -1,10 +1,10 @@
 # 回测静态产物独立运行 Gate
 
-> 最新脚本错误/持久化/故障隔离/K线缓存保护修改后，需以本轮最终构建重新生成产物摘要；上一版Tab/Simulation/极小轴产物为12 files / 3,731,990 bytes、main raw/gzip 1,826,350/489,506，均在既定预算内。当前独立性检查仍保持禁止项/静态外链0，完整状态见[需求表](BACKTEST_REQUIREMENTS_STATUS.md)；独立性通过不关闭VoiceOver或明确保留的产品差异。
+> 最新脚本错误/持久化/故障隔离/K线缓存保护修改后，需以本轮最终构建重新生成产物摘要；上一版Tab/Simulation/极小轴产物为12 files / 3,731,990 bytes、main raw/gzip 1,826,350/489,506，均在既定预算内。当前独立性检查仍保持禁止项/静态外链0，完整状态见[需求表](BACKTEST_REQUIREMENTS_STATUS.md)；实体 VoiceOver 和明确保留的产品差异按范围处理，不影响本地独立运行结论。
 
-> 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。此前完整本地门禁保持原时点；本轮未改视觉基线，VoiceOver与参考交互差异仍开放。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
+> 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。实体桌面 VoiceOver 按 SCOPE-08 不纳入本阶段；其余桌面可访问性合同已通过。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
 
-> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver和共享参考差异仍按需求表开放；GitHub CI 按用户决定暂缓，不作为当前 Gate。
+> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；手机专项默认deferred/full可选，实体桌面 VoiceOver按 SCOPE-08 暂不做；GitHub CI 按用户决定暂缓，不作为当前 Gate。
 
 > 最新范围调整：手机端适配/手机实机触摸按需求表 SCOPE-07 暂缓，不再作为当前交付阻塞；已有结果保留。此调整不改变独立运行、桌面功能或通用数据完整性要求。
 

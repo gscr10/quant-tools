@@ -2,15 +2,15 @@
 
 > 最新对齐批次（2026-10-07）：H-09共享Tab滚动196/196、S-11 Simulation挂载生命周期216/216、D-10实际小值轴8个图表/28个标签、ENG-10脚本错误双引擎64项、STG-03/06恢复合同及LC-07/NR-05故障隔离198项通过；根653/653、类型、构建、生产主E2E及工程门禁通过。K线空最新页缓存保护/连续性定向31项通过。证据为本地忽略目录 `audit-evidence/2026-10-07-tab-parity-closure/`、`audit-evidence/2026-10-07-real-script-error-final/`、`audit-evidence/2026-10-07-storage-restoration-final/`、`audit-evidence/2026-10-07-workspace-fault-isolation-final/`。当前范围与各批次边界见[需求状态表](BACKTEST_REQUIREMENTS_STATUS.md)，本次没有重跑全量视觉/长时/读屏；GitHub CI 按用户决定暂缓。
 
-> 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。此前完整本地门禁保持原时点；本轮未改视觉基线，VoiceOver与参考交互差异仍开放。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
+> 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。实体桌面 VoiceOver 按 SCOPE-08 不纳入本阶段；其余桌面可访问性合同已通过。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
 
-> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver和共享参考差异仍按需求表开放；GitHub CI 按用户决定暂缓，不作为当前 Gate。
+> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；手机专项默认deferred/full可选，实体桌面 VoiceOver按 SCOPE-08 暂不做；GitHub CI 按用户决定暂缓，不作为当前 Gate。
 
 > 当前需求总表：[BACKTEST_REQUIREMENTS_STATUS.md](BACKTEST_REQUIREMENTS_STATUS.md)。本矩阵保留逐项参考对照和历史证据索引。
 
 > **现行 UI 标准（2026-10-07 用户修正）**：对标 Backtest Workspace 内的功能、交互、图标及组件风格，整体布局适配本项目。没有参考站 AI 侧栏/顶部登录 banner，也不留占位。合理的容器伸展、换行、列宽和绝对坐标差异不再按整页 1px / 0.5% / 1% 阈值判失败；遮挡、裁切、跨格不可读、入口不可达仍须修复。参考截图/DOM 是诊断证据，本地截图基线仍用于非回归；未验条目不自动转 PASS。以下现行视觉行统一按[计划 §10](BACKTEST_WORKSPACE_PLAN.md#10-ui-对标与本项目布局适配规范)执行，旧轮次的像素描述仅保留追溯。
 
-> **最新范围：手机端适配暂缓（SCOPE-07）**。本期 UI/响应式验收以桌面为准；手机横竖屏、safe-area、触摸及手机实机专项不再阻塞。S-07、RSP-04 的手机部分为 DEFERRED，其它混合行只继续桌面子项；已有手机 PASS 保留原证据，不把未验收改为通过。桌面紧凑窗口、DPR/缩放、键盘及 VoiceOver 要求保持。
+> **最新范围：手机端适配暂缓（SCOPE-07），实体桌面 VoiceOver 暂缓（SCOPE-08）**。本期 UI/响应式验收以桌面浏览器合同为准；手机横竖屏、safe-area、触摸、手机实机及实体读屏专项不再阻塞。S-07、RSP-04 的手机部分为 DEFERRED，其它混合行只继续桌面子项；已有手机 PASS 保留原证据，不把未验收改为通过。桌面紧凑窗口、DPR/缩放和键盘合同已通过。
 
 > **桌面组件续验**：原生 Performance/Analysis 与本地同输入的 13 类状态共 1,014/1,014 项通过，693/902 表格单元、276 图点及 145 次实际 hover 留证；Entry/Exit 定位在 Chromium/Firefox 各 37/37 通过。详见下方 R-COMP / A-LOC。Settings 本期桌面控件及 Simulation 同输入/交互已有对应证据，本批统一桌面门禁与最后Preserve CSS补丁的验证边界见顶部632批次记录；不以先前627批次代替后续修改的回归，也不由此关闭共享参考差异或辅助技术验收。
 
@@ -96,7 +96,7 @@
 | A-TOOLTIP | 本地忽略 `2026-10-07-pointer-tooltip-escape/`、`2026-10-07-shared-tooltip-escape/`；Simulation/Analysis永久E2E | pointer首次Escape隐藏提示、第二次退出；point Escape保精确焦点且Home继续。两浏览器Simulation164/164、共享路径66/66、Analysis三类图×DPR1/2共212/212；Calendar子浮层优先级已验，原失败保留 | 原数据与Chart/Observer清理不变；只证明列明桌面交互，不扩大为所有图表/状态/VoiceOver通过 |
 | A-PROVIDER | `npm run test:providers` / [`tests/provider_smoke.py`](../../../tests/provider_smoke.py) | Binance、Hyperliquid 各自历史 5 bars + live smoke | Provider smoke 不证明参考站逐笔数值相等；本期唯一参考对账为 Binance Spot `BTCUSDT/15m/SMA`，其完整输入见 R-SMA921 |
 | A-DEP | `npm run check:dependencies`、`npm run build`、Fork fingerprint/sentinel、`npm run test:e2e:offline`、`npm run release:manifest` | 本地包版本、SHA、Worker 内嵌版本、Highcharts 本地构建；fresh clone、生产断网壳和文件级 manifest 证据 | 上一制品真实 rollback、清缓存恢复和无行情缓存行为仍未完成 |
-| A-UNVERIFIED | 当前需求表中的开放项及本矩阵的具体缺口；历史 `[ ]` 必须先核对现行范围和后续直接证据 | 列明待验场景，不作为失败或通过证据 | 固定golden、有限撮合/HMR/性能/资源合同已有各自闭环，不能由历史未勾项重新判未完成；实际VoiceOver仍逐项记录，GitHub CI按当前决定暂缓，存储/错误隔离以最新证据为准 |
+| A-UNVERIFIED | 当前需求表中的开放项及本矩阵的具体缺口；历史 `[ ]` 必须先核对现行范围和后续直接证据 | 列明待验场景，不作为失败或通过证据 | 固定golden、有限撮合/HMR/性能/资源合同已有各自闭环；实体 VoiceOver、手机、Safari、GitHub CI 和线上部署按范围暂缓，不作为当前未完成需求 |
 | A-LEDGER | `BACKTEST_LEDGER_AUDIT.md`（本地忽略证据，公开仓库不携带） 及 PineTS/Vela 定向测试 | 证明 round-trip trade ledger、reversal/FIFO/pyramiding 的内部撮合语义，以及本地 Fork `auditLedger` 的 identity-bound raw order/fill bridge | 上游 Vela 基线仍无 raw selector；本地 envelope 缺失、过期或 malformed 时 capability 必须回退 false；不能据此宣称完整 TV broker parity |
 | A-FORK | [`VELA_FORK_DECISION.md`](../../architecture/VELA_FORK_DECISION.md) 与 dependency contract | 证明 PineTS/Vela-PineTS 的本地源码版本、Vela 主包的 registry 边界和触发本地化的条件；清缓存构建已在 `44ade5c` 临时 clone 复核 | 不能证明断网发布或 rollback 演练已经完成 |
 
