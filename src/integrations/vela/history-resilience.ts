@@ -187,6 +187,24 @@ type HistoryProvider = DataProvider & {
   __quantToolsHistoryCalendar?: HistoryCalendar;
 };
 
+/**
+ * A guarded provider may legitimately confirm that a symbol has no candles in
+ * the requested window. Throwing this private boundary through Vela's cache
+ * path keeps that result attached to the load invocation that requested it;
+ * the checked load wrapper converts it back to `[]` after clearing Vela's
+ * fallback watermark. A shared feed/key marker cannot do that safely when an
+ * empty request and a successful request overlap.
+ */
+class EmptyHistoryBoundary extends Error {
+  readonly key: string;
+
+  constructor(key: string) {
+    super('History provider confirmed an empty window');
+    this.name = 'EmptyHistoryBoundary';
+    this.key = key;
+  }
+}
+
 /** Vela's registry seam is deliberately feature-detected and restricted to
  * our guarded instances. Calling getBars here avoids RegistryFetchFeed's
  * safeBars catch, which otherwise makes a failed range look like valid []. */
@@ -218,20 +236,37 @@ function dropDiscontinuousCache(feed: InternalFeed, cfg: MarketConfig, key: stri
   store.coveredFrom.delete(key);
 }
 
-let installed = false;
-// A fetch can legitimately return no rows (a newly listed/empty market), but
-// it must not leave CachingDataFeed's fallback coverage watermark protecting
-// an older cached island. Track that outcome per feed/key so the load wrapper
-// can remove only the watermark written by this request after Vela returns.
-const noCoverageFetches = new WeakMap<InternalFeed, Set<string>>();
-
+// Vite HMR re-evaluates this module while retaining the Vela package
+// prototype. A module-local flag would then wrap `fetchRange`/`load*` again on
+// every edit, so keep the install sentinel on the runtime global instead.
+const INSTALL_STATE_KEY = Symbol.for('quant-tools.vela.history-resilience.install.v1');
+type InstallState = { installed: boolean; prototype?: object };
+const installState = (() => {
+  const runtime = globalThis as unknown as Record<symbol, unknown>;
+  const existing = runtime[INSTALL_STATE_KEY];
+  if (existing && typeof existing === 'object' && 'installed' in existing) {
+    return existing as InstallState;
+  }
+  const created: InstallState = { installed: false };
+  Object.defineProperty(runtime, INSTALL_STATE_KEY, {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: created,
+  });
+  return created;
+})();
 /** Install the narrow integration patch before VelaWorkspace creates feeds. */
 export function installVelaHistoryResilience(): void {
-  if (installed) return;
-  installed = true;
   const prototype = CachingDataFeed.prototype as unknown as InternalFeed;
+  // A normal Vite HMR reload keeps the dependency prototype, while a full
+  // dependency reload may replace it. Reinstall only for that new runtime;
+  // this keeps the guard correct in both cases without stacking wrappers.
+  if (installState.installed && installState.prototype === prototype) return;
   const original = prototype.fetchRange;
   if (typeof original !== 'function') return;
+  installState.installed = true;
+  installState.prototype = prototype;
   Object.defineProperty(prototype, 'fetchRange', {
     configurable: true,
     enumerable: false,
@@ -248,16 +283,11 @@ export function installVelaHistoryResilience(): void {
         { emptyIsBoundary: route !== null, continuous: route?.provider.__quantToolsContinuousHistory === true,
           calendar: route?.provider.__quantToolsHistoryCalendar },
       );
-      if (route) {
-        void result.then(({ bars }) => {
-          if (bars.length === 0) {
-            const pending = noCoverageFetches.get(this) ?? new Set<string>();
-            pending.add(route.key);
-            noCoverageFetches.set(this, pending);
-          }
-        }, () => undefined);
-      }
-      return result;
+      if (!route) return result;
+      return result.then((rangeResult) => {
+        if (rangeResult.bars.length === 0) throw new EmptyHistoryBoundary(route.key);
+        return rangeResult;
+      });
     },
   });
 
@@ -277,28 +307,20 @@ export function installVelaHistoryResilience(): void {
         if (!route?.provider.__quantToolsContinuousHistory) return load.call(this, cfg, ...args);
         const calendar = route.provider.__quantToolsHistoryCalendar;
         dropDiscontinuousCache(this, cfg, route.key, calendar);
-        let bars = await load.call(this, cfg, ...args);
-        // fetchRange records its result on a promise continuation. Yield once
-        // before inspecting the marker so nested head/tail cache paths cannot
-        // return an older island before the marker is visible here.
-        await Promise.resolve();
-        const noCoverage = noCoverageFetches.get(this);
-        let emptyFetch = false;
-        if (noCoverage?.has(route.key)) {
-          // CachingDataFeed may mark `range.from` after an empty fetch even
-          // though no candle was merged. Remove only this series' watermark;
-          // the next request must retry instead of serving an older island as
-          // a complete latest window.
-          this.store?.coveredFrom?.delete(route.key);
-          noCoverage.delete(route.key);
-          if (!noCoverage.size) noCoverageFetches.delete(this);
-          emptyFetch = true;
+        let bars: OHLCV[] | null;
+        try {
+          bars = await load.call(this, cfg, ...args);
+        } catch (error) {
+          if (error instanceof EmptyHistoryBoundary && error.key === route.key) {
+            // The sentinel belongs to this exact load call, so a concurrent
+            // successful load cannot consume or invalidate its result.
+            this.store?.coveredFrom?.delete(route.key);
+            bars = [];
+          } else {
+            throw error;
+          }
         }
         dropDiscontinuousCache(this, cfg, route.key, calendar);
-        // CachingDataFeed can return an older cached island after its empty
-        // fetch path. Do not expose that stale island as the current request;
-        // an empty result keeps the chart in a retryable no-data state.
-        if (emptyFetch) bars = [];
         if (bars) assertHistoryContinuous(bars, cfg.timeframe ?? '60', calendar);
         return bars;
       },

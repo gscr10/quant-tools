@@ -179,10 +179,14 @@ export class StrategySettingsPanel {
     this.element.setAttribute('aria-label', 'Strategy settings');
     this.element.tabIndex = -1;
 
-    const backdrop = create(doc, 'button', 'quant-backtest-settings-backdrop');
-    backdrop.type = 'button';
-    backdrop.tabIndex = -1;
-    backdrop.setAttribute('aria-label', 'Close strategy settings');
+    // The backdrop is a pointer hit target, not a second close control. A
+    // button here is exposed by browser accessibility trees even with
+    // `tabindex=-1`, so VoiceOver announces a duplicate "Close strategy
+    // settings" action before the real dialog close button. Keep it purely
+    // presentational and leave the labelled header button as the only modal
+    // close action in the accessibility tree.
+    const backdrop = create(doc, 'div', 'quant-backtest-settings-backdrop');
+    backdrop.setAttribute('aria-hidden', 'true');
     let dismissedSelect = false;
     backdrop.addEventListener('pointerdown', (event) => { dismissedSelect = this.options.controls?.dismissedPopover(event) ?? false; });
     backdrop.addEventListener('click', () => {
@@ -588,6 +592,12 @@ export class StrategySettingsPanel {
       : this.dirty
         ? 'Unsaved changes'
         : '');
+    // Keep ordinary draft/busy updates polite, but make validation and host
+    // failures interruptible for screen readers.  The status node remains a
+    // stable `role=status` target for existing consumers; only its politeness
+    // changes with the message severity.
+    this.status.setAttribute('aria-live', this.errorMessage ? 'assertive' : 'polite');
+    this.status.setAttribute('aria-atomic', 'true');
     this.status.classList.toggle('error', Boolean(this.errorMessage));
     this.applyButton.disabled = this.busy;
     this.resetButton.disabled = this.busy;
@@ -1089,6 +1099,8 @@ export class StrategySettingsPanel {
   private setError(message: string): void {
     this.errorMessage = message;
     this.status.textContent = message;
+    this.status.setAttribute('aria-live', 'assertive');
+    this.status.setAttribute('aria-atomic', 'true');
     this.status.classList.add('error');
   }
 

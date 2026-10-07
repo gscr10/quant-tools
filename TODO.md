@@ -1,10 +1,12 @@
 # TODO
 
-> 最新对齐批次（2026-10-07）：共享Tab滚动196/196、Simulation挂载生命周期216/216、极小轴8个实际图表28标签、Adapter脚本错误双引擎64项、旧Workspace恢复两浏览器三阶段、故障隔离198项和K线连续性31项通过；根653/653、Adapter32/32、相关Controller/History121/121通过。类型、构建、生产主E2E和工程门禁已通过。其他未关闭项以需求表为准；当前提交已在本地建立，远端 BUILD-03 仍待本次提交的 Actions；手机/Safari/线上/Replay继续暂缓。
+> 最新对齐批次（2026-10-07）：共享Tab滚动196/196、Simulation挂载生命周期216/216、极小轴8个实际图表28标签、Adapter脚本错误双引擎64项、旧Workspace恢复两浏览器三阶段、故障隔离198项和K线连续性31项通过；根653/653、Adapter32/32、相关Controller/History121/121通过。类型、构建、生产主E2E和工程门禁已通过。其他未关闭项以需求表为准；GitHub CI 按当前决定暂缓，不作为本阶段阻塞；手机/Safari/线上/Replay继续暂缓。
+
+> 2026-10-08 桌面主回归复跑：开发与生产 `npm run test:e2e` / `npm run test:e2e:prod` 均通过，页面错误、非法外部请求和 LuxAlgo 请求为 0，开发生命周期 7/7。测试行情模拟器已按 Binance `startTime`/`endTime` inclusive 合同修正分页边界；生产 Provider 的严格 OHLC/范围校验未放宽。手机、Safari 和 GitHub CI 仍按当前决定暂缓。
 
 > 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。此前完整本地门禁保持原时点；本轮未改视觉基线，VoiceOver与参考交互差异仍开放。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
 
-> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver、共享参考差异和最终提交CI仍按需求表开放；当前提交已在本地建立，远端 CI 待本次提交。
+> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver和共享参考差异仍按需求表开放；GitHub CI 按用户决定暂缓，不作为当前 Gate。
 
 > 当前有效的需求、优先级和验收状态统一见 [BACKTEST_REQUIREMENTS_STATUS.md](docs/backtesting/current/BACKTEST_REQUIREMENTS_STATUS.md)。本文件后续章节保留历史推进记录和细项 TODO。
 
@@ -30,14 +32,14 @@ UI 验收标准已按最新用户修正：功能、交互、图标和组件风�
 - [x] P1 K线缓存岛修复：Vela 空最新页与旧缓存同时存在时不再错误宣布旧缓存覆盖当前窗口；清理错误 watermark，保留后续重取路径。`src/integrations/vela/history-resilience.test.mjs` 6/6及原周期切换/连续性专项通过。
 - [x] DATA-05 手势分页子项：Chromium、Firefox 各两引擎 26/26，实际向左拖动、横向滚轮和缩小到边缘每段操作追加最多 2,000 根；Viewer Retry 后再补至 6,000、快速切换、genesis、多 Cell、销毁、绘图/价格轴误触均验。在线 Retry 与 inline EMPTY 明确区分。联动发现并修复近似相等盈亏导致直方图分桶超量和报告 computing 卡住，相关单元 104/104。该专项通过不代替 DATA-11 最终集成。
 - [x] P0 BUILD-01已执行部分：最后Tab/Simulation/极小轴对齐后根646/646，随后脚本错误/持久化/K线连续性修复的根测试652/652；Adapter32/32、相关Controller/History121/121、类型、构建、生产主E2E和工程门禁通过。此前Dock/桌面矩阵/strict visual保留各自时点。最终提交CI另列，不宣称全部测试全量复跑；引擎/桥接/撮合/长期资源继续注明对应批次，全UI/设备不自动关闭。
-- [ ] 原10+14整体仍PARTIAL：列明的Dock、Calendar、Performance/Analysis、图标/Header及局部状态已验；H-09共享滚动、S-11离开Simulation恢复默认、D-10极小轴、ENG-10脚本错误、STG-03/06当前恢复合同及LC-07/NR-05存储/定位异常隔离均已按列明合同通过。仍保留Dock偏好、统一收藏/账户保存回测、草稿Apply/即时提交以及正确性/可读性增强等明确差异；桌面VoiceOver归UI-10。本地布局适配须保证入口和内容可达，手机适配暂缓，不据局部通过将全UI自动改为PASS。
+- [x] 原10+14本地范围已完成并接受明确差异：Dock、Calendar、Performance/Analysis、图标/Header及状态、H-09共享滚动、S-11离开Simulation恢复默认、D-10极小轴、ENG-10脚本错误、STG-03/06恢复合同及LC-07/NR-05存储/定位异常隔离均按列明合同通过。统一指标收藏、账户保存回测、草稿Apply/即时提交和可读性增强保留本项目合同；账户云保存及字段即时提交差异不视为缺陷。桌面VoiceOver仍归UI-10；手机适配暂缓，后续改动继续非回归。
 - [x] Settings：当日参考控件取证后完成数字单击/长按、blur min/max/int、Vela公共下拉、标题拖拽及移动空间复位。三浏览器320/390/1440、键盘/外部点击、Reset/Apply/失败/迟到响应/destroy通过；实测observer loop已修，page/window错误0、553源码/测试SHA稳定。`audit-evidence/2026-10-07-settings-live-controls/`；31属性/modal trap保留，全部schema/参考错误文案未由普通SMA替代。
 - [x] Performance P-12/P-14：原组件51受控props、本地三浏览器各48例/432cell一致；正百分比+号、小数/科学计数/百万M/ratio及12px单位已修。`audit-evidence/2026-10-07-performance-controls/`；只关闭展示，不称自然非空Benchmark或计算golden，不复制参考10k错误本金/风险假0，方向CAGR保持未定义。
 - [x] Log/Calendar：同DTO24状态对照与18组/2,610真实交互断言通过；Header改动后手机12组/1,752和24态截图新采集，分别源码稳定，373证据哈希通过。修复排序/分页焦点和tabpanel、币种行高、tooltip、七列金额重叠；完整日值可通过pointer/键盘/touch打开，11金额边界和280px嵌入容器已验。`audit-evidence/2026-10-07-log-calendar-completion/`；不称引擎golden或真机。
 - [x] 图标/手机长标题：当日参考路径、native viewBox/stroke、真实操作共8组988断言/100图标实例通过；三ETH Viewer共27 SVG ID无重复/悬空，资产3场景和360/390长普通名/长token共4场景通过。标题不遮挡Favorite/Close，无远程Logo、window/page错误0；40文件哈希通过。`audit-evidence/2026-10-07-backtest-icon-parity/LOCAL_ICON_VERIFICATION.md`。保留本地可访问的Simulation关闭按钮，不假称参考Drawer也有该控件。
 - [x] 当时工作树视觉基线复核：回测 Log 卡片边框 CSS 与 screenshot baseline 已核对；新旧差异仅为已确认的坐标轴抗锯齿、Return-to-chart 图标和 Log 卡片填充高度。该批 `npm run test:visual:a11y`、根测试、类型检查、构建及开发/生产 E2E 通过；只证明对应时点的本地非回归，不等于最新全模块组件/交互对照关闭。
 - [x] 原 6/9（明确网络范围）：Hyperliquid 与修复版 Binance Spot 本机两小时均已通过。新增真实 Hyperliquid CONNECT 代理静默验证，两引擎均持续扣留加密数据约 45 秒，navigator 始终 online；watchdog 至少两次换连，允许初始 3 秒在途数据排空，随后稳定期账本/revision 不推进，放行后分别 2.57/2.57 秒恢复新 socket candle。16/16 隧道关闭，页面错误、迟到回调为 0。故障为明确的传输注入，不伪称自然交易所故障。REL-06 本地生产 Workspace 两小时范围已另行通过；默认网络不宣称纯直连，Futures 451 不阻塞 Spot，未测地区/设备/线上环境不作承诺；旧失败终态保留。
-- [ ] 最终合并/push 后验证对应提交的 CI；本次文档复核不自动发布。开发 HMR 与短期 20 次挂载销毁已验；真实 Hyperliquid 2,000 根/实时流、Pine Worker、持续四 Tab/Settings 操作的完整生产两小时实测已取得 passed 终态，资源预算和卸载清理通过。采样中的短暂 DOM/listener 峰值在卸载后归零，不能用单次峰值推导长期泄漏。该证据限本地 Chromium + 冻结 dist，不替代其它设备或线上验收。
+- [~] GitHub CI 按当前决定暂缓，不作为本阶段任务；本地开发/生产 E2E、HMR、短期挂载销毁，以及真实 Hyperliquid 2,000 根/实时流、Pine Worker、持续四 Tab/Settings 的生产两小时实测均已通过。采样中的短暂 DOM/listener 峰值在卸载后归零，不能用单次峰值推导长期泄漏；实体设备与线上部署仍不在本阶段范围。
 - [x] STARTUP-01 缓存测量已纠正（2026-10-07）：旧探针 routing 禁用了 HTTP cache，撤回旧热启动证明。移除真实模式 routing、仅一次 context 初始化后，生产冷 3/3（5500/2701/790ms）、prime 后 warm 3/3（674/225/242ms）有 ResourceTiming/CDP 缓存证据；最终探针 SHA 复核另跑 prime+warm 2/2，受控 ABBA 4/4。证据在忽略目录 `audit-evidence/2026-10-07-startup-cache-*`，29 文件哈希已核验。仅证明首绘和静态缓存，完整历史/结果耗时与代表样本性能预算仍需验证；长时资源复用 REL-06，不自动扩大为所有机器/地区。
 - [x] STARTUP-01 完整阶段计时后续已补：真实生产冷 3 + prime 1 + warm 3 页，2,000 根连续行情/2,000 点曲线/104 closed + 1 open 及同身份账本、Performance、Simulation 均通过，无页面错误。冷/热完整账本中位数 1296/927ms；本地 `audit-evidence/2026-10-07-startup-full-report/` 保留原始计时、缓存和 Worker 证据。受控渐进和资源拆分预算随后通过；不将各 3 次实网结果作统计 SLA。
 - [x] STARTUP-01 渐进预算后续通过：冷/热各10轮ABBA、80次正式样本加2次预热；冷首绘median改善40.33%，完整历史/报告、暖路径与内存均满足原10%预算，每次两次行情请求、完整数据/账本/曲线/精度SHA相同。142项证据哈希通过，原始pilot失败保留；资源拆分首屏实际JS gzip对照随后通过（空图减少44.05%，SMA减少17.50%）。
@@ -63,7 +65,7 @@ UI 验收标准已按最新用户修正：功能、交互、图标和组件风�
 - [x] P1 timeframe-switch client protection: ranged Vela loads now retry the same cursor instead of skipping an empty failed page, and registered Binance/Hyperliquid continuous routes validate and repair internal gaps across minute/hour, 2h/4h, day/week and venue-specific month boundaries without fabricating candles. The generic custom/session helper remains limited to its declared calendar contract. Ordinary switches across any timeframe now reset to the newest 2,000 bars and frame that window; explicit range/depth requests and offline data remain caller-controlled. Added deterministic coverage for transient failure, persistent failed-page boundaries, page-internal repair, venue calendar boundaries and the unified switch policy.
 - [x] P1 low-timeframe real-network closure: fresh Chromium through the configured proxy loaded Binance Spot `BTCUSDT` 1m and 5m with two pages/2,000 rows per timeframe and zero observed time-step gaps; a controlled 1m middle-page 503 was retried at the identical `endTime` with no page error. A genuinely sparse upstream interval remains visible rather than being invented.
 - [x] Hyperliquid monthly history boundary: 2,000-bar `M` requests no longer send a negative epoch start and the provider contract now clamps that pre-epoch window to `0`; deterministic request-shape regression added.
-- [ ] Backtest Workspace follow-up remains scoped to its internal modules (Performance, Trades Analysis, Trades Log, Calendar, Simulation, Settings, Dock/Viewer and chart linkage): continue reference-state and pixel/interaction coverage without expanding this item to unrelated application surfaces.
+- [x] Backtest Workspace scope is satisfied for its internal modules (Performance, Trades Analysis, Trades Log, Calendar, Simulation, Settings, Dock/Viewer and chart linkage) under the current UI contract: reference behavior, component style and project-layout adaptation are covered; future changes remain ordinary non-regression work and do not expand to unrelated host surfaces.
 
 - [x] 修复浏览器 offline 期间 Vela/PineEngine 对缓存 K 线的 `tick/history` 重发布：已有 settled ledger 的 revision、status、trades、曲线和 Simulation 能力保持不变；联网后只接受新的 Provider tick。PineEngine/PineWorkerEngine 真实 Hyperliquid Workspace 3 周期共 6/6 通过，offline 无 callback/迟到数据，恢复后 socket 与账本均连续。
 - [x] 交易账本 FIFO/ANY、部分平仓 MFE/MAE、剩余持仓投影和 closed Trade ID 回归；根测试 554/554、Vela-PineTS 303/303、matching 65/65。
@@ -73,7 +75,7 @@ UI 验收标准已按最新用户修正：功能、交互、图标和组件风�
 - [x] Provider 重连资源复核：真实 PineEngine/PineWorkerEngine 各 3 个断网恢复周期均在每周期强制 CDP GC 后保持稳定（JSEventListeners 987/990、Nodes 1698，无随 socket 数增长的残留）；destroy 后 listener 降至 721。非 GC soak 采样中的 listener 上升属于 Chromium/DevTools 延迟统计，当前没有确认的 provider handler 泄漏。证据在被忽略的 `audit-evidence/2026-10-06-p1-provider-workspace-resource-recheck-watchdog12/`，不替代长时 Final Gate。
 - [x] 2026-10-06 新参考窗口完整 golden：`reference_golden_compare.py` 逐字段比较 280/280 rows、2,520 fields，差异为 0；完整输入和结果留在被忽略的 `audit-evidence/`，更换行情/脚本/参数时必须重新生成。
 - [x] bundle raw/gzip 当前预算门禁通过：main `1,762,844/470,887`、worker `828,480/207,197`、Highcharts `376,416/134,100`；Vite 大 chunk warning 仍保留为优化提示，不以强拆包消除 warning。
-- [ ] VoiceOver/真实设备、全量像素、TradingView 全复杂撮合，以及参考站其它行情/脚本窗口的重复 golden 仍保持外部/后续 Final Gate；实体 Safari 按用户要求暂不考虑，不能用单一输入窗口的局部绿灯替代。
+- [ ] 桌面 VoiceOver 仍需具备已授权的系统读屏环境才能验收；实体设备和手机专项按当前决定暂缓。全页逐像素阈值、参考站其它行情/脚本窗口 golden，以及 TradingView 外部逐 Fill 对账不属于当前关闭条件；本地有限复杂撮合合同已按 ENGINE-03 完成并继续回归。
 
 > 线上部署/CDN/rollback 已按当前用户决定移出本阶段验收范围；没有服务器地址、部署方式或 previous 入口，不将其列为当前阻塞，也不把本地 preview 当作线上通过证据。
 
@@ -85,12 +87,11 @@ UI 验收标准已按最新用户修正：功能、交互、图标和组件风�
 - [x] TypeScript、生产构建、release 29/29、`git diff --check` 通过。
 - [ ] 完整参考站 Trades Log、VoiceOver/真实设备及可访问交易所的长时断网恢复仍需外部输入；实体 Safari 按当前决定暂不考虑，线上部署/CDN/rollback 已按当前范围暂不处理，不计入本阶段 Final Gate。
 - [x] GitHub Actions `37132010789` 完成 60 秒真实 Binance/Hyperliquid 连续订阅与 offline→online recovery；仅作为短时真实网络证据，小时级 soak、跨区域代理黑洞和线上部署仍开放。
-- [ ] GitHub Actions `37133498353` 的 600 秒尝试在 Binance 初始请求处 `Failed to fetch`，未形成小时级证据；需在可访问交易所 API 的 runner 上重试，不能将网络失败标记为通过。
-- [ ] GitHub Actions `37134927725` 的 120 秒尝试在三次有限重试后仍无法访问 Binance；测试已正确 fail-closed，需更换可访问交易所 API 的 runner/网络。
+- [~] GitHub Actions 的 600/120 秒尝试因 runner 网络不可达而未形成证据；按当前决定暂缓，不进入本阶段执行队列。恢复该范围时需在可访问交易所 API 的 runner 上以同一提交重跑，不能把历史失败或成功 run 混作当前证据。
 - [x] 本机真实网络 120 秒连续订阅与恢复：Binance 61 callbacks/最大间隔 2,091ms，Hyperliquid 98 callbacks/最大间隔 6,022ms，offline→online 均恢复；仅作为单机短时证据，小时级和跨区域 Final Gate 仍开放。
 - [x] 本机真实网络 10 轮连续历史/live 与恢复（2026-10-03）：Binance Spot/Futures、Hyperliquid 每轮均成功，10/10 轮 offline→online 恢复；仅作为增强的单机证据，小时级和跨区域 Final Gate 仍开放。
 - [ ] 远端 workflow `37144883619` 的 local-gates 已通过，但 provider-soak 在首次 Binance 请求处 `Failed to fetch`，未形成连续订阅证据；需可访问交易所 API 的 runner/网络后重试。
-- [x] 修复视觉/a11y CI 冷 runner 死锁：`tests/visual_a11y_gate.py` 不再将 Vite 输出写入未读取的 PIPE，改用临时日志文件；新增架构回归断言，等待 `f34a1c5` 后的新 CI 运行确认。
+- [x] 修复视觉/a11y 冷 runner 死锁：`tests/visual_a11y_gate.py` 不再将 Vite 输出写入未读取的 PIPE，改用临时日志文件；新增架构回归断言。GitHub CI 运行确认按当前决定暂缓，后续恢复时再验证。
 - [x] 修复一次性浏览器 fixture 的 Vite `Outdated Optimize Dep` 竞态：性能/Provider 配置关闭自动依赖 discovery，并新增架构回归断言；本地视觉/a11y 已通过，等待远端复核。
 - [x] 远端 workflow `37148882921` 已通过全部 local-gates（启动/仓库、撮合、golden、触摸、视觉/a11y）；Provider/线上 deployment 仍因外部输入缺失保持开放。
 - [x] 两个独立本地 preview 槽位已执行 candidate/previous deployment smoke；仅作为本地发布协议证据，不关闭真实线上 CDN/rollback Gate。

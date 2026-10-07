@@ -98,19 +98,31 @@ export function installDefaultTimeframeSwitchPolicy(
       : undefined;
     if (cell.host) observer?.observe(cell.host);
     const wrapped: Vela['setMarket'] = function (this: Vela, next: MarketSwitch) {
-      const effectiveMarket = this.market && emptyReload ? { ...this.market, offline: false } : this.market;
+      const current = this.market;
+      // Vela represents an explicit online retry as `data: []` and leaves the
+      // resulting market marked offline until the first successful response.
+      // Treat that one retry as online while normalizing the following request,
+      // but keep the marker until an identity switch actually succeeds. This
+      // prevents a failed switch from changing the next retry contract, while
+      // allowing a successful timeframe/session switch to re-enable deliberate
+      // history gestures on the new market.
+      const wasEmptyReload = emptyReload;
+      const effectiveMarket = current && wasEmptyReload ? { ...current, offline: false } : current;
       const adjusted = normalizeDefaultMarketSwitch(effectiveMarket, next, defaultBars);
+      const identityChanged =
+        (adjusted.symbol !== undefined && adjusted.symbol !== current?.symbol) ||
+        (adjusted.timeframe !== undefined && adjusted.timeframe !== current?.timeframe) ||
+        (adjusted.session !== undefined && adjusted.session !== current?.session);
       if (next.data !== undefined) emptyReload = next.data.length === 0 && isOnlineHistoryReload(this);
-      else if (next.symbol !== undefined && next.symbol !== this.market?.symbol) emptyReload = false;
       const request = ++generation;
       frameAll = false;
-      const current = this.market;
       if (adjusted.data !== undefined ||
         adjusted.symbol !== undefined && adjusted.symbol !== current?.symbol ||
         adjusted.timeframe !== undefined && adjusted.timeframe !== current?.timeframe ||
         adjusted.session !== undefined && adjusted.session !== current?.session ||
         adjusted.bars !== undefined && adjusted.bars !== current?.bars) gestureHistory.reset();
       return original.call(this, adjusted).then(() => {
+        if (identityChanged && wasEmptyReload) emptyReload = false;
         if (disposed || generation !== request || adjusted === next) return;
         // Keep an ordinary switch fitted through layout/mobile resizing until
         // the user navigates. Cold/restored and explicit-range views are not

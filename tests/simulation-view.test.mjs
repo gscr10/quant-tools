@@ -61,6 +61,8 @@ test('Simulation view freezes the captured reference surface without a duplicate
   assert.match(source, /simulation\.method === 'shuffle' && simulation\.variationPercent === 0/);
   assert.match(source, /settingsOpen:[\s\S]*onSettingsOpenChange/);
   assert.match(source, /aria-modal/);
+  assert.match(source, /element\(doc, 'div', 'quant-backtest-simulation-settings-backdrop'\)/);
+  assert.match(source, /backdrop\.setAttribute\('aria-hidden', 'true'\)/);
   assert.match(source, /mouseenter/);
   assert.match(source, /trigger\.addEventListener\('focus'/);
   assert.match(source, /simulationRunStatus/);

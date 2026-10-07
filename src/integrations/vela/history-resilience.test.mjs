@@ -161,3 +161,52 @@ test('an empty newest page cannot make an older cached island look complete', as
   await feed.loadRange({ symbol: 'binance:BTCUSDT', timeframe: '1' }, range);
   assert.ok(calls > before, 'the same failed range remains retryable');
 });
+
+test('overlapping empty and successful loads keep their own results', async () => {
+  installVelaHistoryResilience();
+  const all = barsFrom(2_000);
+  const store = new BarStore();
+  let calls = 0;
+  let releaseFirst;
+  const first = new Promise(resolve => { releaseFirst = resolve; });
+  const provider = {
+    __quantToolsHistoryGuard: true,
+    __quantToolsContinuousHistory: true,
+    __quantToolsHistoryCalendar: 'utc-month',
+    async getBars(_ticker, _timeframe, range) {
+      calls += 1;
+      if (calls === 1) {
+        await first;
+        return [];
+      }
+      return all.filter(bar => bar.time <= range.to).slice(-range.limit);
+    },
+  };
+  const inner = {
+    registry: { get(name) { return name === 'binance' ? provider : undefined; } },
+    async load() { return []; },
+    async loadRange() { throw new Error('unrouted provider load'); },
+  };
+  const feed = new CachingDataFeed(inner, store);
+  const cfg = { symbol: 'binance:BTCUSDT', timeframe: '1' };
+  const range = { from: all[0].time, to: all.at(-1).time, limit: all.length };
+  const emptyLoad = feed.loadRange(cfg, range);
+  const successfulLoad = feed.loadRange(cfg, range);
+  releaseFirst();
+  const [empty, successful] = await Promise.all([emptyLoad, successfulLoad]);
+  assert.deepEqual(empty, [], 'the confirmed empty request should stay empty');
+  assert.equal(successful.length, all.length, 'the overlapping successful request must survive');
+  assert.deepEqual(successful, all);
+  assert.ok(calls >= 2);
+});
+
+test('history resilience stays idempotent across an HMR-style module reload', async () => {
+  installVelaHistoryResilience();
+  const methods = ['fetchRange', 'load', 'loadRange', 'loadProgressive'];
+  const before = Object.fromEntries(methods.map(method => [method, CachingDataFeed.prototype[method]]));
+  const reloaded = await import(`./history-resilience.ts?hmr=${Date.now()}`);
+  reloaded.installVelaHistoryResilience();
+  for (const method of methods) {
+    assert.strictEqual(CachingDataFeed.prototype[method], before[method], `${method} must not be wrapped twice`);
+  }
+});

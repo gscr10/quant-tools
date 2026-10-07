@@ -4,13 +4,13 @@
 
 > 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。此前完整本地门禁保持原时点；本轮未改视觉基线，VoiceOver与参考交互差异仍开放。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
 
-> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver、共享参考差异和最终提交CI仍按需求表开放；当前提交已推送，远端 CI 待该提交结果。
+> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver和共享参考差异仍按需求表开放；GitHub CI 按用户决定暂缓，不作为当前 Gate。
 
 > 最新范围调整：手机适配及手机实机触摸按需求表 SCOPE-07 暂缓，不作为当前完成阻塞。已有手机代码和回归记录保留；新增响应式必跑门禁只验桌面，专门触摸矩阵改为手动可选。桌面窗口缩放、键盘、辅助技术和通用功能仍维持原非回归要求。
 
 > 2026-10-07 UI 验收标准已按用户修正：参考对标检查功能、交互、图标及组件风格，布局适配本项目，不复刻 AI 侧栏/登录 banner 或要求整页像素重合。本地截图基线则继续检查项目自身的非预期回归；两类验证不能混用。现有截图差异必须解释并按实际改动复核，不因新标准无条件刷新基线或放宽功能断言。旧轮次的绝对几何和像素数字仅保留当时证据。
 
-> 当前需求、证据时点和未完成项以 [BACKTEST_REQUIREMENTS_STATUS.md](BACKTEST_REQUIREMENTS_STATUS.md) 为准。DATA-11、REL-01、ENGINE-03、STARTUP-01、REL-06及PERF-01的列明有限范围已有直接证据；完整工作区UI、真实设备和最终提交CI仍开放。PERF-01仅固定Chromium生产基准达原预算，Firefox超出观察值明确保留，不能写成全浏览器同预算。
+> 当前需求、证据时点和未完成项以 [BACKTEST_REQUIREMENTS_STATUS.md](BACKTEST_REQUIREMENTS_STATUS.md) 为准。DATA-11、REL-01、ENGINE-03、STARTUP-01、REL-06及PERF-01的列明有限范围已有直接证据；桌面 VoiceOver 和真实设备仍开放，GitHub CI 按用户决定暂缓。PERF-01仅固定Chromium生产基准达原预算，Firefox超出观察值明确保留，不能写成全浏览器同预算。
 
 > **2026-10-07 最新统一回归**：根627/627、TypeScript、构建、dev/prod主E2E通过；dev生命周期7/7、非法外部请求0。生产桌面/手机32状态的page/window错误及blocked0，Analysis8×41通过。本地visual现已通过：先独立审阅8组旧新图及DOM A/B，确认8px为12px币种suffix使8行各增1px且无裁切；glyph/mobile Tab变化均有依据。旧实体1px边框检查改为border0+精确可见shadow ring，5类负控拒绝；已审基线与候选逐字节一致，普通strict门禁8图diff0，原0.001像素差/1px本地几何阈值不变。首跑失败保留，非无条件刷新基线。证据 `audit-evidence/2026-10-07-ui-layout-acceptance/`；616/624、桥接310/310和引擎1773+1仍注明原时点，全UI/设备/CI不由此关闭。
 

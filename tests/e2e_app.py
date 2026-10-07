@@ -328,7 +328,18 @@ def mock_klines(url: str) -> list[list[object]]:
     default_end = FIXED_BROWSER_NOW_MS
     end = int(query.get("endTime", [str(default_end)])[0])
     end -= end % step
-    first = end - count * step
+    # Binance treats startTime/endTime as inclusive bounds.  The previous
+    # fixture only honored endTime, so a Vela page request with both bounds
+    # returned rows from before startTime and the provider boundary quite
+    # correctly rejected the page as having no usable rows.  Keep the fixture
+    # faithful to the public contract and cap the generated page to the
+    # requested window.
+    requested_start = query.get("startTime", [None])[0]
+    start = None if requested_start is None else int(requested_start)
+    if start is not None:
+        start -= start % step
+    first = max(end - (count - 1) * step, start) if start is not None else end - (count - 1) * step
+    count = min(count, max(0, int((end - first) // step) + 1))
     bars: list[list[object]] = []
     for index in range(count):
         opened = first + index * step

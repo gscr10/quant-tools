@@ -58,6 +58,9 @@ integrity issue rather than a chart-only rendering issue.
   conversion. Confirmed empty history remains a distinct listing boundary.
   A non-progressing page retries at the same cursor and ultimately rejects.
   A count-satisfied tail never claims an earlier requested `from` as covered.
+  Confirmed empty windows use a request-scoped boundary sentinel rather than a
+  feed/key marker, so an overlapping empty load cannot clear or replace a
+  successful load for the same series.
 - Cache reads and writes also validate continuous series. Old discontinuous
   cached islands are invalidated only for the affected series, including its
   coverage watermark; unrelated symbols/timeframes/cells remain cached. Tests
@@ -143,7 +146,7 @@ belongs to REL-06 and is not implied by this data-integrity closure.
 
 ## Verification covered locally
 
-The latest calendar/cache/provider targeted run passed **60/60**. This is a
+The latest calendar/cache/provider targeted run passed **78/78**. This is a
 different selection from the earlier same-count history/readiness/switch run:
 
 ```bash
@@ -151,8 +154,14 @@ node --test \
   tests/history-continuity.test.mjs \
   tests/history-cache-recovery.test.mjs \
   tests/provider-progressive.test.mjs \
-  src/integrations/vela/provider-history.test.mjs
+  src/integrations/vela/provider-history.test.mjs \
+  src/integrations/vela/history-resilience.test.mjs \
+  tests/timeframe-switch-policy.test.mjs
 ```
+
+The same run includes the overlapping empty/successful `loadRange` regression:
+the empty request returns no bars and remains retryable, while the concurrent
+successful request retains the complete 2,000-bar window.
 
 Fresh real-component browser tests (controlled provider data):
 
