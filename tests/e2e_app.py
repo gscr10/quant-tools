@@ -3054,6 +3054,28 @@ def verify_backtest_workspace(
             for viewport_width in calendar_widths:
                 page.set_viewport_size({"width": viewport_width, "height": 900})
                 page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
+                # A production resize can briefly keep the Calendar's day-P&L
+                # spans in their responsive transition state.  Two animation
+                # frames are enough for geometry, but not always for the text
+                # node to become measurable on a hosted CI runner.  Wait for
+                # the same visible-number contract that the probe below
+                # asserts, so a transient reflow is not reported as a product
+                # failure.
+                page.wait_for_function(
+                    """
+                    () => {
+                      const values = [...document.querySelectorAll(
+                        '.quant-backtest-calendar-day-pnl'
+                      )];
+                      if (!values.length) return false;
+                      return values.every((pnl) => [...pnl.querySelectorAll('span')].some((part) => {
+                        if (part.children.length || !part.getClientRects().length) return false;
+                        return /\\d/.test(part.textContent || '');
+                      }));
+                    }
+                    """,
+                    timeout=5_000,
+                )
                 overflow_probes[viewport_width] = calendar.evaluate(
                     """
                     (node) => {
