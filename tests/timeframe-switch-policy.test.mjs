@@ -83,6 +83,11 @@ test('depth-only requests and explicit range requests remain user controlled', (
   const range = { timeframe: '1', bars: 20_000, visibleRange: '3M' };
   assert.strictEqual(normalizeDefaultMarketSwitch(current, depth, 2_000), depth);
   assert.strictEqual(normalizeDefaultMarketSwitch(current, range, 2_000), range);
+  // A host may combine an identity switch and an explicit depth request. The
+  // default-depth policy must not overwrite that request merely because no
+  // visibleRange preset was included.
+  const switchedDepth = { timeframe: '1', bars: 4_000 };
+  assert.strictEqual(normalizeDefaultMarketSwitch(current, switchedDepth, 2_000), switchedDepth);
   const offline = { timeframe: '1', data: [{ time: 1, open: 1, high: 1, low: 1, close: 1, volume: 1 }], bars: 1 };
   assert.strictEqual(normalizeDefaultMarketSwitch(current, offline, 2_000), offline);
 });
