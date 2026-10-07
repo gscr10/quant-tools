@@ -1,12 +1,12 @@
 # 回测工作区需求状态表
 
-> 2026-10-07 继续复核：在当前工作树重新执行 `npm test`（653/653）、Vela-PineTS（310/310）、TypeScript、生产构建、bundle/依赖/仓库/dist/release 门禁及 `npm run test:e2e:prod`，均通过。真实 Provider 低周期/跨周期检查 `tests/e2e_history_real.py` 的 16 个场景和双引擎主动手势分页 `tests/e2e_history_gestures.py` 的 26 个场景均通过；未发现新的业务回归。此记录只更新验证时点，不改变手机、Safari、线上部署、Replay、桌面 VoiceOver 等既有范围决定。
+> 2026-10-07 继续复核：在当前工作树重新执行 `npm test`（653/653）、Vela-PineTS（310/310）、TypeScript、生产构建、bundle/依赖/仓库/dist/release 门禁及 `npm run test:e2e:prod`，均通过。真实 Provider 低周期/跨周期检查 `tests/e2e_history_real.py` 的 16 个场景和双引擎主动手势分页 `tests/e2e_history_gestures.py` 的 26 个场景均通过；未发现新的业务回归。实体桌面 VoiceOver 按用户最新决定移出本阶段验收；手机、Safari、线上部署、Replay 仍按各自范围决定处理。
 
 > 最新对齐批次（2026-10-07）：H-09改为共享Tab滚动/实际高度夹紧，受控56项、真实dev70项及prod70项通过；S-11离开Simulation后恢复默认并按策略身份取消旧任务，浏览器216/216通过；D-10极小轴科学记数已对齐，8个实际surface/28个SVG标签通过。随后真实脚本错误重试/首次错误处理已修，Adapter32/32、相关Controller/History121/121及双引擎真实4/4通过；旧Workspace恢复两浏览器各三阶段通过；故障隔离8/8场景、198/198检查通过。K线空最新页缓存保护/连续性定向31项通过。Adapter/持久化修改后的根测试为653/653，类型、构建、生产主E2E和工程门禁已通过。证据在忽略目录 `audit-evidence/2026-10-07-tab-parity-closure/`、`2026-10-07-real-script-error-final/`、`audit-evidence/2026-10-07-storage-restoration-final/`、`audit-evidence/2026-10-07-workspace-fault-isolation-final/`；旧per-Tab/保留参数/极小轴差异不再列为未完成，下面更早批次保留时点。本地门禁已完成；GitHub CI 按当前决定暂缓，不作为本地验收条件。
 
 > 2026-10-07 后续两项修复：pointer hover提示时Escape曾误关Viewer；Analysis点选Escape曾blur到BODY。现先隐藏提示、保留Tab/所选点焦点，Home继续导航；无提示时正常退出。两浏览器Simulation164/164、Performance/Analysis独立66/66及Analysis永久212/212通过，原失败均保留；最后源码根639/639、类型、新构建/生产主E2E及包体/独立性检查通过。证据在本地忽略目录 `audit-evidence/2026-10-07-pointer-tooltip-escape/`、`2026-10-07-shared-tooltip-escape/`；不是全量视觉或VoiceOver复验。并纠正旧golden/HMR/图例待办、参考状态误述和补丁/rollback范围冲突。
 
-> 2026-10-08 低周期并发与桌面读屏语义修复：历史 resilience 的空窗口标记改为请求级 sentinel，重叠空/成功 `loadRange` 不再互相清空；Vela resilience 安装 sentinel 改为跨 HMR 的 runtime Symbol，四个原型方法不会重复包裹；普通在线 Retry 成功后的下一次周期切换会清除临时 offline 标记。低周期连续性/缓存/provider/progressive/resilience/timeframe 定向 **78/78**，根测试和类型检查通过。Settings/Simulation backdrop 改为 `aria-hidden` 的非交互层，AX tree 每个模态只保留一个真实 Close 控件；对应静态、生产 a11y、Simulation/Settings 桌面专项通过。证据/截图仍只存忽略目录；实体 VoiceOver 未验。
+> 2026-10-08 低周期并发与桌面读屏语义修复：历史 resilience 的空窗口标记改为请求级 sentinel，重叠空/成功 `loadRange` 不再互相清空；Vela resilience 安装 sentinel 改为跨 HMR 的 runtime Symbol，四个原型方法不会重复包裹；普通在线 Retry 成功后的下一次周期切换会清除临时 offline 标记。低周期连续性/缓存/provider/progressive/resilience/timeframe 定向 **78/78**，根测试和类型检查通过。Settings/Simulation backdrop 改为 `aria-hidden` 的非交互层，AX tree 每个模态只保留一个真实 Close 控件；对应静态、生产 a11y、Simulation/Settings 桌面专项通过。实体桌面 VoiceOver按用户决定暂不纳入本阶段。
 
 > 2026-10-08 桌面主回归复跑：开发与生产 `npm run test:e2e` / `npm run test:e2e:prod` 均通过，页面错误、非法外部请求和 LuxAlgo 请求为 0，开发生命周期 7/7。为匹配 Binance `startTime`/`endTime` inclusive 合同，测试行情模拟器已修正分页边界；生产 Provider 的严格 OHLC/范围校验保持不放宽。该修复仅影响测试输入，不改变线上数据源行为。
 
@@ -202,9 +202,9 @@ ENGINE-04 的需求验收记录保持有效；之后修改撮合源码时，仍�
 | UI-05 | P1 | Trades Log 内 Calendar | 已完成（列明的导航、日值与可读性合同） | 最新同参考 DTO 的当前/前月/空月、hover 及两 DPR 共 24 状态对照已完成；独立 18 组/2,610 断言联合验证月份/列表状态、真实 pointer/键盘/touch、tooltip Escape、销毁和源码稳定。七列内金额可读缩写、单位可换行；实际日期按钮显示未缩写金额/币种/笔数/胜率并可关闭回焦点。11 种金额边界含正负小数、±1e-9、百万附近值，保留非零和符号，原数据不变；手机及 280px 桌面嵌入容器无跨格重叠。保留本项目响应式适配，不复制参考手机溢出；不据此关闭全工作区、所有 locale 或真实设备。 |
 | UI-06 | P1 | Settings | 已完成（本期桌面控件与提交合同） | 当前桥接的12类Inputs及31个可变Properties具备控件；Chromium/Firefox×两真实引擎4/4实际计算验证typed提交与一次Apply，数字options/time/timeframe override已修。纯净参考context取证后修正26px色块、双路径勾号、跨组共享标签列及textarea padding；日期/时间/菜单/提示/图标已核对。两浏览器桌面焦点、拖拽、数字、下拉、Reset/Apply/失败恢复/destroy通过，R-09不重开。证据 `audit-evidence/2026-10-07-settings-schema-completion/`。保留draft-only Reset、31属性、volume、原始epoch/day-mask及a11y增强；全部撮合组合归ENGINE-03，不把无限脚本排列加为Settings阻塞。 |
 | UI-07 | P1 | 图表联动 | 已完成（既有路径） | 返回图表、交易定位、Viewer 覆盖与挂载关系已有回归；新增任意周期切换已由 DATA-11 联合验收。后续改变切换、定位或视口时继续非回归。 |
-| UI-08 | P2 | 全模块功能、交互与组件视觉对标及本项目布局适配（原 10+14） | 已完成（接受明确范围差异） | Dock、Viewer 四 Tab、Performance、Trades Analysis、Trades Log/Calendar、Simulation、Settings、图表联动、图标和桌面布局适配均有对应证据。保留统一指标收藏与账户保存回测、Settings草稿Apply与参考即时提交的差异；本地正确指标、Dock偏好、可访问性和显式错误恢复优先于复制参考站账户语义。**其中“账户保存回测”依赖参考站账户/云服务，而本项目当前是独立本地自用版本；“参考即时提交”是参考站字段事务语义，本地已冻结为可回滚的一次性草稿 Apply 合同。这两项是已接受的范围边界差异，不是本地缺陷或未接线入口。** UI 评价不要求复制 AI 侧栏、登录 banner 或整页坐标；手机适配按 SCOPE-07 暂缓，桌面 VoiceOver 归 UI-10。 |
+| UI-08 | P2 | 全模块功能、交互与组件视觉对标及本项目布局适配（原 10+14） | 已完成（接受明确范围差异） | Dock、Viewer 四 Tab、Performance、Trades Analysis、Trades Log/Calendar、Simulation、Settings、图表联动、图标和桌面布局适配均有对应证据。保留统一指标收藏与账户保存回测、Settings草稿Apply与参考即时提交的差异；本地正确指标、Dock偏好、可访问性和显式错误恢复优先于复制参考站账户语义。**其中“账户保存回测”依赖参考站账户/云服务，而本项目当前是独立本地自用版本；“参考即时提交”是参考站字段事务语义，本地已冻结为可回滚的一次性草稿 Apply 合同。这两项是已接受的范围边界差异，不是本地缺陷或未接线入口。** UI 评价不要求复制 AI 侧栏、登录 banner 或整页坐标；手机适配和实体桌面 VoiceOver 按当前范围暂缓。 |
 | UI-09 | P2 | 工作区图标、资产Logo和SVG稳定性 | 已完成（列明glyph/资产/多实例合同） | 当日参考路径对照，Chromium/Firefox×桌面/手机×DPR1/2共8组、988断言/100图标实例通过：星标、关闭、排序、List/Calendar、定位、Simulation、Dock、mobile gauge及原生Settings；真实点击/回焦点通过。三ETH Viewer每例27个SVG ID无重复/悬空，BTC/ETH本地图标及Canvas导出、未知ETHFIUSDT的ET fallback共3场景通过，无远程Logo。360/390普通长名和长token共4场景验证不遮挡Favorite/Close、完整换行及实际点击。40文件SHA通过；保留本地额外可访问Simulation关闭按钮，不伪称参考Drawer有该控件，不扩展为全交易所资产库或全UI通过。 |
-| UI-10 | P2 | 桌面可访问性与跨浏览器；手机专项暂缓 | 部分完成（列明的生产、文字及必要图形合同已验） | 生产主入口32状态/34交互、DOM/AX通知及18图210个文字已验，文字最低4.595:1。后续两浏览器实际取色20项和键盘16项关闭Calendar焦点框及Settings四类控件边界；Simulation区间虚实轮廓与中位线最低4.41:1，全部68原始点及low/high可访问，正式四场景144/144和SVG fallback通过。原218次axe incomplete为文字检测不确定记录，不等于218个非文字缺陷；保留原始记录及对应人工测量。实际VoiceOver尚未验，本机AX自动化未授权；未覆盖状态须列明具体控件/场景，不重复将已验hover、键盘或区间列为待做。手机/Safari专项按SCOPE-07/03暂缓。可读性修正保留，不复制参考低对比度。 |
+| UI-10 | P2 | 桌面可访问性与跨浏览器；实体 VoiceOver/手机专项暂缓 | 已完成（当前验收范围） | 生产主入口32状态/34交互、DOM/AX通知、文字与图形可读性、两浏览器键盘/焦点及 Simulation 区间交互均已通过；axe、对比度、生产 a11y 和桌面 E2E 无阻塞问题。实体桌面 VoiceOver 按用户决定暂不验收；手机和实体 Safari 按 SCOPE-07/SCOPE-03 暂缓，不计入本阶段完成条件。 |
 
 UI-10 后续两项Escape缺陷已修：鼠标悬停且Tab保焦点时先隐藏图表提示，第二次关闭Viewer；移出后提示已消失则直接关闭。Analysis点选Escape不再blur到BODY，保留精确point焦点并可Home继续浏览。两浏览器Simulation164/164、独立Performance/Analysis66/66及永久Analysis212/212通过，后者覆盖distribution/donut/duration与DPR1/2，Calendar子浮层优先级也已验。数值/状态不变，Chart/Observer销毁归零。原chart-focused Escape未覆盖这些路径，原失败证据保留；不扩大为实际读屏通过。
 
@@ -276,11 +276,12 @@ Settings 的 UI-06/ST-02～04 通过指本地草稿事务合同：修改和 Rese
 | --- | --- | --- | --- |
 | SCOPE-01 | 真实部署、CDN、rollback | 暂不做 | 用户表示目前没有环境，“这部分可以先忽略”；本地构建、预览和缓存合同仍维护。 |
 | SCOPE-02 | Replay | 暂不做 | 用户明确本阶段先不考虑。 |
-| SCOPE-03 | Safari 专项 | 暂不做 | 用户明确“Safari 验证——这个后续可以不考虑”；不取消桌面 VoiceOver，WebKit 自动化可保留。手机另按 SCOPE-07 暂缓。 |
+| SCOPE-03 | Safari 专项 | 暂不做 | 用户明确“Safari 验证——这个后续可以不考虑”；WebKit 自动化结果可作为桌面回归证据，实体 Safari 不纳入本阶段。手机另按 SCOPE-07 暂缓。 |
 | SCOPE-04 | 自建脚本长期持久化 | 待讨论 | 只记录待讨论，不给技术方案，不列为当前 P1 开发或发布阻塞。 |
 | SCOPE-05 | 完整 TradingView 外部逐 Fill 对账 | 当前不作为关闭条件 | 当前验收策略是已选语义的独立预期/回归；仍按 TODO 和 TV 调研实现，不能表述为用户取消复杂撮合。 |
 | SCOPE-06 | 原列表第 15 项 | 暂不做，题名待核对 | 保留原编号和决定，不据未知题名扩大排除范围。 |
 | SCOPE-07 | 手机端布局、交互适配与专项验收 | 暂不做 | 用户明确“手机端……适配可以先暂时不做”。暂停新增手机布局/横竖屏/safe-area/触摸及手机实机验证，不作为当前完成阻塞，不标为通过；保留已有修复和证据。桌面各模块、窗口缩放、键盘及通用业务逻辑继续验收。 |
+| SCOPE-08 | 实体桌面 VoiceOver | 暂不做 | 用户明确当前阶段不考虑实体桌面 VoiceOver；DOM/AX、键盘、对比度和浏览器自动化仍作为已完成的桌面可访问性范围。未来重新纳入时需建立独立读屏验收，不回溯改变本阶段结论。 |
 | 参见 ENGINE-06 | 其它品种/策略/窗口 golden | 当前范围外 | 第 7 项限定 BTCUSDT/15m/SMA，不把扩展 golden 混入本期未完成队列。 |
 
 ## 本轮新增确定问题（2026-10-07，已复核关闭）
@@ -305,14 +306,14 @@ Settings 的 UI-06/ST-02～04 通过指本地草稿事务合同：修改和 Rese
 | 6 | P1 | BUILD-03 | 本地门禁已通过，远端 CI 已按用户决定暂缓 | 恢复该范围时再核对同一提交的远端 CI；当前不阻塞本地功能交付。 |
 | 7 | P2 | STARTUP-01 | 真实完整启动/缓存、80次渐进预算及80页资源对照均通过；SMA首启JS gzip减少17.50% | 原有限预算关闭，后续修改继续回归；不重列已验事项，也不扩大为全球网络/设备SLA。 |
 | 8 | P2 | REL-06 | 开发 HMR、主入口 CSS/整页刷新、独立生产宿主 20 次挂载/销毁及两小时生产 Workspace 已验 | 独立冻结 dist 的真实行情/Worker 和持续 UI 操作运行 7,200.505 秒，资源预算和卸载清理通过；该本地 Chromium 证据不代表全部设备、最新未提交 UI 或线上部署。 |
-| 9 | P2 | UI-10 | 生产32状态/34交互、DOM/AX通知及210个文字；后续20项必要边界取色、16项键盘、Simulation区间68原始点/144项正式交互及SVG fallback通过 | 实际VoiceOver仍未验，本机AX自动化未授权；其它缺口须给出具体控件/状态，不用“全部tooltip/非文字incomplete”重复列已完成项。手机/Safari专项暂缓，已有自动化不替代读屏实测。 |
+| 9 | P2 | UI-10 | 生产32状态/34交互、DOM/AX通知及210个文字；两浏览器取色、键盘、Simulation区间和 SVG fallback 均通过 | 实体桌面 VoiceOver 按 SCOPE-08 暂不做；手机/Safari专项按 SCOPE-07/SCOPE-03 暂缓。 |
 | 10 | P2 | PERF-01 | 固定 Chromium 生产预算及 Chromium/Firefox DPR1/2 功能/资源矩阵已通过，包含完整冷 selector、range tooltip、Worker 取消和异常清理 | 本期列明范围关闭；Firefox 超出 Chromium 对照值、100k factory 约1.14s及 API 缺失如实保留，不称全浏览器/全设备同预算。后续改动按 BUILD-01 维护。 |
 
 已关闭的 ENGINE-04 固定窗口数值对账、ENGINE-01/02 默认精度与开关、ENGINE-03 有限撮合合同、DATA-11/REL-01 和当前 bundle 预算不重复实施；源码改变时继续非回归。待讨论/范围外项目保留在上一节。
 
 ## 当前判断与维护规则
 
-项目已具备独立本地构建和人工测试能力，整体仍为 **PARTIAL**。H-09共享滚动、S-11参数挂载生命周期、D-10极小轴记法、STG-03/06恢复合同、ENG-10脚本错误合同及LC-07/NR-05明确故障隔离合同均已直接验收；K线、有限撮合、固定golden、代表网络、性能及长生命周期维持各自证据。剩余内容主要是两类：一是用户明确保留的**范围差异**——参考站账户保存回测依赖云账户，本地只提供指标/脚本/Workspace/Dock 的持久化；参考站字段即时提交，本地保留可取消、可回滚的一次性草稿 Apply；二是当前仍受环境限制的桌面 VoiceOver。GitHub CI 已按用户最新决定暂缓，不再作为本地阻塞。手机/Safari/线上部署等暂缓项不混入当前阻塞。
+项目已具备独立本地构建和人工测试能力，当前需求表中纳入本阶段的功能、数据、回测、UI 和桌面可访问性范围均已完成。保留的账户云保存、字段即时提交等是已接受的产品差异；手机、实体 Safari、实体桌面 VoiceOver、GitHub CI、线上部署、Replay 和长期脚本持久化按各自范围标记为暂缓/待讨论，不属于当前未完成的本地需求。后续源码变更继续执行 BUILD-01 非回归。
 
 历史记录：根554/554、桥接303/303、低周期23/23，以及后续根616/624/627、引擎1773+1均保留各自时点。sentinel、Settings/Calendar/Performance及Header后已有根639/639和完整本地门禁；最新非文字修复又通过根639/639、类型、重建/生产主E2E及受影响专项。前一次完整门禁与最后定向验证分别记录，不冒称每轮全量重跑。
 

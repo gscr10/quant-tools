@@ -1,6 +1,6 @@
 # Final Gate Closure Plan
 
-> 2026-10-07 桌面续验终态：根632/632、类型/构建、dev/prod主E2E及工程门禁通过；桌面32场景/1,792项、Analysis164、Log/Calendar858、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84及重建/生产E2E。证据与源码时点见 `audit-evidence/2026-10-07-desktop-acceptance-final/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver和共享参考差异仍按需求表开放；GitHub CI 按用户决定暂缓，不作为本阶段 Gate。
+> 2026-10-07 桌面续验终态：根632/632、类型/构建、dev/prod主E2E及工程门禁通过；桌面32场景/1,792项、Analysis164、Log/Calendar858、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84及重建/生产E2E。证据与源码时点见 `audit-evidence/2026-10-07-desktop-acceptance-final/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，实体桌面 VoiceOver按需求表 SCOPE-08 暂不做；GitHub CI 按用户决定暂缓，不作为本阶段 Gate。
 
 工作分支：`task/p1-priority`（从 `master` 的 `a7aa5bf` 创建）
 
@@ -10,7 +10,7 @@
 
 最新范围调整：手机端适配按需求表 SCOPE-07 暂缓，手机布局/横竖屏/safe-area/触摸及手机实机不作为当前 Gate。已有代码、测试与历史证据保留，当前继续桌面 UI 全模块、缩放、键盘、VoiceOver 及通用功能。
 
-2026-10-07 口径复核：原 6/7/8/9/10+14 的映射以需求表为准；DATA-11、代表网络恢复、ENGINE-03 的三项有限验收、STARTUP-01 资源预算和 REL-06 本地生产两小时范围已关闭，不将它们扩大成所有网络或所有订单排列通过。完整桌面 Backtest Workspace UI 和桌面VoiceOver仍按需求表维护；GitHub CI 按用户决定暂缓。长期持久化只待讨论，其它 golden 不重入队；Safari和手机适配/手机实机触摸暂缓。原第 15 项题名待追溯，不能用它取消其它项目。
+2026-10-07 口径复核：原 6/7/8/9/10+14 的映射以需求表为准；DATA-11、代表网络恢复、ENGINE-03 的三项有限验收、STARTUP-01 资源预算和 REL-06 本地生产两小时范围已关闭，不将它们扩大成所有网络或所有订单排列通过。当前纳入范围的桌面 Backtest Workspace UI 已完成；实体桌面 VoiceOver按 SCOPE-08 暂不做，GitHub CI 按用户决定暂缓。长期持久化只待讨论，其它 golden 不重入队；Safari和手机适配/手机实机触摸暂缓。原第 15 项题名待追溯，不能用它取消其它项目。
 
 ## 本轮 P1 范围
 
@@ -25,7 +25,7 @@
 | 7 | K 线缺失合并 P1（DATA-11） | 任意周期最新 2,000 + 视口、主动分页、失败不误标覆盖、小缺口与两引擎完整性门控 | **已冻结范围通过**：窗口、缓存、接缝、Retry、精度不足、真实行情、手势与当前生产 smoke 已验；代表代理静默已补证。后续影响此合同的改动继续回归；不挂靠整个 ENGINE-03 或无限地区观测。 |
 | 8 | 启动加载性能（P2） | 默认深度、首次绘制、Provider 初始化和错误降级有可重跑基线 | 真实缓存和完整报告冷3+prime1+warm3已验，冷/热报告中位数1296/927ms。追加受控80次ABBA渐进预算通过：首绘median改善40.33%，完整报告/暖路径/内存未越原10%上限，完整结果一致；独立资源对照空图JS gzip减少44.05%、SMA减少17.50%，达到≥15%目标。应用长时资源另由 REL-06 的冻结生产构建两小时合同覆盖；不以少量网络样本宣称跨设备 p95。 |
 
-Safari 专项、Replay、真实线上部署/rollback/CDN 及手机端适配/手机实机触摸本阶段暂缓；桌面 VoiceOver 仍未验收，缺环境时记录具体阻塞。自建脚本长期持久化只待讨论。
+Safari 专项、Replay、真实线上部署/rollback/CDN、手机端适配/手机实机触摸及实体桌面 VoiceOver 本阶段暂缓；它们不属于当前本地功能完成条件。自建脚本长期持久化只待讨论。
 原始行情、截图、认证状态及执行日志不加入 Git；只提交业务代码、可重跑测试和必要状态文档。
 以下历史测试总数和旧分支运行记录仅说明当时验证，不作为本轮通过依据。
 
@@ -87,11 +87,11 @@ npm run test:e2e:deployment
 - 实际部署槽位、CDN/browser cache、真实 rollback 与缓存清理：按用户要求暂不考虑，不纳入当前 Final Gate；本地 preview/release 合同仍仅作为可选的离线验证。
 - 当前 BTCUSDT/15m/SMA 固定窗口已通过；其它行情/脚本窗口 golden 属后续扩展，不是本期开放 Gate。
 - 已列撮合语义继续按 TODO/TV 调研维护，完整 TV 外部逐 Fill golden 不作为当前关闭条件。
-- 桌面 VoiceOver 仍需证据；Safari 专项按 SCOPE-03、手机布局和手机实机触摸按 SCOPE-07 暂缓，不标为通过。
+- 实体桌面 VoiceOver 按 SCOPE-08 暂不做；Safari 专项按 SCOPE-03、手机布局和手机实机触摸按 SCOPE-07 暂缓，不纳入本阶段完成条件。
 - 完整 Backtest Workspace 功能、交互、图标和组件风格对标及本地布局适配按需求表的接受差异维护；不再追逐整页像素重合。STARTUP-01 启动预算、完整历史/策略就绪计时及 DATA-11 K 线合并验收已通过各自合同，不用历史未验文字重开。
 - PERF-01（原 PF-01～06、PF-09～10）的本期有限合同已通过：固定 Chromium DPR1 的 10k/100k 冷 selector p95 为 52.2/399.9ms，分页 41.4/42.2ms；range/多 series tooltip、Worker 取消和相应生产资源检查均已留证。Firefox 的 100k 聚合 656/589ms 与一次 10k 分页 124ms 超过 Chromium 对照值，100k report factory 约1.14s另计，不声称全浏览器/全设备同预算；这些观察不重新打开未约定的全设备 SLA。
 
-当前未验项保留 `PARTIAL` 或说明具体阻塞；暂缓/范围外不标为通过，也不再用作当前发布阻塞。
+当前需求表纳入本阶段的项目均已完成；暂缓/范围外项目单独记录，不作为当前发布阻塞。历史 `PARTIAL` 仅作追溯，不能覆盖需求表的最新口径。
 
 ### 2026-10-03 外部复核记录
 

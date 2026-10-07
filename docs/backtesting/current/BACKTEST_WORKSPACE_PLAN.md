@@ -2,15 +2,15 @@
 
 > 最新对齐批次（2026-10-07）：H-09共享Tab滚动196/196、S-11 Simulation挂载生命周期216/216、D-10实际小值轴28标签、ENG-10脚本错误双引擎64项、STG-03/06恢复和LC-07/NR-05故障隔离198项通过；根653/653、类型、构建、生产主E2E及工程门禁通过。K线空最新页缓存保护/连续性定向31项通过。证据为本地忽略目录 `audit-evidence/2026-10-07-tab-parity-closure/`及各专项目录。当前剩余项以[需求状态表](BACKTEST_REQUIREMENTS_STATUS.md)为准；本文G0～G9历史勾选不代替现行状态。
 
-> 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。此前完整本地门禁保持原时点；本轮未改视觉基线，VoiceOver与参考交互差异仍开放。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
+> 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。实体桌面 VoiceOver 按 SCOPE-08 不纳入本阶段；其余桌面可访问性合同已通过。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
 
-> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver和共享参考差异仍按需求表开放；GitHub CI 按用户决定暂缓，不作为当前 Gate。
+> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；手机专项默认deferred/full可选，实体桌面 VoiceOver按 SCOPE-08 暂不做；GitHub CI 按用户决定暂缓，不作为当前 Gate。
 
 > 当前有效的需求、优先级和状态以 [BACKTEST_REQUIREMENTS_STATUS.md](BACKTEST_REQUIREMENTS_STATUS.md) 为准；本文下方的独立审计和历史轮次仅用于追溯。
 
 > 2026-10-07 用户修正 UI 标准：功能、交互、图标和组件风格对标参考，整体布局适配本项目；没有 AI 对话区和顶部登录 banner，也不为它们留白。§3.3～3.4、§10 和 §14.2 已改用此标准；整页 1px / 0.5% / 1% 旧阈值不再有效。已有 PASS/PARTIAL 仍须按实际证据判定，不随标准文字自动关闭。
 
-> 最新范围调整：手机端适配先暂缓，见需求表 SCOPE-07。手机布局、横竖屏、safe-area、手机触摸及手机实机专项不再阻塞本阶段；保留已有实现与证据。本文未逐项重写的历史移动端目标仅供后续恢复工作，当前继续桌面全模块对标、窗口缩放、键盘和 VoiceOver，不取消通用功能正确性。
+> 最新范围调整：手机端适配先暂缓，见需求表 SCOPE-07；实体桌面 VoiceOver 按 SCOPE-08 暂不做。手机布局、横竖屏、safe-area、手机触摸及手机实机专项不再阻塞本阶段；保留已有实现与证据。当前桌面全模块对标、窗口缩放、键盘和通用功能正确性已完成，后续仅做非回归。
 
 > PERF-01 已取得独立生产终态：固定 Chromium DPR1 的 10k/100k 冷 selector p95 为 52.2/399.9ms，分页 41.4/42.2ms，列明的跨浏览器功能/资源检查通过；Firefox 超出 Chromium 对照值及 factory/API 限制如实记录于需求表，不声称所有设备同预算。启动预算、包体预算和生产两小时分别保留，不相互替代。此前 UI 批次根 627/627、类型/构建、开发/生产主 E2E、32 状态生产检查保留其时点；当前桌面632批次及最后CSS补丁的验证边界见顶部，剩余工作以需求表为准。参考信息已提供，无需用户重复补充。
 
@@ -44,7 +44,7 @@
 >
 > 日期：2026-09-27（历史计划版本；当前状态见顶部需求表及最新批次）
 >
-> 文档状态：实施中；G4b.2/G4b.3 和后续阶段过程保留作历史基线，当前状态只以顶部需求表为准。G8.1（`reportSchemaVersion=4`）下的本期有限引擎合同、固定 `BTCUSDT · 15m · SMA` 数值窗口、K 线合并、代表网络、STARTUP-01、PERF-01 固定生产合同与 REL-06 本地两小时已验；桌面 VoiceOver 和真实辅助技术/设备仍按需求表维护。GitHub CI 按用户决定暂缓，不作为本地交付阻塞。长期持久化只待讨论；完整 TV 外部逐 Fill 不作为条件，Safari 专项和线上 rollback 暂缓。
+> 文档状态：当前需求表纳入本阶段的本地功能已完成；G4b.2/G4b.3 和后续阶段过程保留作历史基线，当前状态只以顶部需求表为准。G8.1（`reportSchemaVersion=4`）下的有限引擎合同、固定 `BTCUSDT · 15m · SMA` 数值窗口、K 线合并、代表网络、STARTUP-01、PERF-01 和 REL-06 均已验；实体桌面 VoiceOver、手机、Safari、GitHub CI、线上部署和 Replay 按范围暂缓。长期持久化只待讨论；完整 TV 外部逐 Fill 不作为条件。
 >
 > 实施目标：功能完备、前端 UI 与交互一比一对标、运行时完全独立于参考网站
 >
@@ -1049,7 +1049,7 @@ G0 在记录 viewport、DPR、字体、timezone、locale 和固定数据的前�
 - 保持外观不变的前提下扩大透明触控 hit area。
 - 策略标题只通过 `textContent` 渲染，避免脚本标题注入。
 
-可执行验收门槛：当前阶段以桌面 WCAG 2.2 AA 的浏览器自动化可验证部分为目标；axe 或等价自动检查不得有 critical/serious 违规，moderate 违规必须逐项记录并有豁免；键盘必须能完成所有 Viewer/Dock/Tab/表格排序/设置/关闭操作且无焦点丢失。桌面 VoiceOver 仍需独立证据，缺环境时记录外部阻塞；Safari 专项按 SCOPE-03、手机适配及手机实机触摸按 SCOPE-07 暂缓。视觉对标不能覆盖这些不可见语义要求。
+可执行验收门槛：本阶段以桌面 WCAG 2.2 AA 的浏览器自动化可验证部分为目标；axe 或等价自动检查不得有 critical/serious 违规，moderate 违规必须逐项记录并有豁免；键盘必须能完成所有 Viewer/Dock/Tab/表格排序/设置/关闭操作且无焦点丢失。上述桌面浏览器合同已通过；实体 VoiceOver 按 SCOPE-08、Safari 按 SCOPE-03、手机按 SCOPE-07 暂不做。视觉对标不能覆盖这些已明确的范围决定。
 
 ## 11. 性能、持久化与故障隔离
 
