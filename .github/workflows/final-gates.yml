@@ -51,8 +51,11 @@ jobs:
       - run: npm ci
       - name: Install Python Playwright for Python E2E gates
         run: python3 -m pip install --disable-pip-version-check playwright
-      - run: npx playwright install --with-deps chromium firefox webkit
-      - run: python3 -m playwright install chromium firefox webkit
+      # All E2E gates use the Python Playwright API.  There is no Node
+      # Playwright dependency in this workspace, so `npx playwright` would
+      # download an unpinned npm package on a clean runner and make browser
+      # versions depend on network state.  Install through the package above.
+      - run: python3 -m playwright install --with-deps chromium firefox webkit
       # Keep the same aggregate command semantics, but expose each phase as a
       # separate step.  A single opaque shell step can appear frozen for many
       # minutes on a hosted runner while a browser or dependency subprocess is
@@ -122,8 +125,7 @@ jobs:
       - run: npm ci
       - name: Install Python Playwright for deployment smoke
         run: python3 -m pip install --disable-pip-version-check playwright
-      - run: npx playwright install --with-deps chromium
-      - run: python3 -m playwright install chromium
+      - run: python3 -m playwright install --with-deps chromium
       - name: Check deployed candidate and optional rollback slot
         env:
           QUANT_DEPLOY_URL: ${{ vars.QUANT_DEPLOY_URL }}

@@ -1,10 +1,10 @@
 # TODO
 
-> 最新对齐批次（2026-10-07）：共享Tab滚动196/196、Simulation挂载生命周期216/216、极小轴8个实际图表28标签、Adapter脚本错误双引擎64项、旧Workspace恢复两浏览器三阶段、故障隔离198项和K线连续性31项通过；根652/652、Adapter32/32、相关Controller/History121/121通过。类型、构建、生产主E2E和工程门禁已通过。其他未关闭项以需求表为准；未commit/push，手机/Safari/线上/Replay继续暂缓。
+> 最新对齐批次（2026-10-07）：共享Tab滚动196/196、Simulation挂载生命周期216/216、极小轴8个实际图表28标签、Adapter脚本错误双引擎64项、旧Workspace恢复两浏览器三阶段、故障隔离198项和K线连续性31项通过；根652/652、Adapter32/32、相关Controller/History121/121通过。类型、构建、生产主E2E和工程门禁已通过。其他未关闭项以需求表为准；当前提交已在本地建立，远端 BUILD-03 仍待本次提交的 Actions；手机/Safari/线上/Replay继续暂缓。
 
 > 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。此前完整本地门禁保持原时点；本轮未改视觉基线，VoiceOver与参考交互差异仍开放。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
 
-> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver、共享参考差异和最终提交CI仍按需求表开放，未commit/push。
+> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver、共享参考差异和最终提交CI仍按需求表开放；当前提交已在本地建立，远端 CI 待本次提交。
 
 > 当前有效的需求、优先级和验收状态统一见 [BACKTEST_REQUIREMENTS_STATUS.md](docs/backtesting/current/BACKTEST_REQUIREMENTS_STATUS.md)。本文件后续章节保留历史推进记录和细项 TODO。
 
