@@ -1,6 +1,6 @@
 # G4a 本地源码依赖基线
 
-状态：已完成本地源码导入与 workspace 解析；Vela 主包仍固定使用 registry `0.7.7`。
+状态：已完成本地源码导入与 workspace 解析；Vela 主包固定使用 registry `0.7.7`，并在构建准备阶段应用一处经过完整 SHA-256 校验的视口兼容补丁。
 
 本文件配合 [`DEPENDENCY_BASELINE.json`](./DEPENDENCY_BASELINE.json) 使用。它记录三个基础包的版本、npm tarball 完整性、上游仓库 tag/commit、导出入口和 peer contract。`pinets` 与 `@luxalgo/vela-pinets` 已完整导入 `packages/`，根 `package.json` 通过 `file:` workspace 解析；Vela 主包仍使用精确 registry 版本，避免安装时被 `^` 或 `>=` 静默升级。
 
@@ -8,7 +8,7 @@
 
 | 包 | npm 版本 | npm `gitHead` | 上游 tag | npm integrity | 当前解析 |
 | --- | --- | --- | --- | --- | --- |
-| `@luxalgo/vela` | `0.7.7` | `07c1d829c66bd5fb72b4ab7d2ca780d506d8a00b` | `v0.7.7` | `sha512-9V8cCJUP3i+nkrzxU43rrnZFxPGDfOxX/XDlcAdBFMbUrNartDrVVPsk1kTZyQyqBR4115n3n6XACLImTaM4hw==` | registry |
+| `@luxalgo/vela` | `0.7.7` | `07c1d829c66bd5fb72b4ab7d2ca780d506d8a00b` | `v0.7.7` | `sha512-9V8cCJUP3i+nkrzxU43rrnZFxPGDfOxX/XDlcAdBFMbUrNartDrVVPsk1kTZyQyqBR4115n3n6XACLImTaM4hw==` | registry + pinned viewport patch |
 | `@luxalgo/vela-pinets` | `0.2.13` | `a2a2097be8f30b4b596b13212ed4608c36c2ea26` | `v0.2.13` | `sha512-KKw/lfAByoZwxM8IcCyGiQXD6lzl3XXGslM8r7kXHMMGRNguDHiUil0vGRwtg4IaoJLRWgFdm5XSn/Bz3iAvjw==` | workspace `packages/vela-pinets` |
 | `pinets` | `0.9.34` | `beacd587e83aa7ee061023f8cea66b2e887d5676` | `v0.9.34` | `sha512-5dnrrR+g40XMjrMBJEHGL2Hk7lqCz/fPkaPklFvD6G/qdh3xwRYX3W7UADaNieX6ZV/+/xah78ufOwEkNKVFyg==` | workspace `packages/pinets` |
 
@@ -36,6 +36,6 @@ npm run check:dependencies
 
 `npm run test:forks` 已作为开发命令保留，但上游 PineTS 测试集包含实时 Binance 请求；在无稳定外网时会出现超时，不能作为本地应用 CI 的必过门禁。当前可重复的依赖门禁是 `npm run check:dependencies`、`npm run build:forks`、根 TypeScript/Vite build，以及应用层回归/E2E；上游网络测试失败不改变 workspace 解析或构建结论。
 
-Vela 仍按 G2 的公开 API Spike 决策；在决策记录证明需要修改之前，继续使用精确 registry `0.7.7`，不 vendoring Vela。
+Vela 继续使用精确 registry `0.7.7`，不整体 vendoring；视口一处兼容补丁已明确超出公共 API，详见 [`vela-viewport.md`](./vela-viewport.md)。它把原生最小柱间距从 `0.5` CSS px 降为数值保护下限，使窄 Cell/手机能完整定位普通切周期的 2,000 根；仍保留原生按实际数据量限制缩放、平移的逻辑。构建入口会校验安装包版本及补丁前后完整文件哈希，未知文件或版本拒绝处理。不能再把该依赖描述为完全未经修改的 registry 产物。
 
 两个本地包的补丁边界、升级流程和验证命令分别记录在 [`pinets.md`](./pinets.md) 与 [`vela-pinets.md`](./vela-pinets.md)。

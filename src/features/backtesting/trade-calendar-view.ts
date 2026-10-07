@@ -13,6 +13,40 @@ import { formatBacktestTradeMetric } from './trade-log.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const WEEKDAYS = Object.freeze(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+const COMPACT_MONEY = new Intl.NumberFormat('en-US', {
+  notation: 'compact', maximumSignificantDigits: 2, signDisplay: 'exceptZero',
+});
+const COMPACT_WHOLE_MONEY = new Intl.NumberFormat('en-US', {
+  maximumFractionDigits: 0, signDisplay: 'exceptZero', useGrouping: false,
+});
+const COMPACT_SMALL_MONEY = new Intl.NumberFormat('en-US', {
+  maximumFractionDigits: 2, signDisplay: 'exceptZero', useGrouping: false,
+});
+const COMPACT_COUNT = new Intl.NumberFormat('en-US', {
+  notation: 'compact', maximumFractionDigits: 0,
+});
+const EXACT_DAY_MONEY = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2, maximumFractionDigits: 20, signDisplay: 'exceptZero',
+});
+let nextCalendarTooltipId = 0;
+
+function compactDayPnl(value: number): string {
+  const magnitude = Math.abs(value);
+  if (magnitude > 0 && magnitude < 0.01) return value < 0 ? '-<.01' : '+<.01';
+  if (magnitude < 1) return COMPACT_SMALL_MONEY.format(value === 0 ? 0 : value);
+  if (magnitude < 1000) return COMPACT_WHOLE_MONEY.format(value);
+  return COMPACT_MONEY.format(value);
+}
+
+function exactDayPnl(value: number, currency: string): string {
+  // The table's reference formatter abbreviates million-sized values. The
+  // expanded day must expose the actual value, including tiny nonzero P&L.
+  const normalized = Object.is(value, -0) ? 0 : value;
+  const amount = normalized !== 0 && Math.abs(normalized) < 1e-7
+    ? `${normalized > 0 ? '+' : ''}${normalized.toString()}`
+    : EXACT_DAY_MONEY.format(normalized);
+  return `${amount} ${currency}`;
+}
 
 export interface BacktestTradeCalendarViewOptions {
   readonly days: ReadonlyMap<string, BacktestTradeCalendarDay>;
@@ -68,6 +102,30 @@ function navigationButton(
   control.title = label;
   control.dataset.calendarNavigation = name;
   control.appendChild(navigationIcon(doc, name));
+  if (name === 'current') {
+    // The reference uses a styled popup for this icon, not a native title.
+    // Keep the popup within the component so replacing/destroying a Calendar
+    // cannot leave a portal or a document listener behind.
+    control.removeAttribute('title');
+    const tooltip = element(doc, 'span', 'quant-backtest-calendar-tooltip');
+    tooltip.id = `quant-calendar-current-tooltip-${++nextCalendarTooltipId}`;
+    tooltip.setAttribute('role', 'tooltip');
+    tooltip.textContent = label;
+    control.setAttribute('aria-describedby', tooltip.id);
+    control.appendChild(tooltip);
+    const resetDismissal = (): void => { delete control.dataset.tooltipDismissed; };
+    control.addEventListener('pointerleave', () => {
+      if (doc.activeElement !== control) resetDismissal();
+    });
+    control.addEventListener('blur', resetDismissal);
+    control.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape'
+        || doc.defaultView?.getComputedStyle(tooltip).visibility !== 'visible') return;
+      event.preventDefault();
+      event.stopPropagation();
+      control.dataset.tooltipDismissed = 'true';
+    });
+  }
   control.addEventListener('click', onClick);
   return control;
 }
@@ -95,11 +153,32 @@ function renderDayDetails(
   currency: string,
 ): HTMLElement {
   const details = element(doc, 'div', 'quant-backtest-calendar-day-details');
-  details.appendChild(money(doc, day.pnl, currency, 'quant-backtest-calendar-day-pnl'));
+  const pnl = money(doc, day.pnl, currency, 'quant-backtest-calendar-day-pnl');
+  const compactPnl = element(doc, 'span', 'quant-backtest-calendar-compact quant-backtest-calendar-compact-pnl');
+  const compactValue = compactDayPnl(day.pnl);
+  const compactNumber = element(doc, 'span', 'quant-backtest-calendar-compact-number');
+  const scale = compactValue.match(/[KMBT]$/)?.[0];
+  compactNumber.textContent = scale ? compactValue.slice(0, -1) : compactValue;
+  compactPnl.appendChild(compactNumber);
+  if (scale) {
+    const compactScale = element(doc, 'span', 'quant-backtest-calendar-compact-scale');
+    compactScale.textContent = scale;
+    compactPnl.appendChild(compactScale);
+  }
+  pnl.appendChild(compactPnl);
+  details.appendChild(pnl);
   const count = element(doc, 'span', 'quant-backtest-calendar-day-meta');
-  count.textContent = `${day.tradeCount} trade${day.tradeCount === 1 ? '' : 's'}`;
+  const countFull = element(doc, 'span', 'quant-backtest-calendar-full');
+  countFull.textContent = `${day.tradeCount} trade${day.tradeCount === 1 ? '' : 's'}`;
+  const countCompact = element(doc, 'span', 'quant-backtest-calendar-compact');
+  countCompact.textContent = `${COMPACT_COUNT.format(day.tradeCount)} tr`;
+  count.append(countFull, countCompact);
   const winRate = element(doc, 'span', 'quant-backtest-calendar-day-meta');
-  winRate.textContent = `${day.winRate.toFixed(0)}% win`;
+  const winRateFull = element(doc, 'span', 'quant-backtest-calendar-full');
+  winRateFull.textContent = `${day.winRate.toFixed(0)}% win`;
+  const winRateCompact = element(doc, 'span', 'quant-backtest-calendar-compact');
+  winRateCompact.textContent = `${day.winRate.toFixed(0)}%`;
+  winRate.append(winRateFull, winRateCompact);
   details.append(count, winRate);
   return details;
 }
@@ -158,6 +237,42 @@ export function renderBacktestTradeCalendar(
   heading.appendChild(navigation);
   container.appendChild(heading);
 
+  // Narrow day cells may abbreviate long amounts. A real button and an
+  // inline detail region keep the full value available to touch and
+  // keyboard users as well as assistive technology, without a hover-only
+  // tooltip or a document-level listener that could survive a rerender.
+  const daySummary = element(doc, 'section', 'quant-backtest-calendar-day-summary');
+  daySummary.id = `quant-calendar-day-summary-${++nextCalendarTooltipId}`;
+  daySummary.setAttribute('aria-label', 'Daily trade summary');
+  daySummary.hidden = true;
+  const daySummaryText = element(doc, 'p', 'quant-backtest-calendar-day-summary-text');
+  daySummaryText.setAttribute('role', 'status');
+  daySummaryText.setAttribute('aria-live', 'polite');
+  daySummaryText.setAttribute('aria-atomic', 'true');
+  const closeSummary = element(doc, 'button', 'quant-backtest-button');
+  closeSummary.type = 'button';
+  closeSummary.textContent = 'Close';
+  closeSummary.setAttribute('aria-label', 'Close daily summary');
+  let selectedDay: HTMLButtonElement | null = null;
+  const hideDaySummary = (): void => {
+    daySummary.hidden = true;
+    daySummaryText.textContent = '';
+    selectedDay?.setAttribute('aria-expanded', 'false');
+    // The detail region may have scrolled a late-month day out of view.
+    // Restore both focus and visibility when it closes.
+    selectedDay?.focus();
+    selectedDay = null;
+  };
+  closeSummary.addEventListener('click', hideDaySummary);
+  container.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || daySummary.hidden) return;
+    event.preventDefault();
+    event.stopPropagation();
+    hideDaySummary();
+  });
+  daySummary.append(daySummaryText, closeSummary);
+  container.appendChild(daySummary);
+
   const grid = element(doc, 'div', 'quant-backtest-calendar-grid');
   grid.setAttribute('role', 'grid');
   grid.setAttribute('aria-readonly', 'true');
@@ -208,10 +323,31 @@ export function renderBacktestTradeCalendar(
     day.appendChild(dateElement);
     if (value) {
       day.appendChild(renderDayDetails(doc, value, currency));
-      day.setAttribute(
-        'aria-label',
-        `${date}: ${formatBacktestTradeMetric(value.pnl, currency, true)}, ${value.tradeCount} trade${value.tradeCount === 1 ? '' : 's'}, ${value.winRate.toFixed(0)}% win`,
-      );
+      const summaryLabel = `${date}: ${exactDayPnl(value.pnl, currency)}, ${value.tradeCount} trade${value.tradeCount === 1 ? '' : 's'}, ${value.winRate.toFixed(0)}% win`;
+      day.setAttribute('aria-label', summaryLabel);
+      const detailsButton = element(doc, 'button', 'quant-backtest-calendar-day-toggle');
+      detailsButton.type = 'button';
+      detailsButton.dataset.calendarDayDetails = date;
+      detailsButton.setAttribute('aria-label', `Show daily summary: ${summaryLabel}`);
+      detailsButton.setAttribute('aria-controls', daySummary.id);
+      detailsButton.setAttribute('aria-expanded', 'false');
+      detailsButton.title = summaryLabel;
+      detailsButton.addEventListener('click', () => {
+        if (selectedDay === detailsButton) {
+          hideDaySummary();
+          return;
+        }
+        selectedDay?.setAttribute('aria-expanded', 'false');
+        selectedDay = detailsButton;
+        detailsButton.setAttribute('aria-expanded', 'true');
+        daySummaryText.textContent = summaryLabel;
+        daySummary.hidden = false;
+        // The expanded region precedes the grid. Move focus to its close
+        // control so it is visible even when a user opened a late-month day
+        // from the bottom of a phone viewport; closing restores the day.
+        closeSummary.focus();
+      });
+      day.appendChild(detailsButton);
     } else {
       day.setAttribute('aria-label', `${date}: No closed trades`);
     }

@@ -16,6 +16,7 @@ import type {
 import { validateAuditLedgerSnapshot } from '@luxalgo/vela-pinets/audit';
 import { WORKSPACE_HISTORY_BARS } from '../../config/workspace-options.ts';
 import { observedWorkspaceHistory, requestedHistoryMarketKey, subscribeWorkspaceHistoryRequests } from './workspace-history-observer.ts';
+import { reloadOnlineHistory } from './online-history-reload.ts';
 import {
   BACKTEST_CONTEXT_SELECT,
   BACKTEST_SUMMARY_CONTEXT_SELECT,
@@ -129,6 +130,8 @@ interface Entry {
   } | null;
   error: Error | null;
   errorDetails: BacktestAdapterError | null;
+  /** A failed Pine execution must be rerun, never recovered from cached context. */
+  runtimeRetryPending: boolean;
   noData: boolean;
   /** Vela deep-history coverage, independent of ScriptRun.complete. */
   historyLoaded: number | null;
@@ -273,10 +276,8 @@ export class VelaBacktestResultsAdapter {
             // Some Vela cells omit `market.bars` while an aborted initial load
             // is being rebound; falling back to Vela's generic 500-bar default
             // would silently downgrade the 2000-bar startup contract.
-            await binding.chart.setMarket({
-              bars: binding.chart.market.bars ?? entry.historyTarget ?? WORKSPACE_HISTORY_BARS,
-              data: [],
-            });
+            await reloadOnlineHistory(binding.chart,
+              binding.chart.market.bars ?? entry.historyTarget ?? WORKSPACE_HISTORY_BARS);
             if (this.isBindingCurrent(binding) && this.historyRetries.get(binding)?.token === token) {
               await binding.chart.historyComplete();
             }
@@ -287,6 +288,23 @@ export class VelaBacktestResultsAdapter {
         }
         try { await retry.promise; }
         finally { if (this.historyRetries.get(binding) === retry) this.historyRetries.delete(binding); }
+        return;
+      }
+      if (entry.runtimeRetryPending) return;
+      if (entry.errorDetails?.kind === 'pine-runtime') {
+        // Vela's public input update reexecutes even unchanged values. Reading
+        // context() here can only return the previous successful execution.
+        // Native inputs/run/error events own state; keep the failure visible
+        // until Vela actually announces the new execution.
+        entry.runtimeRetryPending = true;
+        const revision = entry.revision;
+        const epoch = entry.epoch;
+        try {
+          entry.handle.setInputs(entry.handle.inputValues());
+        } catch (error) {
+          entry.runtimeRetryPending = false;
+          if (this.isCurrent(entry, revision, epoch, binding, entry.handle)) this.contextFailed(entry, error);
+        }
         return;
       }
       const revision = entry.revision;
@@ -543,8 +561,15 @@ export class VelaBacktestResultsAdapter {
       if (!this.isBindingCurrent(binding)) return;
       const handle = this.findHandle(chart, id);
       if (!handle || !this.isHandleCurrent(binding, handle)) return;
-      const entry = this.entries.get(keyOf({ cellId: cell.id, indicatorId: id }));
+      const key = { cellId: cell.id, indicatorId: id };
+      const entry = this.entries.get(keyOf(key))
+        ?? (isStrategyHandle(handle, null) ? this.ensureEntry(key, handle, binding) : null);
       if (!entry) return;
+      // A first Worker failure can precede any model/context announcement.
+      // Its error is authoritative over discovery and all earlier reads.
+      entry.revision += 1;
+      entry.runtimeRetryPending = false;
+      entry.desiredLedger = null;
       entry.error = error;
       entry.errorDetails = backtestAdapterErrorOf(error);
       entry.ledgerState = entry.trades ? 'ready' : 'error';
@@ -785,6 +810,7 @@ export class VelaBacktestResultsAdapter {
       const entry = this.entries.get(keyOf({ cellId: cell.id, indicatorId: id }));
       const handle = this.findHandle(chart, id);
       if (!handle || !this.isHandleCurrent(binding, handle)) return;
+      if (entry?.runtimeRetryPending || entry?.errorDetails?.kind === 'pine-runtime') return;
       if (!entry) {
         this.startBootstrapHandle(cell.id, handle, binding);
       } else if (entry.run) {
@@ -935,7 +961,7 @@ export class VelaBacktestResultsAdapter {
     const loadGeneration = binding.loadGeneration;
     const requestedMarket = requestedHistoryMarketKey(binding.chart.market ?? {});
     let entry = this.entries.get(keyOf(key));
-    if (entry?.run) return;
+    if (entry?.run || entry?.runtimeRetryPending || entry?.errorDetails?.kind === 'pine-runtime') return;
     // Existing strategies participate in the same request ordering as Retry
     // before the first await. Initial discovery has no publicly retryable
     // entry yet; any run creating one during the read supersedes discovery.
@@ -1033,6 +1059,7 @@ export class VelaBacktestResultsAdapter {
       return;
     }
     entry.awaitingMarketRun = false;
+    entry.runtimeRetryPending = false;
     entry.revision += 1;
     entry.run = { ...run, ...detachedFrozen(run) };
     entry.mixedTickProjectionAllowed = run.cause === 'tick';
@@ -1576,6 +1603,7 @@ export class VelaBacktestResultsAdapter {
       desiredLedger: null,
       error: null,
       errorDetails: null,
+      runtimeRetryPending: false,
       noData: binding.noData,
       ...binding.history,
     };
@@ -1649,6 +1677,7 @@ export class VelaBacktestResultsAdapter {
     entry.desiredLedger = null;
     entry.error = null;
     entry.errorDetails = null;
+    entry.runtimeRetryPending = false;
     entry.noData = this.cells.get(entry.cellId)?.noData ?? false;
     // Hiding a strategy invalidates its execution, not its chart's history.
     // Market/load invalidation already resets binding.history beforehand.
@@ -2532,7 +2561,9 @@ function historyStateOf(entry: Entry): BacktestAdapterHistoryState {
     target,
     barsLoaded: entry.historyBarsLoaded,
     oldestTime: entry.historyOldestTime,
-    complete: entry.historyComplete === true,
+    // history:complete is a terminal notification even after an abort. The
+    // public result must describe data completeness, not merely a stopped load.
+    complete: entry.historyComplete === true && entry.historyReason !== 'aborted' && !entry.historyError,
     reason: entry.historyReason,
     progress,
   });

@@ -15,6 +15,7 @@ import type { BacktestAdapterKey } from '../integrations/vela/backtest-adapter-t
 import type { QuantWorkspace } from '../integrations/vela/create-workspace.ts';
 import type { BacktestPreferencesRepository } from '../domain/ports/backtest-preferences.ts';
 import { diffBacktestSettingValues, resolveBacktestSettingValues } from '../domain/backtest-settings.ts';
+import { velaSettingsControls } from '../integrations/vela/settings-controls.ts';
 
 /**
  * The app-level composition boundary for backtesting.
@@ -156,13 +157,28 @@ export function mountBacktestFeature(
   const syncHostBounds = () => {
     const root = workspace.root;
     const rootRect = root.getBoundingClientRect();
+    if (rootRect.width <= 0 || rootRect.height <= 0) return;
     const topbar = root.querySelector<HTMLElement>('.vela-widget-topbar');
-    const bottombar = root.querySelector<HTMLElement>('.vela-widget-bottombar');
-    const top = topbar
-      ? Math.max(0, topbar.getBoundingClientRect().bottom - rootRect.top)
-      : 39;
-    const bottom = bottombar
-      ? Math.max(0, rootRect.bottom - bottombar.getBoundingClientRect().top)
+    const bottomBars = [...root.querySelectorAll<HTMLElement>('.vela-widget-bottombar, .vela-mobilebar')];
+    const visibleRect = (bar: HTMLElement) => {
+      const rect = bar.getBoundingClientRect();
+      const visibility = view?.getComputedStyle(bar).visibility;
+      // On mobile Vela keeps its desktop bars in the DOM with display:none.
+      // Their zero rect must not reserve the entire Workspace height. Only
+      // rendered chrome intersecting this root participates in the inset.
+      if (!bar.getClientRects().length || rect.width <= 0 || rect.height <= 0
+        || visibility === 'hidden' || visibility === 'collapse'
+        || rect.bottom <= rootRect.top || rect.top >= rootRect.bottom
+        || rect.right <= rootRect.left || rect.left >= rootRect.right) return null;
+      return rect;
+    };
+    const topRect = topbar ? visibleRect(topbar) : null;
+    const top = topRect ? Math.max(0, topRect.bottom - rootRect.top) : topbar ? 0 : 39;
+    const bottom = bottomBars.length
+      ? Math.max(0, ...bottomBars.map((bar) => {
+        const rect = visibleRect(bar);
+        return rect ? rootRect.bottom - rect.top : 0;
+      }))
       : 38;
     options.host.style.setProperty('--quant-backtest-host-top', `${Math.round(top)}px`);
     options.host.style.setProperty('--quant-backtest-host-bottom', `${Math.round(bottom)}px`);
@@ -250,12 +266,19 @@ export function mountBacktestFeature(
     }
 
     const mountedWorkbench = createBacktestWorkbench(options.host, {
+      settingsControls: velaSettingsControls,
       dockPreferences: loadDockPreferences(),
       getSnapshot: () => controller.getSnapshot(),
       subscribe: (listener) => controller.subscribe(listener),
       onTabChange: () => undefined,
       settings: {
-        read: (report) => report.key ? control.readSettings(report.key) : null,
+        read: (report) => {
+          const settings = report.key ? control.readSettings(report.key) : null;
+          // Vela's script handle can retain the generic "Indicator" title
+          // after compilation. The report already owns the resolved Pine
+          // strategy name used by the Dock and Viewer; keep Settings aligned.
+          return settings ? { ...settings, title: report.strategyName } : null;
+        },
         apply: (
           report,
           inputs: Record<string, BacktestSettingValue>,
@@ -318,6 +341,7 @@ export function mountBacktestFeature(
         const updated = controller.updateSimulation(change);
         options.onSimulationChange?.(updated ?? report, change);
       },
+      onSimulationSessionEnd: (key) => controller.resetSimulationSession(key),
       onTradeLocate: (trade, side) => {
         const report = controller.getSnapshot();
         if (report) options.onTradeLocate?.(report, trade, side);

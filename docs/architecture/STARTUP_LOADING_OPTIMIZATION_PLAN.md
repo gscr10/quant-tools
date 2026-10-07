@@ -1,16 +1,20 @@
 # 首次加载与行情初始化优化计划
 
-日期：2026-10-02。代码基线：`feature/startup-loading-optimization` 当前工作树（提交基线 `f338e25`，本轮未提交改动以本轮验证为准）。工作分支：`feature/startup-loading-optimization`。
+日期：2026-10-02，2026-10-07 复核更新。代码基线：当前 `task/p1-priority` 工作树（HEAD `2981cd3` 加未提交改动；本轮未提交改动以本轮验证为准）。
 
-状态：执行中。默认历史、渐进加载、Worker 懒加载、存储降级、Provider 去重/短 TTL 和主要回归门禁已落地；D-01 本地动态边界已完成复核，但长时 Provider、真实制品 rollback 及完整线上验收仍未关闭。本文件同时记录执行状态，不替代独立性能报告。
+状态：有限性能合同和 REL-06 本地生产两小时范围已完成。默认历史、渐进加载、Worker 懒加载、存储降级、Provider 去重/短 TTL 和主要回归门禁已落地；代表环境下的真实冷/热启动和性能证据以 [STARTUP-01](../backtesting/current/BACKTEST_REQUIREMENTS_STATUS.md) 为准。本文件保留历史实现过程，不替代独立性能报告；跨设备、线上部署和 rollback 仍不在本地证据内。
 
-后续 Final Gate 收敛工作在 `task/network-release-gates` 分支推进，细分证据见
-[FINAL_GATE_CLOSURE_PLAN.md](FINAL_GATE_CLOSURE_PLAN.md)。本轮已新增 offline/online
-WebSocket lease 恢复、1H/10m Bar Magnifier golden 和触摸语义门禁；实体 Safari、VoiceOver、真实
-设备、线上 CDN/cache/rollback、参考站完整逐笔 golden 仍必须等待对应外部环境或同源数据，不以本地
-模拟结果代替。
+2026-10-07 已补完整阶段实测：真实 Binance Spot BTCUSDT/15m，恢复 SMA 9/21，冷3页、prime1页、warm3页全部通过，无 routing、行情/Worker 替换或页面错误。每页2,000根连续行情、2,000点曲线、104 closed + 1 open、同run/revision，实际打开 Performance/Simulation。冷/热中位数：首绘787/311ms，完整历史1230/848ms，完整报告1296/927ms，Performance1459/1084ms，Simulation1545/1181ms；warm静态资源传输0且CDP证实缓存。证据 `audit-evidence/2026-10-07-startup-full-report/`；关闭完整阶段计时缺口，不将各3次网络样本当统计p95/SLA。新增报告观察器的4项合同测试拒绝partial、旧身份、缺账本和错误窗口误判。
 
-### 2026-10-02 当前工作树追加修复
+同日追加原§3渐进预算验收：同一隔离生产产物，受控HTTP每请求300ms/200,000B/s，冷/热各10轮ABBA、四组各20次（80正式+2prime）。冷首绘median/p95为1301/1618→776/950ms，改善40.33%；冷完整历史1396/1721→1291/1666ms，冷完整报告1468/1913→1354/1766ms，热完整报告1402/1588→1302/1509ms。页内暖路径最大median回退1.23%，页面/Worker retained heap最大median增加0.50%，每次2次行情请求，完整OHLCV/交易/统计/曲线/精度SHA一致，82流程零页面/请求错误且销毁归零。`tests/startup_progressive_build.mjs`、`tests/startup_progressive_benchmark.py`可复跑，观察器/预算测试7/7。142项哈希通过；证据 `audit-evidence/2026-10-07-startup-progressive-budget-final/` 保留全部样本和pilot失败。有限渐进预算已关闭。
+
+当前 Final Gate 收敛工作在 `task/p1-priority` 分支推进，细分证据见
+[FINAL_GATE_CLOSURE_PLAN.md](FINAL_GATE_CLOSURE_PLAN.md)。固定 BTCUSDT/15m/SMA 数值窗口已验收；
+不再把其它数值窗口追加为当前阻塞。Safari 专项、线上部署/CDN/rollback 和 Replay 按用户决定暂缓；
+VoiceOver、真实设备触摸和剩余网络/生命周期验收继续单列。下方 2026-10-02 的分支、测试数字和
+外部待办均为历史记录，不能覆盖这些新决定。
+
+### 2026-10-02 工作树追加修复（历史记录）
 
 - 启动矩阵新增可选 `--max-p95` 与 `--max-failures` 失败护栏；`verify:startup:full` 现在执行三样本、每个单元首绘 p95 5 秒上限，并纳入离线 smoke、严格性能和视觉/a11y 回归，避免“只绘制成功但性能已回退”仍返回绿色。
 - 组合验收已实际复跑通过；随后新增 Binance Futures 30 轮断线/重连/销毁回归、repository-hygiene 和 Vela-PineTS fork 测试门禁，当前根测试为 512/512、Vela-PineTS 为 292/292、release 专项为 27/27、Provider live 为 11/11。类型/构建、Bundle/依赖/repository-hygiene/dist/release、启动矩阵、0 延迟三浏览器竞态、getter/methods/quota 存储故障探针、Provider soak、主流程/Settings/故障隔离/多 Cell、开发/生产/三浏览器 E2E、离线 smoke、strict performance 和 visual/a11y 均通过；外部 Final Gate 仍按下方边界保持开放。
@@ -307,6 +311,12 @@ kill-switch 测试后重新进行普通 production build，避免遗留禁用回
 2026-10-02 本轮代码复核：D-01 历史完成后立即挂载、晚挂载、延迟适配器及两种真实引擎均通过；Provider live 7/7（含异步 Binance endpoint、Hyperliquid reconnect、嵌套订阅）；根测试 454/454、Provider 专项 52/52、Vela-PineTS 283/283、开发/生产 E2E、三浏览器、性能 strict、视觉/a11y、Provider smoke 均通过。`startup_loading.py` 在默认延迟、2 秒索引延迟和 0 秒索引/行情延迟场景均通过；此前 `bar-delay=80ms` 的偶发超时已用 0 秒场景 11/11 复测收口，不将单次旧时序抖动继续作为当前未决缺陷。
 
 2026-10-02 冷/热启动补测：Chromium 3 次首绘 `620.8/518.8/528.5ms`（median `528.5ms`），Firefox 2 次 `733/550ms`（median `641.5ms`），WebKit 2 次 `634/626ms`（median `630ms`）；getter 和 Storage methods 故障各 1 次均成功启动。该样本证明当前跨浏览器和存储降级链路可工作，但样本量仍不足以关闭完整 S0 冷/热 p95 门禁。
+
+2026-10-07 启动测量纠正：首版 `--real-provider` 虽然不注入行情，但仍注册 `context.route('**/*')`，Playwright 因而禁用 HTTP cache；共享 context 每轮还重复安装了观测脚本。旧 `1369.8/614.3/674.8ms` 只能说明同 context 新页面能首绘，撤回其“HTTP 热缓存”结论；旧 `948.7/847.6ms` 也不能作为未拦截请求的基线。旧附件仅留作追溯，不与更正后的样本合并计算。
+
+更正后的真实模式完全不注册 Playwright routing，通过 request/response/requestfinished 事件观测实际网络；初始化脚本在 context 创建时仅安装一次，真实开发模式也不再通过 main.ts 改写取得 App 引用。`--hot` 必须同时指定 `--real-provider --preview` 且至少两个样本：序号 0 是 prime，其后才是 warm；若 warm 页面没有同源生产 JS/CSS 的缓存命中证据，运行失败。冷模式每次创建无 HTTP 缓存的新 context，服务器在样本之间复用；“冷”不表示清空操作系统 DNS、代理或服务器缓存。每次页面均恢复相同的 Workspace 种子，行情内存缓存不跨页面共享。
+
+更正后的生产基线：本机 `HeadlessChrome/154.0.0.0` + 显式 `QUANT_PROVIDER_PROXY`，真实 Binance Spot `BTCUSDT/15m`、2,000 根配置，冷 context 首绘 3/3 为 `5500.2/2700.5/789.8ms`，主 JS/CSS 每次传输 `477674/13217 bytes`，无缓存命中；同一 context 首次 prime `847.3ms`，随后新页面 warm 3/3 为 `673.7/225.2/241.9ms`。三个 warm 样本主 JS/CSS 均 `transferSize=0`、`encodedBodySize>0`，CDP 同时确认两个缓存命中；所有样本页面错误为 0。冷样本在首绘采样时仍有未结束的后台/补历史请求，因此这里仅证明首绘与静态资源缓存，不宣称历史完成或全请求成功。原始结果、请求时间线、缓存记录和截图分别保存在被忽略的 `audit-evidence/2026-10-07-startup-cache-corrected-cold/`、`audit-evidence/2026-10-07-startup-cache-corrected-warm/`。小样本的网络波动不能归因于代码，也不能关闭完整 p95、其它代表环境和长时资源/结果完整性验收；不扩大为所有地区必测，STARTUP-01 保持 PARTIAL。
 2026-10-02 Chromium 扩展样本：受控索引 `200ms`、K 线 `300ms`，10 次首绘为 `671.1/567.4/535.7/511.8/525.7/512.4/501.8/530.4/515.7/530.6ms`，median `528.1ms`、离散 p95（第 10 个排序样本的近似）`567.4ms`，全部无失败。该结果用于启动观测，不替代跨机器基线和长期真实网络样本。
 
 2026-10-02 资源预算门禁：`npm run check:bundle-size` 通过；当前 main `2,274,833/640,437`、worker `825,094/206,251`、Highcharts 合计 `376,416/134,100`（raw/gzip bytes），均低于源码中定义的预算。预算只约束构建产物，不把历史 audit 附件纳入仓库或门禁。

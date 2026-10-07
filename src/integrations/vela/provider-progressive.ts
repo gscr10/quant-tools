@@ -1,5 +1,6 @@
 import type { BarRange, DataProvider, OHLCV } from '@luxalgo/vela';
-import { normalizeProviderBars, normalizeProviderRange } from './provider-history.ts';
+import { hasContinuousHistory, providerHistoryCalendar, normalizeProviderBars, normalizeProviderRange } from './provider-history.ts';
+import { repairHistoryGaps } from './history-continuity.ts';
 
 const NATIVE = new Set([
   '1', '3', '5', '15', '30', '60', '120', '240', '360', '480', '720', 'D', 'W', 'M',
@@ -137,7 +138,19 @@ export function enableProviderProgressiveHistory<T extends DataProvider>(provide
         }
         // Existing recent candles win by construction; each earlier request
         // is strictly older, preventing overlap from replacing a forming bar.
-        confirmed = [...page, ...confirmed];
+        let joined = [...page, ...confirmed];
+        if (hasContinuousHistory(provider) && confirmed.length) {
+          // Individually continuous pages can still omit candles exactly at
+          // their join. Repair before publication/caching; failure leaves the
+          // already-painted recent prefix and an explicit progressive error.
+          joined = await repairHistoryGaps(joined, timeframe, async gap => {
+            const received = await abortable(getBars(ticker, timeframe, gap), signal);
+            if (received === undefined || signal?.aborted) throw new Error('progressive history load aborted');
+            return normalizeProviderBars(received, gap);
+          }, providerHistoryCalendar(provider));
+        }
+        if (signal?.aborted) break;
+        confirmed = joined.slice(-range.limit!);
         cursor = page[0]!.time - 1;
         // Give callbacks copies: a renderer must not mutate the pagination
         // cursor, next callback, or final returned data through a shared array.

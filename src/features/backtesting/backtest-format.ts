@@ -1,9 +1,11 @@
 import type { BacktestReport } from './backtest-types.ts';
 import type { BacktestExecutionSnapshot } from '../../domain/ports/backtest-results.ts';
 
+const currencyFormatters = new Map<string, Intl.NumberFormat>();
+
 /**
- * Format account-currency values using the precision visible in the reference
- * Performance table. Normal-sized amounts keep two fractional digits, while
+ * Format full account-currency values for chart/KPI surfaces. Normal-sized
+ * amounts keep two fractional digits, while
  * values between -1 and 1 retain up to seven digits (with at least two).
  */
 export function formatBacktestCurrency(
@@ -14,10 +16,40 @@ export function formatBacktestCurrency(
   const normalized = Object.is(value, -0) ? 0 : value;
   const magnitude = Math.abs(normalized);
   const maximumFractionDigits = magnitude > 0 && magnitude < 1 ? 7 : 2;
-  return normalized.toLocaleString(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits,
-  });
+  const key = `${locale}:${maximumFractionDigits}`;
+  let formatter = currencyFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits });
+    // Locale is caller-provided. Keep this presentation cache bounded across
+    // repeated workspace language changes as well as large table pages.
+    if (currencyFormatters.size >= 16) currencyFormatters.delete(currencyFormatters.keys().next().value!);
+    currencyFormatters.set(key, formatter);
+  }
+  return formatter.format(normalized);
+}
+
+const performanceWholeFormatter = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+const performanceFractionFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 7 });
+const performanceDrawdownFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
+
+/** The reference Performance table preserves sub-unit values and compacts
+ * millions. Keep this display policy separate from chart/KPI formatting and
+ * from numeric report values used for calculations or export. */
+export function formatBacktestPerformanceValue(
+  value: number | null | undefined,
+  kind: 'value' | 'ratio' | 'drawdown-percent' = 'value',
+): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  const normalized = Object.is(value, -0) ? 0 : value;
+  const magnitude = Math.abs(normalized);
+  if (kind === 'ratio') return normalized.toFixed(3);
+  if (magnitude >= 1_000_000) return `${(normalized / 1_000_000).toFixed(1)}M`;
+  if (magnitude !== 0 && magnitude < 1e-7) return normalized.toExponential(2);
+  if (kind === 'drawdown-percent') return performanceDrawdownFormatter.format(normalized);
+  return (magnitude >= 1 || magnitude === 0 ? performanceWholeFormatter : performanceFractionFormatter).format(normalized);
 }
 
 /**
@@ -126,11 +158,13 @@ function parseReportDate(value: number | string | null | undefined): Date | null
   return Number.isNaN(date.valueOf()) ? null : date;
 }
 
-/** Format the report range identically in the summary Dock and full Viewer. */
-export function formatBacktestRange(report: Pick<BacktestReport, 'range'>): string {
-  if (report.range?.label) return report.range.label;
-  const from = parseReportDate(report.range?.from);
-  const to = parseReportDate(report.range?.to);
+/** Format the activity label identically in the summary Dock and full Viewer.
+ * Keep the loaded report range available to history/navigation consumers. */
+export function formatBacktestRange(report: Pick<BacktestReport, 'range' | 'activityRange'>): string {
+  const range = report.activityRange === undefined ? report.range : report.activityRange;
+  if (range?.label) return range.label;
+  const from = parseReportDate(range?.from);
+  const to = parseReportDate(range?.to);
   if (!from && !to) return '';
   const monthDay = new Intl.DateTimeFormat('en-US', {
     month: 'short',

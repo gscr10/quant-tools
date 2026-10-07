@@ -433,6 +433,102 @@ test('preserves Pine runtime/provider error metadata in adapter snapshots and ev
   adapter.destroy();
 });
 
+test('runtime Retry reexecutes current inputs without accepting the cached report', async (t) => {
+  const context = new Deferred();
+  const history = new Deferred();
+  const handle = new FakeHandle('runtime-retry', 'Runtime retry', context);
+  const chart = new FakeChart(handle, history);
+  const adapter = new VelaBacktestResultsAdapter(new FakeWorkspace({ id: 'cell-1', chart }));
+  t.after(() => adapter.destroy());
+  const boot = adapter.bootstrap();
+  context.resolve(reportContext('old-success'));
+  history.resolve();
+  await boot;
+  const error = Object.assign(new Error('fatal guard'), { name: 'PineRuntimeError', method: 'error', kind: 'pine-runtime' });
+  chart.emit('indicator:error', { id: handle.id, error });
+  const calls = handle.contextCalls;
+  const values = { fail: true };
+  const updates = [];
+  handle.inputValues = () => values;
+  handle.setInputs = (inputs) => updates.push(inputs);
+  await adapter.retry({ cellId: 'cell-1', indicatorId: handle.id });
+  assert.deepEqual(updates, [values]);
+  assert.equal(handle.contextCalls, calls, 'cached successful context is not a retry of failed Pine execution');
+  assert.equal(adapter.getSnapshot({ cellId: 'cell-1', indicatorId: handle.id })?.status, 'error');
+  // Even after native inputs clears the error, repeated Retry and a cached
+  // context notification must wait for the new run/error, not read old data.
+  chart.emit('indicator:inputs', { id: handle.id });
+  chart.emit('context:changed', { id: handle.id });
+  await adapter.retry({ cellId: 'cell-1', indicatorId: handle.id });
+  assert.deepEqual(updates, [values]);
+  assert.equal(handle.contextCalls, calls);
+  chart.emit('indicator:error', { id: handle.id, error });
+  handle.setInputs = () => { throw new Error('session unavailable'); };
+  await adapter.retry({ cellId: 'cell-1', indicatorId: handle.id });
+  assert.equal(adapter.getSnapshot({ cellId: 'cell-1', indicatorId: handle.id })?.status, 'error');
+  assert.equal(adapter.getSnapshot({ cellId: 'cell-1', indicatorId: handle.id })?.errorDetails?.message, 'session unavailable');
+});
+
+test('an initial native runtime error creates a strategy entry and supersedes pending discovery', async (t) => {
+  const context = new Deferred();
+  const history = new Deferred();
+  const handle = new FakeHandle('first-failure', 'First failure', context);
+  const chart = new FakeChart(handle, history);
+  const adapter = new VelaBacktestResultsAdapter(new FakeWorkspace({ id: 'cell-1', chart }));
+  t.after(() => adapter.destroy());
+  const boot = adapter.bootstrap();
+  const error = Object.assign(new Error('first execution failed'), { name: 'PineRuntimeError', method: 'error', kind: 'pine-runtime' });
+  chart.emit('indicator:error', { id: handle.id, error });
+  const key = { cellId: 'cell-1', indicatorId: handle.id };
+  assert.equal(adapter.getSnapshot(key)?.status, 'error');
+  context.resolve(reportContext('cached-before-failure'));
+  history.resolve();
+  await boot;
+  await flush();
+  assert.equal(adapter.getSnapshot(key)?.status, 'error');
+  assert.equal(adapter.getSnapshot(key)?.errorDetails?.message, error.message);
+});
+
+test('a native execution failure supersedes a previously requested successful context', async (t) => {
+  const context = new Deferred();
+  const history = new Deferred();
+  const handle = new FakeHandle('late-context', 'Late context', context);
+  const chart = new FakeChart(handle, history);
+  const adapter = new VelaBacktestResultsAdapter(new FakeWorkspace({ id: 'cell-1', chart }));
+  t.after(() => adapter.destroy());
+  const boot = adapter.bootstrap();
+  context.resolve(reportContext('previous-report'));
+  history.resolve();
+  await boot;
+  const pending = new Deferred();
+  handle.contextDeferred = pending;
+  chart.emit('context:changed', { id: handle.id });
+  const error = Object.assign(new Error('new execution failed'), { name: 'PineRuntimeError', method: 'error', kind: 'pine-runtime' });
+  chart.emit('indicator:error', { id: handle.id, error });
+  pending.resolve(reportContext('previous-report'));
+  await flush();
+  const snapshot = adapter.getSnapshot({ cellId: 'cell-1', indicatorId: handle.id });
+  assert.equal(snapshot?.status, 'error');
+  assert.equal(snapshot?.errorDetails?.message, error.message);
+});
+
+test('an ordinary indicator runtime error never creates a backtest entry', async (t) => {
+  const context = new Deferred();
+  const history = new Deferred();
+  const handle = new FakeHandle('ordinary-indicator', 'Ordinary indicator', context);
+  handle.source = 'indicator("Ordinary indicator")\n// strategy("not a declaration")';
+  const chart = new FakeChart(handle, history);
+  const adapter = new VelaBacktestResultsAdapter(new FakeWorkspace({ id: 'cell-1', chart }));
+  t.after(() => adapter.destroy());
+  const boot = adapter.bootstrap();
+  chart.emit('indicator:error', { id: handle.id, error: Object.assign(new Error('indicator failure'), { name: 'PineRuntimeError', method: 'error' }) });
+  assert.equal(adapter.getSnapshot({ cellId: 'cell-1', indicatorId: handle.id }), undefined);
+  context.resolve({ meta: { title: 'Ordinary indicator' } });
+  history.resolve();
+  await boot;
+  assert.equal(adapter.getSnapshot({ cellId: 'cell-1', indicatorId: handle.id }), undefined);
+});
+
 test('accepts only truthful execution precision envelopes and exposes fallback state', async () => {
   const precision = {
     requested: true,

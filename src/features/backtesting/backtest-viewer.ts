@@ -1,3 +1,4 @@
+import { backtestIcon as icon, backtestIconMarkup } from './backtest-icons.ts';
 import {
   type BacktestComparison,
   type BacktestMetricValue,
@@ -27,6 +28,7 @@ import {
 } from './trade-log.ts';
 import {
   destroyReportCharts,
+  dismissReportChartTooltips,
   enhanceReportCharts,
   registerReportChart,
   updateReportChartPoints,
@@ -39,6 +41,7 @@ import { normalizeCalendarTimezone } from '../../domain/calendar.ts';
 import { renderBacktestTradeCalendar } from './trade-calendar-view.ts';
 import {
   formatBacktestCurrency,
+  formatBacktestPerformanceValue,
   formatBacktestRange,
   formatExecutionPrecision,
 } from './backtest-format.ts';
@@ -80,9 +83,9 @@ const PERFORMANCE_ROWS: ReadonlyArray<MetricRow> = [
   { key: 'averagePnlPerDay', label: 'Average P&L per Day', unit: 'currency' },
   { key: 'averagePnlPerWeek', label: 'Average P&L per Week', unit: 'currency' },
   { key: 'drawdown', label: 'Drawdown' },
-  { key: 'calmar', label: 'Calmar Ratio', group: 'Risk-Adjusted Performance' },
-  { key: 'sharpe', label: 'Sharpe Ratio', group: 'Risk-Adjusted Performance' },
-  { key: 'sortino', label: 'Sortino Ratio', group: 'Risk-Adjusted Performance' },
+  { key: 'calmar', label: 'Calmar Ratio', unit: 'ratio', group: 'Risk-Adjusted Performance' },
+  { key: 'sharpe', label: 'Sharpe Ratio', unit: 'ratio', group: 'Risk-Adjusted Performance' },
+  { key: 'sortino', label: 'Sortino Ratio', unit: 'ratio', group: 'Risk-Adjusted Performance' },
   { key: 'buyAndHoldPnl', label: 'Buy and Hold PnL', unit: 'currency', group: 'Benchmark' },
   { key: 'buyAndHoldPercent', label: 'Buy and Hold % Gain', unit: '%', group: 'Benchmark' },
   { key: 'strategyOutperformance', label: 'Strategy Outperformance', unit: 'currency', group: 'Benchmark' },
@@ -129,10 +132,7 @@ function escapeHtml(value: unknown): string {
 }
 
 /** The only SVG used by the fast Trades Log row template. */
-const CROSSHAIR_ICON_MARKUP = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" class="quant-backtest-icon">'
-  + '<path d="M8 1.5v3"></path><path d="M8 11.5v3"></path>'
-  + '<path d="M1.5 8h3"></path><path d="M11.5 8h3"></path>'
-  + '<path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"></path></svg>';
+const CROSSHAIR_ICON_MARKUP = backtestIconMarkup('crosshair', 14);
 
 function focusableElements(root: HTMLElement): HTMLElement[] {
   const view = root.ownerDocument.defaultView;
@@ -156,40 +156,6 @@ function focusableElements(root: HTMLElement): HTMLElement[] {
     }
     return true;
   });
-}
-
-function icon(doc: Document, name: 'arrow-left' | 'chevron-left' | 'chevron-right' | 'chevron-up' | 'chevron-down' | 'list' | 'calendar' | 'star' | 'refresh' | 'external' | 'settings' | 'crosshair' | 'minimize'): SVGSVGElement {
-  const paths: Record<typeof name, string[]> = {
-    'arrow-left': ['M14 8H3', 'm8 5-5 3 5 3'],
-    'chevron-left': ['m10 3.5-4.5 4.5 4.5 4.5'],
-    'chevron-right': ['m6 3.5 4.5 4.5L6 12.5'],
-    'chevron-up': ['m3.5 10 4.5-4.5 4.5 4.5'],
-    'chevron-down': ['m3.5 6 4.5 4.5L12.5 6'],
-    // Coordinates are the reference Lucide 24px paths scaled into this
-    // feature's 16px icon viewBox.
-    list: ['M2 3.33h.01', 'M2 8h.01', 'M2 12.67h.01', 'M5.33 3.33H14', 'M5.33 8H14', 'M5.33 12.67H14'],
-    calendar: ['M5.33 1.33v2.67', 'M10.67 1.33v2.67', 'M2 2.67h12a1.33 1.33 0 0 1 1.33 1.33v12a1.33 1.33 0 0 1-1.33 1.33H2A1.33 1.33 0 0 1 .67 16V4A1.33 1.33 0 0 1 2 2.67Z', 'M.67 6.67H15.33'],
-    star: ['m8 1.8 1.9 3.85 4.25.62-3.08 3  .73 4.23L8 11.5l-3.8 2  .73-4.23-3.08-3 4.25-.62Z'],
-    refresh: ['M13 8a5 5 0 1 1-1.45-3.53', 'M13 2.8v3.1H9.9'],
-    external: ['M9.5 2.5h4v4', 'm13.5 2.5-6 6', 'M12 8.5v3.8a1.2 1.2 0 0 1-1.2 1.2H4.7a1.2 1.2 0 0 1-1.2-1.2V5.3a1.2 1.2 0 0 1 1.2-1.2h3.8'],
-    settings: ['M8 2.2v1.1', 'M8 12.7v1.1', 'M2.2 8h1.1', 'M12.7 8h1.1', 'm3.9 3.9.8-.8', 'm11.3-7.1.8-.8', 'm3.9-3.9.8.8', 'm7.4 7.4.8.8', 'M8 5.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6Z'],
-    // Lucide crosshair: the reference uses the outer ring plus four short
-    // gaps, not the small center-only target used by the first implementation.
-    crosshair: ['M8 1.33v2', 'M8 12.67v2', 'M1.33 8h2', 'M12.67 8h2', 'M8 4.67a3.33 3.33 0 1 0 0 6.66 3.33 3.33 0 0 0 0-6.66Z'],
-    // Lucide minimize-2 used by the reference Return to chart control.
-    minimize: ['m9.33 6.67 4.67-4.67', 'M13.33 6.67H8.67V2.67', 'm2 14 4.67-4.67', 'M2.67 9.33h4.66V14'],
-  };
-  const svg = createSvgElement(doc, 'svg');
-  svg.setAttribute('viewBox', '0 0 16 16');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.setAttribute('focusable', 'false');
-  svg.classList.add('quant-backtest-icon');
-  paths[name].forEach((d) => {
-    const path = createSvgElement(doc, 'path');
-    path.setAttribute('d', d);
-    svg.appendChild(path);
-  });
-  return svg;
 }
 
 function unwrapMetric(value: BacktestMetricValue | undefined): number | null {
@@ -281,8 +247,22 @@ function formatTradePrice(value: number | null | undefined, currency: string): s
 
 const tradePriceFormatters = new Map<number, Intl.NumberFormat>();
 
+/** Keep account units smaller than amounts without changing the readable
+ * plain-text price/metric contract used by copying and assistive tooling. */
+function tradeMoneyMarkup(formatted: string, currency: string): string {
+  const suffix = ` ${currency}`;
+  if (!formatted.endsWith(suffix)) return escapeHtml(formatted);
+  return `${escapeHtml(formatted.slice(0, -suffix.length))}`
+    + '<span class="quant-backtest-trade-money-gap"> </span>'
+    + `<span class="quant-backtest-trade-currency">${escapeHtml(currency)}</span>`;
+}
+
 function reportCurrency(report: BacktestReport): string {
-  return report.currency?.trim() || 'USD';
+  // Provider/account payloads are not required to use a canonical case. Keep
+  // every Viewer surface (metric suffixes, table cells, chart axes and the
+  // KPI unit split) on one display contract so a `usd` payload cannot render
+  // as `12.00 usd` in one place and `USD` in another.
+  return report.currency?.trim().toUpperCase() || 'USD';
 }
 
 /**
@@ -384,6 +364,22 @@ function assetLogo(doc: Document, asset: string): SVGSVGElement {
     if (rule) mark.setAttribute('fill-rule', rule);
     svg.appendChild(mark);
   });
+  if (!geometry) {
+    // Unknown symbols still need a useful local identity.  A neutral initials
+    // badge is deterministic, has no network dependency, and keeps the
+    // header legible when a provider has no asset vector.
+    const fallback = createSvgElement(doc, 'text');
+    fallback.setAttribute('x', '28');
+    fallback.setAttribute('y', '29');
+    fallback.setAttribute('text-anchor', 'middle');
+    fallback.setAttribute('dominant-baseline', 'middle');
+    fallback.setAttribute('fill', 'currentColor');
+    fallback.setAttribute('font-family', 'system-ui, sans-serif');
+    fallback.setAttribute('font-size', asset.length > 1 ? '18' : '22');
+    fallback.setAttribute('font-weight', '650');
+    fallback.textContent = asset.trim().slice(0, 2).toUpperCase() || '•';
+    svg.appendChild(fallback);
+  }
   return svg;
 }
 
@@ -435,6 +431,11 @@ function reportPerformanceKpiSignature(report: BacktestReport | null): string {
 
 function isTransientReportStatus(status: BacktestReport['status'] | undefined): boolean {
   return status === 'compiling' || status === 'computing' || status === 'updating';
+}
+
+function isPendingReportStatus(status: BacktestReport['status'] | undefined): boolean {
+  return status === 'loading' || status === 'waiting-data' || status === 'partial'
+    || isTransientReportStatus(status);
 }
 
 function isTerminalReportStatus(status: BacktestReport['status'] | undefined): boolean {
@@ -765,6 +766,7 @@ function markCumulativePnlSource(
   if (source !== 'realized-ledger') return;
   // This is the reference Summary population, not a degraded equity fallback.
   // Keep provenance machine-readable without adding a non-reference badge.
+  chart.setAttribute('role', 'group');
   chart.setAttribute('aria-label', 'Cumulative P&L (realized closed trades)');
 }
 
@@ -821,6 +823,15 @@ function renderMetricTable(
     tr.appendChild(label);
     COMPARISON_COLUMNS.forEach((column) => {
       const td = createElement(doc, 'td');
+      const emptyDirection = column.id !== 'all' && report.trades !== undefined
+        && !report.trades.some((trade) => trade.direction === column.id);
+      if (emptyDirection && ['netProfit', 'grossProfit', 'grossLoss', 'profitFactor',
+        'averagePnlPerDay', 'averagePnlPerWeek'].includes(row.key)) {
+        td.textContent = '-';
+        td.classList.add('quant-backtest-tone-neutral');
+        tr.appendChild(td);
+        return;
+      }
       const source = comparison?.[column.id];
       const raw = row.key === 'drawdown'
         ? undefined
@@ -846,13 +857,24 @@ function renderMetricTable(
         const resolvedAmount = amount ?? fallbackAmount;
         const fallbackPercent = column.id === 'all' ? metricValue(report, 'maxDrawdownPercent') : null;
         const resolvedPercent = percent ?? fallbackPercent;
-        td.textContent = resolvedAmount === null
-          ? (column.id === 'all' && row.group === 'Benchmark' ? '-' : column.id === 'all' ? '—' : '')
-          : `${formatMetric(resolvedAmount, reportCurrency(report))}${resolvedPercent === null ? '' : ` (${formatMetric(resolvedPercent, '%')})`}`;
+        if (resolvedAmount === null) {
+          td.textContent = column.id === 'all' ? '—' : '';
+        } else {
+          td.textContent = formatBacktestPerformanceValue(resolvedAmount);
+          const unit = createElement(doc, 'span', 'quant-backtest-metric-unit');
+          unit.textContent = ` ${reportCurrency(report)}`;
+          td.appendChild(unit);
+          if (resolvedPercent !== null) {
+            const percent = createElement(doc, 'span', 'quant-backtest-metric-unit');
+            percent.textContent = ` (${formatBacktestPerformanceValue(resolvedPercent, 'drawdown-percent')}%)`;
+            td.appendChild(percent);
+          }
+        }
         td.classList.add('quant-backtest-tone-neutral');
       } else {
         const signed = row.key === 'netProfit'
           || row.key === 'buyAndHoldPnl'
+          || row.key === 'buyAndHoldPercent'
           || row.key === 'strategyOutperformance';
         const unit = row.key === 'trades'
           ? 'count'
@@ -860,9 +882,20 @@ function renderMetricTable(
             ? 'ratio'
             : row.unit === 'currency' ? reportCurrency(report) : row.unit;
         const missing = value === null;
-        td.textContent = missing
-          ? (column.id === 'all' && row.group === 'Benchmark' ? '-' : column.id === 'all' ? '—' : '')
-          : formatMetric(value, unit, signed);
+        if (missing) {
+          td.textContent = column.id === 'all' && row.group === 'Benchmark' ? '-' : column.id === 'all' ? '—' : '';
+        } else {
+          const sign = signed && value > 0 ? '+' : '';
+          const formatted = unit === 'count'
+            ? formatNumber(value, 0)
+            : formatBacktestPerformanceValue(value, unit === 'ratio' ? 'ratio' : 'value');
+          td.textContent = `${sign}${formatted}${unit === '%' ? '%' : ''}`;
+          if (unit && !['%', 'count', 'ratio'].includes(unit)) {
+            const currency = createElement(doc, 'span', 'quant-backtest-metric-unit');
+            currency.textContent = ` ${unit}`;
+            td.appendChild(currency);
+          }
+        }
         td.classList.add(`quant-backtest-tone-${performanceMetricTone(row.key, value)}`);
       }
       tr.appendChild(td);
@@ -1002,31 +1035,131 @@ export class BacktestViewer {
   private lastSimulationSignature: string | null = null;
   private simulationSettingsOpen = false;
   private simulationSettingsReturnTarget: 'desktop' | 'mobile' = 'desktop';
-  private readonly scrollPositions = new Map<BacktestTab, number>();
+  // A native Tab move can synchronously blur a simulation input.  Its blur
+  // handler may publish a new report before the browser finishes moving
+  // focus; at that point activeElement is BODY (or a detached old control).
+  // Keep the intended modal control separately so a report redraw can restore
+  // it and Escape remains handled by the Viewer.
+  private pendingSimulationFocus: string | null = null;
+  private readonly onDocumentKeydown = (event: KeyboardEvent): void => {
+    // A synchronous input blur/report redraw can leave activeElement on BODY,
+    // so the event no longer bubbles through the Viewer section. Keep Escape
+    // available at the document boundary while this modal is mounted.
+    if (event.key !== 'Escape' || !this.openState || event.defaultPrevented) return;
+    const dialog = this.panel.querySelector<HTMLElement>(
+      '.quant-backtest-simulation-settings-dialog',
+    );
+    if (!this.simulationSettingsOpen && !dialog) return;
+    const expandedRuns = dialog?.querySelector<HTMLButtonElement>(
+      '.quant-backtest-simulation-runs-trigger[aria-expanded="true"]',
+    );
+    if (expandedRuns) {
+      event.preventDefault(); event.stopPropagation();
+      expandedRuns.click();
+      return;
+    }
+    if (!this.simulationSettingsOpen) this.simulationSettingsOpen = true;
+    this.onViewerKeydown(event);
+    event.stopPropagation();
+  };
+  private pendingPanelScrollTop: number | null = null;
   private readonly onViewerKeydown = (event: KeyboardEvent): void => {
     if (!this.openState) return;
     if (event.key === 'Escape') {
+      // Point controls/popovers may already have handled their own Escape.
+      if (event.defaultPrevented) return;
       event.preventDefault();
       if (this.simulationSettingsOpen) {
         this.setSimulationSettingsOpen(false);
         return;
       }
+      // Hover does not move focus off a Tab/header button. Dismiss the chart's
+      // visible content first, keeping focus and the report open until the next
+      // Escape. Only this Viewer's charts participate, never a background Cell.
+      if (dismissReportChartTooltips(this.panel)) return;
       this.callbacks.onClose();
       return;
     }
     if (event.key !== 'Tab') return;
-    const focusRoot = this.simulationSettingsOpen
-      ? this.panel.querySelector<HTMLElement>('.quant-backtest-simulation-settings-dialog') ?? this.element
+    const dialog = this.panel.querySelector<HTMLElement>(
+      '.quant-backtest-simulation-settings-dialog',
+    );
+    const settingsOpen = this.simulationSettingsOpen || Boolean(dialog);
+    const focusRoot = settingsOpen
+      ? dialog ?? this.element
       : this.element;
     const focusable = focusableElements(focusRoot);
     if (focusable.length === 0) return;
     const current = this.doc.activeElement;
     const index = current instanceof HTMLElement ? focusable.indexOf(current) : -1;
+    // Variation changes the enabled state of the following Preserve control.
+    // The pre-blur focus list therefore cannot be used for this Tab move: blur
+    // commits the value and redraws the dialog before the next control exists.
+    // Commit first, then compute the next/previous control from the replacement
+    // dialog so focus never lands on a detached node or BODY.
+    if (this.simulationSettingsOpen
+      && current instanceof HTMLInputElement
+      && current.dataset.simulationFocus === 'settings:variation') {
+      event.preventDefault();
+      current.blur();
+      queueMicrotask(() => {
+        if (this.destroyed || !this.openState || !this.simulationSettingsOpen
+          || this.activeTab !== 'simulation') return;
+        const dialog = this.panel.querySelector<HTMLElement>(
+          '.quant-backtest-simulation-settings-dialog',
+        );
+        const fresh = dialog ? focusableElements(dialog) : [];
+        const freshIndex = fresh.findIndex(
+          (candidate) => candidate.dataset.simulationFocus === 'settings:variation',
+        );
+        if (freshIndex < 0 || fresh.length === 0) return;
+        const targetIndex = event.shiftKey
+          ? (freshIndex <= 0 ? fresh.length - 1 : freshIndex - 1)
+          : (freshIndex === fresh.length - 1 ? 0 : freshIndex + 1);
+        const target = fresh[targetIndex];
+        if (target) {
+          this.pendingSimulationFocus = target.dataset.simulationFocus ?? null;
+          target.focus();
+        }
+      });
+      return;
+    }
     const next = event.shiftKey
       ? (index <= 0 ? focusable.length - 1 : index - 1)
       : (index < 0 || index === focusable.length - 1 ? 0 : index + 1);
     event.preventDefault();
-    focusable[next]?.focus();
+    const target = focusable[next];
+    if (settingsOpen && target?.dataset.simulationFocus) {
+      this.pendingSimulationFocus = target.dataset.simulationFocus;
+    }
+    // Variation starts with Preserve disabled.  Its value is committed by
+    // blur, which enables Preserve and rebuilds the dialog.  Record the
+    // post-commit target and blur explicitly so the rebuilt control receives
+    // focus instead of wrapping to a detached Close button/BODY.
+    const currentFocus = current instanceof HTMLElement
+      ? current.dataset.simulationFocus
+      : undefined;
+    const preserve = dialog?.querySelector<HTMLElement>(
+      '[data-simulation-focus="settings:preserve"]',
+    );
+    if (settingsOpen && !event.shiftKey && currentFocus === 'settings:variation'
+      && preserve instanceof HTMLInputElement && preserve.disabled) {
+      this.pendingSimulationFocus = 'settings:preserve';
+      if (current instanceof HTMLElement) current.blur();
+    } else {
+      target?.focus();
+    }
+    // The target's blur/change callback can replace the dialog synchronously.
+    // Refetch the replacement after that callback has completed instead of
+    // leaving focus on a detached node (which browsers reset to BODY).
+    if (settingsOpen && this.pendingSimulationFocus) {
+      const focusKey = this.pendingSimulationFocus;
+      queueMicrotask(() => {
+        if (this.destroyed || !this.openState
+          || this.activeTab !== 'simulation') return;
+        this.restoreSimulationFocus(focusKey);
+      });
+    }
   };
   private readonly onViewportResize = (): void => {
     if (!this.openState || !this.simulationSettingsOpen || this.activeTab !== 'simulation') return;
@@ -1051,17 +1184,19 @@ export class BacktestViewer {
     this.element.setAttribute('aria-label', 'Backtest report');
     this.element.setAttribute('role', 'region');
     this.element.addEventListener('keydown', this.onViewerKeydown);
+    this.doc.addEventListener('keydown', this.onDocumentKeydown, true);
     this.doc.defaultView?.addEventListener('resize', this.onViewportResize);
     this.element.hidden = true;
 
     this.header = createElement(doc, 'header', 'quant-backtest-viewer-header');
     const back = button(doc, '', 'quant-backtest-viewer-back');
-    back.prepend(icon(doc, 'minimize'));
+    back.prepend(icon(doc, 'close'));
     back.setAttribute('aria-label', 'Return to chart');
     back.title = 'Return to chart';
     back.addEventListener('click', () => this.callbacks.onClose());
     const heading = createElement(doc, 'div', 'quant-backtest-viewer-heading');
     const market = createElement(doc, 'div', 'quant-backtest-viewer-market');
+    market.setAttribute('role', 'group');
     this.market = market;
     this.marketBadge = createElement(doc, 'span', 'quant-backtest-viewer-market-badge');
     this.marketBadge.setAttribute('aria-hidden', 'true');
@@ -1072,8 +1207,10 @@ export class BacktestViewer {
     market.append(this.marketBadge, this.marketSymbol, this.marketDivider, this.marketTimeframe);
     this.title = createElement(doc, 'h2');
     this.range = createElement(doc, 'span');
+    this.range.setAttribute('role', 'note');
     heading.append(market, this.title, this.range);
     this.favoriteButton = button(doc, 'Save strategy', 'quant-backtest-favorite');
+    this.favoriteButton.replaceChildren(icon(doc, 'star'));
     this.favoriteButton.setAttribute('aria-label', 'Save strategy');
     this.favoriteButton.addEventListener('click', () => {
       if (this.report) this.callbacks.onToggleFavorite?.(this.report);
@@ -1128,6 +1265,7 @@ export class BacktestViewer {
     if (previousExecution !== nextExecution) {
       this.lastSimulationSignature = null;
       this.simulationSettingsOpen = false;
+      this.pendingSimulationFocus = null;
       this.tradePage = 0;
       this.tradeSortedCache = null;
     }
@@ -1138,10 +1276,18 @@ export class BacktestViewer {
     if (!report) {
       this.tradeCalendarCache = null;
       this.simulationSettingsOpen = false;
+      this.pendingSimulationFocus = null;
     }
     const sameExecution = previousReport && report
       && previousReport.key?.cellId === report.key?.cellId
       && previousReport.key?.indicatorId === report.key?.indicatorId;
+    const sameReportContext = sameExecution
+      && previousReport.provider === report.provider
+      && previousReport.symbol === report.symbol
+      && previousReport.timeframe === report.timeframe;
+    if (!sameReportContext || (report && isTerminalReportStatus(report.status))) {
+      this.pendingPanelScrollTop = null;
+    }
     const hasRenderedCharts = Boolean(this.panel.querySelector('.quant-backtest-chart-host'));
     const transientLiveSnapshot = sameExecution
       && hasRenderedCharts
@@ -1168,8 +1314,22 @@ export class BacktestViewer {
       this.tradeSortedCache = null;
     }
     if (this.openState) {
+      // Favorite changes do not change report charts or KPI values. Refresh
+      // this projection even when the chart-preserving fast path skips render.
+      this.updateFavoriteButton();
       const active = this.doc.activeElement;
       const previousPanelScrollTop = this.panel.scrollTop;
+      const pending = report && isPendingReportStatus(report.status);
+      if (pending && sameReportContext && this.pendingPanelScrollTop === null
+        && previousReport && !isPendingReportStatus(previousReport.status)) {
+        // A loading message is shorter than a report, so the DOM clamps its
+        // scrollTop to zero. Keep the offset outside the DOM until the same
+        // strategy/market's content returns, including consecutive updates.
+        this.pendingPanelScrollTop = previousPanelScrollTop;
+      }
+      const restoredPanelScrollTop = sameReportContext
+        ? this.pendingPanelScrollTop ?? previousPanelScrollTop
+        : 0;
       const focusedId = active instanceof HTMLElement && this.element.contains(active)
         ? active.id || null
         : null;
@@ -1178,7 +1338,10 @@ export class BacktestViewer {
         : undefined;
       const focusedSimulationControl = active instanceof HTMLElement && this.element.contains(active)
         ? active.dataset.simulationFocus
-        : undefined;
+        : (this.simulationSettingsOpen
+          || Boolean(this.panel.querySelector('.quant-backtest-simulation-settings-dialog')))
+          ? this.pendingSimulationFocus ?? undefined
+          : undefined;
       const focusedSimulationDialog = active instanceof HTMLElement
         && active.classList.contains('quant-backtest-simulation-settings-dialog');
       // Keep the Viewer mounted for forming-bar snapshots. When the visible
@@ -1191,10 +1354,11 @@ export class BacktestViewer {
         : false;
       if (runChanged || terminalStatusChanged || (!chartDataUnchanged || !performanceKpisUnchanged)
         && (!transientLiveSnapshot || !liveUpdated)) this.render();
-      // Report revisions replace the panel subtree. Keep the active tab's
-      // independent scroll position stable across a full render; transient
-      // updates already leave the subtree mounted and naturally preserve it.
-      if (!liveUpdated) this.panel.scrollTop = previousPanelScrollTop;
+      // Same-context report revisions preserve the shared panel offset;
+      // transient updates already keep its subtree mounted. This is not a
+      // separate scroll memory for each Tab.
+      if (!liveUpdated) this.panel.scrollTop = restoredPanelScrollTop;
+      if (!pending) this.pendingPanelScrollTop = null;
       if (focusedCalendarNavigation) {
         this.element.querySelector<HTMLButtonElement>(
           `[data-calendar-navigation="${focusedCalendarNavigation}"]`,
@@ -1248,21 +1412,24 @@ export class BacktestViewer {
     const dialog = this.panel.querySelector<HTMLElement>(
       '.quant-backtest-simulation-settings-dialog',
     );
-    const focusRoot = this.simulationSettingsOpen && dialog ? dialog : this.element;
+    const dialogOpen = this.simulationSettingsOpen || Boolean(dialog);
+    const focusRoot = dialogOpen && dialog ? dialog : this.element;
     const focusable = focusableElements(focusRoot);
     const replacement = focusable.find(
       (candidate) => candidate.dataset.simulationFocus === focusKey,
     );
     if (replacement) {
       replacement.focus();
+      if (this.doc.activeElement === replacement) this.pendingSimulationFocus = null;
       return;
     }
 
     // A responsive transition can hide the control that owned focus while a
     // Worker report redraw is in flight. Keep focus on the active modal, or on
     // the visible settings entry point that exposes those controls.
-    if (this.simulationSettingsOpen && dialog) {
+    if (dialogOpen && dialog) {
       dialog.focus();
+      this.pendingSimulationFocus = null;
       return;
     }
     const settingsTrigger = focusable.find(
@@ -1271,6 +1438,7 @@ export class BacktestViewer {
     (settingsTrigger
       ?? this.tabs.find((tab) => tab.dataset.tab === 'simulation')
       ?? this.panel).focus();
+    this.pendingSimulationFocus = null;
   }
 
   open(report: BacktestReport | null): void {
@@ -1278,22 +1446,28 @@ export class BacktestViewer {
     this.report = report;
     this.lastSimulationSignature = null;
     this.simulationSettingsOpen = false;
+    this.pendingSimulationFocus = null;
     this.tradeCalendarMonth = null;
     this.tradeCalendarCache = null;
     this.tradePage = 0;
     this.tradeSortedCache = null;
-    this.openState = true;
-    this.scrollPositions.clear();
+    // A new Viewer mount starts at Performance/top, matching the reference.
+    this.openState = false;
+    this.pendingPanelScrollTop = null;
     this.selectTab('performance', false);
+    this.openState = true;
     this.element.hidden = false;
     this.render();
+    this.panel.scrollTop = 0;
     this.tabs[0]?.focus();
   }
 
   close(): void {
     if (this.destroyed) return;
     this.openState = false;
+    this.pendingPanelScrollTop = null;
     this.simulationSettingsOpen = false;
+    this.pendingSimulationFocus = null;
     this.applySimulationModalIsolation();
     this.tradeCalendarCache = null;
     this.tradeSortedCache = null;
@@ -1307,6 +1481,7 @@ export class BacktestViewer {
     this.applySimulationModalIsolation();
     destroyReportCharts(this.panel);
     this.element.removeEventListener('keydown', this.onViewerKeydown);
+    this.doc.removeEventListener('keydown', this.onDocumentKeydown, true);
     this.doc.defaultView?.removeEventListener('resize', this.onViewportResize);
     this.element.remove();
     this.report = null;
@@ -1314,11 +1489,19 @@ export class BacktestViewer {
   }
 
   private selectTab(tab: BacktestTab, notify = true): void {
-    if (this.openState && this.activeTab !== tab) {
-      this.scrollPositions.set(this.activeTab, this.panel.scrollTop);
-    }
+    // Re-selecting the active tab is a no-op in the reference workspace.
+    // Re-rendering here would erase scroll/hover state without navigation.
+    if (this.openState && this.activeTab === tab) return;
+    // Reference Tabs replace children of one scroll container. Carry only its
+    // current DOM offset into the next content; assignment naturally clamps
+    // to that content's height. A pending placeholder must not resurrect a
+    // different Tab's deferred offset after navigation.
+    const sharedScrollTop = this.panel.scrollTop;
+    this.pendingPanelScrollTop = null;
     if (this.activeTab === 'simulation' && tab !== 'simulation') {
+      this.lastSimulationSignature = null;
       this.simulationSettingsOpen = false;
+      this.pendingSimulationFocus = null;
     }
     this.activeTab = tab;
     this.tabs.forEach((tabButton) => {
@@ -1331,7 +1514,7 @@ export class BacktestViewer {
     if (notify) this.callbacks.onTabChange?.(tab);
     if (this.openState) {
       this.render();
-      this.panel.scrollTop = this.scrollPositions.get(tab) ?? 0;
+      this.panel.scrollTop = sharedScrollTop;
     }
   }
 
@@ -1350,6 +1533,7 @@ export class BacktestViewer {
   }
 
   private render(): void {
+    const sharedScrollTop = this.panel.scrollTop;
     // Every render replaces the panel subtree. Dispose chart instances first
     // so ResizeObservers and Highcharts' global event hooks cannot outlive a
     // tab/report revision while an async local chunk is still loading.
@@ -1369,10 +1553,7 @@ export class BacktestViewer {
       this.marketSymbol.textContent = '';
       this.marketTimeframe.textContent = '';
       this.marketSymbol.removeAttribute('aria-label');
-      this.favoriteButton.classList.remove('active');
-      this.favoriteButton.setAttribute('aria-pressed', 'false');
-      this.favoriteButton.setAttribute('aria-label', 'Save strategy');
-      this.favoriteButton.setAttribute('title', 'Save strategy');
+      this.updateFavoriteButton();
       this.panel.replaceChildren(renderEmpty(this.doc, 'No backtest report available.'));
       this.applySimulationModalIsolation();
       return;
@@ -1391,9 +1572,9 @@ export class BacktestViewer {
     this.marketBadge.dataset.asset = assetLabel;
     this.marketSymbol.textContent = displaySymbol;
     this.marketTimeframe.textContent = timeframe;
-    this.marketSymbol.setAttribute(
+    this.market.setAttribute(
       'aria-label',
-      provider && displaySymbol ? `${displaySymbol} on ${provider}` : displaySymbol,
+      [provider && displaySymbol ? `${displaySymbol} on ${provider}` : displaySymbol, timeframe].filter(Boolean).join(', '),
     );
     this.marketBadge.title = provider ? provider.toUpperCase() : '';
     this.title.textContent = this.report.strategyName;
@@ -1420,17 +1601,22 @@ export class BacktestViewer {
       delete this.range.dataset.executionFallback;
       delete this.range.dataset.executionFallbackReason;
     }
-    this.favoriteButton.classList.toggle('active', this.report.favorite === true);
-    this.favoriteButton.replaceChildren(icon(this.doc, 'star'));
-    this.favoriteButton.setAttribute('aria-pressed', String(this.report.favorite === true));
-    this.favoriteButton.setAttribute('aria-label', this.report.favorite ? 'Remove from saved' : 'Save strategy');
-    this.favoriteButton.setAttribute('title', this.report.favorite ? 'Remove from saved' : 'Save strategy');
+    this.updateFavoriteButton();
     this.panel.replaceChildren(this.renderPanel());
     this.applySimulationModalIsolation();
-    this.panel.scrollTop = this.scrollPositions.get(this.activeTab) ?? this.panel.scrollTop;
+    this.panel.scrollTop = sharedScrollTop;
     // Keep the SVG fallback synchronously visible and upgrade only after the
     // rendered hosts are attached. Failures are contained by the renderer.
     void enhanceReportCharts(this.panel);
+  }
+
+  private updateFavoriteButton(): void {
+    const favorite = this.report?.favorite === true;
+    const label = favorite ? 'Remove from saved' : 'Save strategy';
+    this.favoriteButton.classList.toggle('active', favorite);
+    this.favoriteButton.setAttribute('aria-pressed', String(favorite));
+    this.favoriteButton.setAttribute('aria-label', label);
+    this.favoriteButton.title = label;
   }
 
   private applySimulationModalIsolation(): void {
@@ -1444,7 +1630,7 @@ export class BacktestViewer {
 
   private renderPanel(): HTMLElement {
     if (!this.report) return renderEmpty(this.doc, 'No backtest report available.');
-    if (['loading', 'waiting-data', 'compiling', 'computing', 'updating', 'partial'].includes(this.report.status ?? '')) {
+    if (isPendingReportStatus(this.report.status)) {
       return this.renderLoading(this.report.status);
     }
     if (this.report.status === 'error') return this.renderError();
@@ -1454,13 +1640,13 @@ export class BacktestViewer {
       if (this.activeTab === 'analysis') return renderTradeAnalysisView(this.doc, this.report);
       if (this.activeTab === 'simulation') return this.renderSimulation();
       if (this.activeTab === 'log') return this.renderTradesLog();
-      return this.renderStatus('No trades', 'The strategy completed without producing a closed or open trade.');
+      return this.renderPerformance();
     }
     if (this.report.status === 'open-only') {
       if (this.activeTab === 'analysis') return renderTradeAnalysisView(this.doc, this.report);
       if (this.activeTab === 'simulation') return this.renderSimulation();
       if (this.activeTab === 'log') return this.renderTradesLog();
-      return this.renderStatus('Open trades only', 'No closed trades are available yet; realized metrics and simulation are unavailable.');
+      return this.renderPerformance();
     }
     switch (this.activeTab) {
       case 'analysis': return this.renderAnalysis();
@@ -1529,7 +1715,9 @@ export class BacktestViewer {
     const currency = reportCurrency(report).toUpperCase();
     const summary = createElement(this.doc, 'section', 'quant-backtest-summary-section');
     summary.id = 'Summary';
-    const cumulativeChart = renderMiniChart(
+    const hasClosedTrades = (report.trades ?? []).some((trade) => trade.status === 'closed')
+      || (report.cumulativePnl?.length ?? 0) > 0;
+    const cumulativeChart = hasClosedTrades ? renderMiniChart(
       this.doc,
       report.cumulativePnl,
       'area',
@@ -1543,6 +1731,11 @@ export class BacktestViewer {
         negativeColor: '#f23645',
         yAxisOpposite: true,
       },
+    ) : this.renderStatus(
+      report.status === 'open-only' ? 'Open trades only' : 'No trades',
+      report.status === 'open-only'
+        ? 'No closed trades are available yet; realized metrics and simulation are unavailable.'
+        : 'The strategy completed without producing a closed or open trade.',
     );
     cumulativeChart.classList.add('quant-backtest-summary-chart-frame');
     markCumulativePnlSource(this.doc, cumulativeChart, report.cumulativePnlSource);
@@ -1552,7 +1745,7 @@ export class BacktestViewer {
     container.appendChild(renderSectionHeading(this.doc, 'Performance'));
     const performanceCard = createElement(this.doc, 'section', 'quant-backtest-performance-card');
     const charts = createElement(this.doc, 'div', 'quant-backtest-chart-grid');
-    charts.append(
+    if (hasClosedTrades) charts.append(
       renderMiniChart(this.doc, report.netDailyPnl, 'bar', `Net Daily PNL (${currency})`, {
         height: 250,
         currency: reportCurrency(report),
@@ -1570,7 +1763,8 @@ export class BacktestViewer {
         negativeColor: '#f23645',
       }),
     );
-    performanceCard.append(charts, renderMetricTable(this.doc, report, PERFORMANCE_ROWS, report.comparison));
+    if (hasClosedTrades) performanceCard.appendChild(charts);
+    performanceCard.appendChild(renderMetricTable(this.doc, report, PERFORMANCE_ROWS, report.comparison));
     container.appendChild(performanceCard);
     return container;
   }
@@ -1666,6 +1860,11 @@ export class BacktestViewer {
     const row = createElement(this.doc, 'tr');
     const hasSize = backtestTradesHaveSize(trades);
     const hasExcursions = backtestTradesHaveExcursions(trades);
+    // The reference desktop log has a stable eight-column geometry when the
+    // report publishes Size, MFE and MAE. Keep that contract opt-in: reports
+    // without optional columns must retain the content-sized table and the
+    // narrow layout must continue to use its horizontal scroller.
+    if (hasSize && hasExcursions) table.dataset.tradeLayout = 'full';
     const columns: Array<{ key: string; label: string; sort?: BacktestTradeSortKey; tooltip?: string }> = [
       { key: 'number', label: 'Trade #', sort: 'number' },
       { key: 'entryTime', label: 'Entry', sort: 'entryTime' },
@@ -1678,11 +1877,23 @@ export class BacktestViewer {
       ] : []),
       { key: 'cumulativePnl', label: 'Cumulative P&L', sort: 'cumulativePnl' },
     ];
+    if (hasSize && hasExcursions) {
+      // Keep the measured desktop widths in the stylesheet, but emit a
+      // colgroup so the fixed-layout rule remains independent of row content.
+      // Mobile intentionally ignores those widths and keeps the horizontal
+      // scroller used by the reference narrow layout.
+      const colgroup = createElement(this.doc, 'colgroup');
+      for (let index = 0; index < columns.length; index += 1) {
+        colgroup.appendChild(createElement(this.doc, 'col'));
+      }
+      table.appendChild(colgroup);
+    }
     columns.forEach((column) => {
       const th = createElement(this.doc, 'th');
       th.scope = 'col';
       if (column.sort) {
         const control = button(this.doc, '', 'quant-backtest-sort');
+        control.dataset.tradeSort = column.sort;
         const controlLabel = createElement(this.doc, 'span');
         controlLabel.textContent = column.label;
         if (column.tooltip) {
@@ -1699,7 +1910,7 @@ export class BacktestViewer {
         if (!column.tooltip) control.setAttribute('aria-label', `${column.label}, ${sortState}`);
         control.appendChild(controlLabel);
         if (this.tradeSort.key === column.sort) {
-          control.appendChild(icon(this.doc, this.tradeSort.direction === 1 ? 'chevron-up' : 'chevron-down'));
+          control.appendChild(icon(this.doc, this.tradeSort.direction === 1 ? 'chevron-up' : 'chevron-down', 12));
         }
         control.addEventListener('click', () => this.toggleTradeSort(column.sort as BacktestTradeSortKey));
         th.appendChild(control);
@@ -1762,7 +1973,7 @@ export class BacktestViewer {
             : '';
           return `<td class="quant-backtest-trade-time"><span class="quant-backtest-trade-time-details">`
             + `<span class="quant-backtest-trade-datetime" data-timezone="${escapeHtml(timezone)}" title="Displayed in ${escapeHtml(timezone)}">${escapeHtml(openExit ? 'Open' : formatTradeDateTime(displayTime, timezone))}</span>`
-            + `<span class="quant-backtest-trade-price">${escapeHtml(formatTradePrice(price, currency))}</span>`
+            + `<span class="quant-backtest-trade-price">${tradeMoneyMarkup(formatTradePrice(price, currency), currency)}</span>`
             + `</span>${locate}</td>`;
         };
         const size = hasSize
@@ -1774,14 +1985,14 @@ export class BacktestViewer {
           const displayValue = key === 'mfe' || key === 'mae'
             ? backtestTradeExcursionValue(key, value)
             : value;
-          return `<td>${escapeHtml(formatBacktestTradeMetric(displayValue, currency, key === 'cumulativePnl'))}</td>`;
+          return `<td>${tradeMoneyMarkup(formatBacktestTradeMetric(displayValue, currency, key === 'cumulativePnl'), currency)}</td>`;
         }).join('');
         return `<tr aria-rowindex="${tradeWindow.start + index + 2}" data-trade-source-index="${sourceIndex}">`
           + `<th scope="row" class="quant-backtest-trade-number"><span class="quant-backtest-trade-number-value">${number}</span>${direction}</th>`
           + timeCell('entry')
           + timeCell('exit')
           + size
-          + `<td class="quant-backtest-tone-${toneFor(trade.netPnl ?? null)}">${escapeHtml(pnl)}</td>`
+          + `<td class="quant-backtest-tone-${toneFor(trade.netPnl ?? null)}">${tradeMoneyMarkup(pnl, currency)}</td>`
           + metrics
           + '</tr>';
       }).join('');
@@ -1840,7 +2051,7 @@ export class BacktestViewer {
       if (this.tradePage <= 0) return;
       this.tradePage -= 1;
       this.refreshTradeTable();
-      this.element.querySelector<HTMLButtonElement>('[data-trade-pagination="previous"]')?.focus();
+      this.focusTradePagination('previous');
     });
     const next = button(this.doc, 'Next', 'quant-backtest-button quant-backtest-trade-pagination-button');
     next.dataset.tradePagination = 'next';
@@ -1849,7 +2060,7 @@ export class BacktestViewer {
       if (this.tradePage >= totalPages - 1) return;
       this.tradePage += 1;
       this.refreshTradeTable();
-      this.element.querySelector<HTMLButtonElement>('[data-trade-pagination="next"]')?.focus();
+      this.focusTradePagination('next');
     });
     const status = createElement(this.doc, 'span', 'quant-backtest-trade-pagination-status');
     const from = this.tradePage * TRADES_PAGE_SIZE + 1;
@@ -1858,6 +2069,16 @@ export class BacktestViewer {
     status.setAttribute('aria-live', 'polite');
     pagination.append(previous, status, next);
     return pagination;
+  }
+
+  private focusTradePagination(preferred: 'previous' | 'next'): void {
+    // At the first/last page the activated control becomes disabled. Focus
+    // the remaining enabled page control instead of losing keyboard focus
+    // when the old table subtree is removed.
+    const target = this.element.querySelector<HTMLButtonElement>(
+      `[data-trade-pagination="${preferred}"]:not(:disabled)`,
+    ) ?? this.element.querySelector<HTMLButtonElement>('[data-trade-pagination]:not(:disabled)');
+    if (target && this.doc.activeElement !== target) target.focus();
   }
 
   /**
@@ -1880,7 +2101,36 @@ export class BacktestViewer {
       this.render();
       return;
     }
-    current.replaceWith(this.renderTradeTable(this.report.trades ?? []));
+    const replacement = this.renderTradeTable(this.report.trades ?? []);
+    const currentTable = current.querySelector<HTMLTableElement>('.quant-backtest-trade-table');
+    const nextTable = replacement.querySelector<HTMLTableElement>('.quant-backtest-trade-table');
+    const currentPagination = current.querySelector<HTMLElement>('.quant-backtest-trade-pagination');
+    const nextPagination = replacement.querySelector<HTMLElement>('.quant-backtest-trade-pagination');
+    if (currentTable && nextTable && currentPagination && nextPagination) {
+      // Retain the active pager and the scroll/tab panel instead of removing
+      // focus and immediately forcing a full 200-row layout to restore it.
+      // Existing listeners read this.tradePage; only their display state
+      // changes while paging within the same report.
+      currentTable.replaceWith(nextTable);
+      Object.assign(currentPagination.dataset, nextPagination.dataset);
+      for (const side of ['previous', 'next']) {
+        const control = currentPagination.querySelector<HTMLButtonElement>(`[data-trade-pagination="${side}"]`);
+        const nextControl = nextPagination.querySelector<HTMLButtonElement>(`[data-trade-pagination="${side}"]`);
+        if (control && nextControl) control.disabled = nextControl.disabled;
+      }
+      const status = currentPagination.querySelector('.quant-backtest-trade-pagination-status');
+      const nextStatus = nextPagination.querySelector('.quant-backtest-trade-pagination-status');
+      if (status && nextStatus) status.textContent = nextStatus.textContent;
+      return;
+    }
+    // Pagination only replaces the list subtree, whose tabpanel semantics
+    // were originally assigned by renderTradesLog. Carry them forward so
+    // screen-reader and keyboard navigation still reach the same panel.
+    for (const name of ['role', 'id', 'aria-labelledby', 'tabindex']) {
+      const value = current.getAttribute(name);
+      if (value !== null) replacement.setAttribute(name, value);
+    }
+    current.replaceWith(replacement);
   }
 
   private renderTradeCalendar(trades: readonly BacktestTrade[]): HTMLElement {
@@ -1928,6 +2178,7 @@ export class BacktestViewer {
     this.tradePage = 0;
     this.tradeSortedCache = null;
     this.render();
+    this.element.querySelector<HTMLButtonElement>(`[data-trade-sort="${key}"]`)?.focus();
   }
 
   private renderSimulation(): HTMLElement {
@@ -1959,6 +2210,7 @@ export class BacktestViewer {
         this.simulationSettingsReturnTarget = 'desktop';
       }
     }
+    if (!open) this.pendingSimulationFocus = null;
     this.simulationSettingsOpen = open;
     this.render();
     queueMicrotask(() => {

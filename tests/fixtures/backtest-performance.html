@@ -24,6 +24,8 @@
     <script type="module">
       import { BacktestWorkbench } from '/src/features/backtesting/backtest-workbench.ts';
       import { getReportChartResourceStats } from '/src/features/backtesting/highcharts-renderer.ts';
+      import * as runtimeProbes from './backtest-runtime-probes.ts';
+      window.__backtestRuntimeProbes = runtimeProbes;
 
       const params = new URLSearchParams(location.search);
       const requestedCount = Number(params.get('count') ?? 100_000);
@@ -90,6 +92,7 @@
         ready: true,
         count,
         report,
+        selectorTrace: () => runtimeProbes.selectorTrace(trades),
         openViewer: () => workbench.openViewer(),
         selectTab: (tab) => {
           const control = document.querySelector(`.quant-backtest-tab[data-tab="${tab}"]`);

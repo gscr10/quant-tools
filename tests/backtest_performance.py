@@ -3,29 +3,38 @@
 
 The normal unit benchmark proves that selectors and samplers are bounded, but
 it cannot see DOM row counts, Highcharts/ResizeObserver lifetimes, compositor
-frames, long tasks, or browser heap usage.  This runner mounts the checked-in
-synthetic fixture in a fixed 1440x900 Chromium page and records those signals
-for 10k and 100k ledgers.
+frames, long tasks, or browser heap usage. This runner measures those signals
+for 10k and 100k ledgers, cold report selectors, range/line tooltips and actual
+Simulation Worker cancellation after computation begins.
 
 Run ``python3 tests/backtest_performance.py`` for a report.  ``--strict``
 applies the plan's first-pass budgets (200 rendered rows, 2,000 chart points,
 50 FPS, 50ms long-task p95, and <=20MiB heap growth after ten open/close
-cycles).  Set ``QUANT_PERF_ARTIFACT=1`` to write JSON and a Playwright trace
-under ``artifacts/``; generated traces are ignored by the repository's
-``*.zip`` rule while the JSON remains a reviewable local artifact.
+cycles). Chromium exposes precise JS heap and long-task entries; Firefox
+reports those unavailable instead of pretending an absent metric is zero.
+Use ``--production --browsers chromium,firefox --output audit-evidence/<run>``
+to build an isolated static production artifact with app configuration and
+save source/build hashes, JSON and traces. Ordinary deployment dist is never
+overwritten. ``--dpr 2`` repeats the same matrix at a second pixel density.
+``QUANT_PERF_ARTIFACT=1`` retains the legacy artifacts/ output option.
 """
 
 from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import gzip
+import hashlib
 import json
 import math
 import os
 from pathlib import Path
+import platform
 import statistics
 import subprocess
+import socket
 import sys
+import tempfile
 import time
 from urllib.request import urlopen
 
@@ -47,6 +56,16 @@ def trace_label(path: Path | None) -> str | None:
         return str(path.relative_to(ROOT))
     except ValueError:
         return str(path)
+
+
+def source_hashes() -> dict[str, str]:
+    files = [*ROOT.joinpath('src').rglob('*.ts'), *ROOT.joinpath('src').rglob('*.css'),
+             ROOT / 'vite.config.ts', ROOT / 'package-lock.json',
+             ROOT / 'tests/vite-runtime-performance.config.ts',
+             ROOT / 'tests/fixtures/backtest-runtime-probes.ts',
+             ROOT / 'tests/fixtures/backtest-performance.html',
+             ROOT / 'tests/fixtures/backtest-simulation.html']
+    return {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(files)}
 
 
 def percentile_nearest_rank(values: list[float], percentile: float) -> float:
@@ -93,10 +112,25 @@ def heap_usage(page: Page, cdp) -> dict[str, int | None]:
         return {"usedBytes": None, "totalBytes": None}
 
 
+def install_error_probe(page: Page) -> None:
+    # ResizeObserver loop failures can arrive only as window ErrorEvent and
+    # never trigger Playwright's pageerror event. Observe both independently.
+    page.add_init_script("""(() => {
+      window.__quantPerfWindowErrors = [];
+      window.addEventListener('error', event => {
+        window.__quantPerfWindowErrors.push(event.message || 'Resource ErrorEvent');
+      });
+      window.addEventListener('unhandledrejection', event => {
+        window.__quantPerfWindowErrors.push(String(event.reason?.stack || event.reason));
+      });
+    })()""")
+
+
 def install_raf_probe(page: Page) -> None:
     page.evaluate(
         """
         (() => {
+          const longTaskSupported = PerformanceObserver?.supportedEntryTypes?.includes('longtask') ?? false;
           const state = { running: false, started: 0, ended: 0, frames: [], longTasks: [] };
           window.__quantPerfProbe = {
             start() {
@@ -105,7 +139,7 @@ def install_raf_probe(page: Page) -> None:
               state.ended = 0;
               state.frames = [];
               state.longTasks = [];
-              if (window.PerformanceObserver) {
+              if (longTaskSupported) {
                 try {
                   const observer = new PerformanceObserver((list) => {
                     for (const entry of list.getEntries()) state.longTasks.push(entry.duration);
@@ -140,6 +174,7 @@ def install_raf_probe(page: Page) -> None:
                 fps: state.frames.length / duration * 1000,
                 averageFrameMs: frameBudget,
                 longTaskCount: sortedLong.length,
+                longTaskSupported,
                 longTaskP95Ms: percentile(sortedLong, 0.95),
                 longTaskMaxMs: sortedLong.at(-1) ?? 0,
               };
@@ -165,6 +200,19 @@ def measure_trade_log(page: Page) -> dict[str, object]:
     table.wait_for(state="visible")
     page_status = page.locator(".quant-backtest-trade-pagination-status").inner_text()
     rows = table.locator("tbody tr").count()
+    page.evaluate("""() => {
+      const original = HTMLElement.prototype.focus;
+      window.__quantPaginationFocusProbe = { original, samples: [] };
+      window.__quantPaginationIdentity = {
+        panel: document.querySelector('#quant-backtest-trades-view-panel'),
+        pager: document.querySelector('.quant-backtest-trade-pagination'),
+      };
+      HTMLElement.prototype.focus = function (...args) {
+        const started = performance.now();
+        try { return original.apply(this, args); }
+        finally { window.__quantPaginationFocusProbe.samples.push(performance.now() - started); }
+      };
+    }""")
 
     # Prime the sorted-entry cache and the first DOM replacement before timing
     # steady-state page changes.  The first click also mounts the lazy table
@@ -201,6 +249,21 @@ def measure_trade_log(page: Page) -> dict[str, object]:
         )
         durations.append(float(duration))
     after = page.evaluate("window.__backtestPerformance.state()")
+    focus_durations = page.evaluate("""() => {
+      const probe = window.__quantPaginationFocusProbe;
+      HTMLElement.prototype.focus = probe.original;
+      delete window.__quantPaginationFocusProbe;
+      return probe.samples;
+    }""")
+    identity = page.evaluate("""() => {
+      const before = window.__quantPaginationIdentity;
+      const panel = document.querySelector('#quant-backtest-trades-view-panel');
+      const pager = document.querySelector('.quant-backtest-trade-pagination');
+      delete window.__quantPaginationIdentity;
+      return { samePanel: before.panel === panel, samePager: before.pager === pager,
+        role: panel?.getAttribute('role'), labelledBy: panel?.getAttribute('aria-labelledby'),
+        tabIndex: panel?.tabIndex, focusStayedInPager: pager?.contains(document.activeElement) };
+    }""")
     return {
         "initialRows": rows,
         "initialStatus": page_status,
@@ -209,6 +272,8 @@ def measure_trade_log(page: Page) -> dict[str, object]:
         "pageTransitionP50Ms": statistics.median(durations),
         "pageTransitionP95Ms": percentile_nearest_rank(durations, 0.95),
         "pageTransitionMaxMs": max(durations),
+        "focusDurationsMs": focus_durations,
+        "identity": identity,
     }
 
 
@@ -369,14 +434,20 @@ def measure_cycles(page: Page, cdp, cycles: int = 10) -> dict[str, object]:
     }
 
 
-def measure_case(browser: Browser, count: int, trace_path: Path | None) -> dict[str, object]:
-    context = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+def measure_case(browser: Browser, count: int, trace_path: Path | None, dpr: float = 1, heap_snapshot: bool = False) -> dict[str, object]:
+    context = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=dpr)
     if trace_path:
         context.tracing.start(screenshots=False, snapshots=True, sources=True)
     page = context.new_page()
+    install_error_probe(page)
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    cdp = context.new_cdp_session(page)
+    page.on('crash', lambda _: print(f'performance page crashed: {browser.browser_type.name} {count}', flush=True))
+    page.on('framenavigated', lambda frame: print(f'performance navigation: {browser.browser_type.name} {count} {frame.url}', flush=True)
+            if frame == page.main_frame else None)
+    requests: list[str] = []
+    page.on('request', lambda request: requests.append(request.url))
+    cdp = context.new_cdp_session(page) if browser.browser_type.name == 'chromium' else None
     page.goto(f"{FIXTURE}?count={count}", wait_until="domcontentloaded", timeout=60_000)
     page.wait_for_function("window.__backtestPerformance?.ready === true", timeout=60_000)
     page.wait_for_timeout(250)
@@ -392,9 +463,42 @@ def measure_case(browser: Browser, count: int, trace_path: Path | None) -> dict[
     performance_state = page.evaluate("window.__backtestPerformance.state()")
     dock_drag = measure_dock_drag(page)
     cycles = measure_cycles(page, cdp)
+    if cdp is not None and trace_path:
+        cdp.send('Profiler.enable')
+        cdp.send('Profiler.start')
+    selector_trace = page.evaluate("window.__backtestPerformance.selectorTrace()")
+    if cdp is not None and trace_path:
+        profile = cdp.send('Profiler.stop')['profile']
+        profile_path = trace_path.with_suffix('.cpuprofile')
+        profile_path.write_text(json.dumps(profile) + '\n')
+        selector_trace['cpuProfile'] = trace_label(profile_path)
+    range_probe = page.evaluate("window.__backtestRuntimeProbes.mountRangeProbe(window.__backtestPerformance.count)")
+    # Highcharts lazily builds its pointer search tree on the first event.
+    # An actual short pointer stream exercises that asynchronous path too.
+    page.mouse.move(range_probe['x'] - 4, range_probe['y'])
+    page.wait_for_timeout(100)
+    page.mouse.move(range_probe['x'], range_probe['y'])
+    page.wait_for_function("document.querySelector('#runtime-range-probe .highcharts-tooltip')?.textContent?.includes('Median')")
+    range_probe['tooltip'] = page.locator('#runtime-range-probe').inner_text()
+    range_probe['afterUnmount'] = page.evaluate("window.__backtestRuntimeProbes.unmountRangeProbe()")
+    early_destroy = page.evaluate("window.__backtestRuntimeProbes.chartEarlyDestroy()")
+    constructor_failure = page.evaluate("window.__backtestRuntimeProbes.chartConstructionFailure()")
     page.evaluate("window.__backtestPerformance.destroy()")
     page.wait_for_timeout(150)
     final_resources = page.evaluate("window.__backtestPerformance.chartResources()")
+    window_errors = page.evaluate('window.__quantPerfWindowErrors')
+    heap_path = None
+    if heap_snapshot and cdp is not None and trace_path and count == 100_000:
+        heap_path = trace_path.with_suffix('.heapsnapshot.gz')
+        with gzip.open(heap_path, 'wt') as stream:
+            def heap_chunk(event):
+                stream.write(event['chunk'])
+            cdp.on('HeapProfiler.addHeapSnapshotChunk', heap_chunk)
+            try:
+                cdp.send('HeapProfiler.collectGarbage')
+                cdp.send('HeapProfiler.takeHeapSnapshot')
+            finally:
+                cdp.remove_listener('HeapProfiler.addHeapSnapshotChunk', heap_chunk)
     if trace_path:
         context.tracing.stop(path=str(trace_path))
     context.close()
@@ -407,9 +511,17 @@ def measure_case(browser: Browser, count: int, trace_path: Path | None) -> dict[
         "performance": performance_state,
         "dockDrag": dock_drag,
         "cycles": cycles,
+        "selectors": selector_trace,
+        "rangeProbe": range_probe,
+        "earlyDestroy": early_destroy,
+        "constructorFailure": constructor_failure,
         "finalResources": final_resources,
         "pageErrors": errors,
+        "windowErrors": window_errors,
+        "externalRequests": [url for url in requests if not url.startswith(f'http://{HOST}:{PORT}/')],
+        "devModuleRequests": [url for url in requests if '/@vite/' in url or '/src/' in url],
         "tracePath": trace_label(trace_path),
+        "heapSnapshotPath": trace_label(heap_path),
     }
 
 
@@ -419,9 +531,12 @@ def measure_simulation(browser: Browser, trace_path: Path | None = None) -> dict
     if trace_path:
         context.tracing.start(screenshots=False, snapshots=True, sources=True)
     page = context.new_page()
+    install_error_probe(page)
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    cdp = context.new_cdp_session(page)
+    requests: list[str] = []
+    page.on('request', lambda request: requests.append(request.url))
+    cdp = context.new_cdp_session(page) if browser.browser_type.name == 'chromium' else None
     page.goto(SIMULATION_FIXTURE, wait_until="domcontentloaded", timeout=60_000)
     page.wait_for_function("window.__simulationFixture?.ready === true", timeout=60_000)
     before = heap_usage(page, cdp)
@@ -463,6 +578,7 @@ def measure_simulation(browser: Browser, trace_path: Path | None = None) -> dict
         if key != "progressEvents"
     }
     after = heap_usage(page, cdp)
+    window_errors = page.evaluate('window.__quantPerfWindowErrors')
     delta = None
     if before["usedBytes"] is not None and after["usedBytes"] is not None:
         delta = after["usedBytes"] - before["usedBytes"]
@@ -478,13 +594,38 @@ def measure_simulation(browser: Browser, trace_path: Path | None = None) -> dict
         "heapAfter": after,
         "heapDeltaBytes": delta,
         "pageErrors": errors,
+        "windowErrors": window_errors,
+        "externalRequests": [url for url in requests if not url.startswith(f'http://{HOST}:{PORT}/')],
+        "devModuleRequests": [url for url in requests if '/@vite/' in url or '/src/' in url],
         "tracePath": trace_label(trace_path),
     }
+
+
+def measure_worker_lifecycle(browser: Browser) -> dict[str, object]:
+    context = browser.new_context(viewport={"width": 1440, "height": 900})
+    page = context.new_page()
+    install_error_probe(page)
+    errors: list[str] = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    requests: list[str] = []
+    page.on('request', lambda request: requests.append(request.url))
+    page.goto(f"{FIXTURE}?count=1000", wait_until='domcontentloaded')
+    page.wait_for_function('window.__backtestPerformance?.ready === true')
+    result = page.evaluate('window.__backtestRuntimeProbes.simulationLifecycle()')
+    page.evaluate('window.__backtestPerformance.destroy()')
+    result['finalCharts'] = page.evaluate('window.__backtestPerformance.chartResources()')
+    result['pageErrors'] = errors
+    result['windowErrors'] = page.evaluate('window.__quantPerfWindowErrors')
+    result['externalRequests'] = [url for url in requests if not url.startswith(f'http://{HOST}:{PORT}/')]
+    result['devModuleRequests'] = [url for url in requests if '/@vite/' in url or '/src/' in url]
+    context.close()
+    return result
 
 
 def check_budgets(
     results: list[dict[str, object]],
     simulation: dict[str, object],
+    enforce_baseline_timing: bool = True,
 ) -> list[str]:
     failures: list[str] = []
     for result in results:
@@ -496,19 +637,24 @@ def check_budgets(
         log = result["tradeLog"]
         if log["initialRows"] > 200 or log["afterRows"] > 200:
             failures.append(f"{count}: Trades Log rendered {max(log['initialRows'], log['afterRows'])} rows")
+        identity = log['identity']
+        if (not identity['samePanel'] or not identity['samePager'] or not identity['focusStayedInPager']
+            or identity['role'] != 'tabpanel' or identity['tabIndex'] != 0
+            or identity['labelledBy'] != 'quant-backtest-trades-view-list'):
+            failures.append(f"{count}: paging lost DOM/focus/tabpanel semantics: {identity}")
         page_budget = 100 if count == 10_000 else 500
-        if log["pageTransitionP95Ms"] > page_budget:
+        if enforce_baseline_timing and log["pageTransitionP95Ms"] > page_budget:
             failures.append(
                 f"{count}: synchronous page transition p95 {log['pageTransitionP95Ms']:.1f}ms > {page_budget}ms"
             )
         drag = result["dockDrag"]
-        if drag["fps"] < 50:
+        if enforce_baseline_timing and drag["fps"] < 50:
             failures.append(f"{count}: Dock drag FPS {drag['fps']:.1f} < 50")
-        if drag["longTaskP95Ms"] > 50:
+        if enforce_baseline_timing and drag["longTaskP95Ms"] > 50:
             failures.append(f"{count}: Dock long-task p95 {drag['longTaskP95Ms']:.1f}ms > 50ms")
         cycles = result["cycles"]
         delta = cycles["heapDeltaBytes"]
-        if delta is not None and delta > 20 * 1024 * 1024:
+        if enforce_baseline_timing and delta is not None and delta > 20 * 1024 * 1024:
             failures.append(f"{count}: heap delta {delta / 1024 / 1024:.1f}MiB > 20MiB")
         if cycles["afterResources"] != cycles["baselineResources"]:
             failures.append(f"{count}: open/close resources changed {cycles['baselineResources']} -> {cycles['afterResources']}")
@@ -516,6 +662,24 @@ def check_budgets(
             failures.append(f"{count}: final resources {result['finalResources']}")
         if result["pageErrors"]:
             failures.append(f"{count}: page errors {result['pageErrors']}")
+        if result['windowErrors']:
+            failures.append(f"{count}: window errors {result['windowErrors']}")
+        selectors = result['selectors']
+        if selectors['durationRows'] != count:
+            failures.append(f"{count}: aggregate stress case omitted the populated duration scatter")
+        if enforce_baseline_timing and selectors['p95']['combined'] > page_budget:
+            failures.append(f"{count}: aggregate selector p95 {selectors['p95']['combined']:.1f}ms > {page_budget}ms")
+        ranges = result['rangeProbe']
+        if not ranges['extremaPreserved'] or any(value > 2_000 for value in ranges['renderCounts']):
+            failures.append(f"{count}: range series exceeded sample budget or lost extrema")
+        if not all(label in ranges['tooltip'] for label in ('Median', '5–95%')):
+            failures.append(f"{count}: shared tooltip omitted a range/line series: {ranges['tooltip']}")
+        if ranges['afterUnmount'] != cycles['afterResources']:
+            failures.append(f"{count}: range chart did not release resources")
+        if result['earlyDestroy']['before'] != result['earlyDestroy']['after']:
+            failures.append(f"{count}: async chart mount resurrected after destroy")
+        if result['constructorFailure']['before'] != result['constructorFailure']['after'] or 'injected report observer' not in result['constructorFailure']['message']:
+            failures.append(f"{count}: partially constructed chart leaked or fault injection failed")
         live_update = result.get("liveUpdate") or {}
         dock_stability = result.get("dockStability") or {}
         if not all(dock_stability.get(key) for key in ("stable", "sameHost", "sameSvg")):
@@ -564,24 +728,53 @@ def check_budgets(
         failures.append(f"Simulation 10k heap delta {sim_delta / 1024 / 1024:.1f}MiB > 20MiB")
     if simulation["pageErrors"]:
         failures.append(f"Simulation 10k page errors {simulation['pageErrors']}")
+    if simulation['windowErrors']:
+        failures.append(f"Simulation 10k window errors {simulation['windowErrors']}")
     return failures
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--strict", action="store_true", help="fail when the plan budgets are exceeded")
+    parser.add_argument("--production", action="store_true", help="build isolated production app + fixtures and serve static assets")
+    parser.add_argument("--browsers", default="chromium", help="comma separated installed Playwright browsers")
+    parser.add_argument("--dpr", type=float, default=1)
+    parser.add_argument("--output", type=Path, help="local artifact directory; never modifies deployment dist")
+    parser.add_argument("--heap-snapshot", action="store_true", help="save the Chromium 100k post-destroy heap when artifacts are enabled")
     args = parser.parse_args()
     executable = os.environ.get("CHROMIUM_EXECUTABLE") or CHROMIUM_DEFAULT
     if not Path(executable).exists():
         executable = ""
-    server = subprocess.Popen(
-        [
+    vite_command = [
             str(ROOT / "node_modules/.bin/vite")
             if (ROOT / "node_modules/.bin/vite").exists()
             else "npx",
             *([] if (ROOT / "node_modules/.bin/vite").exists() else ["vite"]),
+        ]
+    build_dir = None
+    source_before_build = source_hashes()
+    artifact_hashes: dict[str, str] = {}
+    if args.production:
+        build_dir = tempfile.TemporaryDirectory(prefix='quant-runtime-performance-')
+        subprocess.run([
+            *vite_command, 'build', '--config', str(ROOT / 'tests/vite-runtime-performance.config.ts'),
+            '--outDir', build_dir.name, '--emptyOutDir',
+        ], cwd=ROOT, check=True)
+        artifact_hashes = {str(path.relative_to(build_dir.name)): hashlib.sha256(path.read_bytes()).hexdigest()
+                          for path in sorted(Path(build_dir.name).rglob('*')) if path.is_file()}
+    source_after_build = source_hashes()
+    if source_before_build != source_after_build:
+        raise RuntimeError('Source changed during production build; rerun from a stable source snapshot')
+    # Refuse an existing listener instead of mistaking somebody else's Vite
+    # HTTP 200 for this run's production server while our child exits.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind((HOST, PORT))
+    server = subprocess.Popen(
+        [
+            *vite_command,
+            *(['preview', '--outDir', build_dir.name] if build_dir else []),
             "--config",
-            str(ROOT / "tests/vite-performance.config.ts"),
+            str(ROOT / ("tests/vite-runtime-performance.config.ts" if args.production else "tests/vite-performance.config.ts")),
             "--host",
             HOST,
             "--port",
@@ -593,41 +786,82 @@ def main() -> int:
         stderr=subprocess.STDOUT,
         text=True,
     )
-    artifact_dir = ROOT / "artifacts"
-    artifact_dir.mkdir(exist_ok=True)
+    artifact_dir = args.output or ROOT / "artifacts"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
     started = datetime.now(timezone.utc)
     try:
         wait_for_server(server)
+        if args.production:
+            with urlopen(FIXTURE, timeout=5) as response:
+                served_hash = hashlib.sha256(response.read()).hexdigest()
+            expected_hash = artifact_hashes['tests/fixtures/backtest-performance.html']
+            if served_hash != expected_hash or server.poll() is not None:
+                raise RuntimeError('Preview identity mismatch: served HTML is not the isolated production build')
         launch_options: dict[str, object] = {
             "headless": True,
             "args": ["--enable-precise-memory-info", "--js-flags=--expose-gc"],
         }
         if executable:
             launch_options["executable_path"] = executable
+        browser_reports = []
+        failures = []
+        save_artifacts = args.output is not None or os.environ.get("QUANT_PERF_ARTIFACT") == "1"
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(**launch_options)
-            results: list[dict[str, object]] = []
-            save_artifacts = os.environ.get("QUANT_PERF_ARTIFACT") == "1"
-            for count in (10_000, 100_000):
-                trace = artifact_dir / f"backtest-performance-{count}.zip" if save_artifacts else None
-                results.append(measure_case(browser, count, trace))
-            simulation_trace = artifact_dir / "backtest-performance-simulation.zip" if save_artifacts else None
-            simulation = measure_simulation(browser, simulation_trace)
-            browser.close()
+            for browser_name in args.browsers.split(','):
+                browser = getattr(playwright, browser_name).launch(**(launch_options if browser_name == 'chromium' else {'headless': True}))
+                results: list[dict[str, object]] = []
+                for count in (10_000, 100_000):
+                    trace = artifact_dir / f"backtest-performance-{browser_name}-{count}.zip" if save_artifacts else None
+                    results.append(measure_case(browser, count, trace, args.dpr, args.heap_snapshot))
+                    if save_artifacts:
+                        (artifact_dir / f'{browser_name}-{count}.json').write_text(json.dumps(results[-1], indent=2) + '\n')
+                simulation_trace = artifact_dir / f"backtest-performance-{browser_name}-simulation.zip" if save_artifacts else None
+                simulation = measure_simulation(browser, simulation_trace)
+                lifecycle = measure_worker_lifecycle(browser)
+                is_baseline = browser_name == 'chromium' and args.dpr == 1
+                current_failures = check_budgets(results, simulation, enforce_baseline_timing=is_baseline)
+                extended_timing = [] if is_baseline else [message for message in check_budgets(results, simulation)
+                                                          if message not in current_failures]
+                if any(result['externalRequests'] or (args.production and result['devModuleRequests']) for result in [*results, simulation, lifecycle]):
+                    current_failures.append('Production performance fixture made external or source module requests')
+                for outcome in lifecycle['results']:
+                    if outcome['status'] != outcome['kind'] or outcome['elapsedMs'] > 100 or outcome['activeWorkers'] or outcome['lateProgress']:
+                        current_failures.append(f"Simulation cancellation contract failed: {outcome}")
+                    if not any(value > 0 for value in outcome['progress']):
+                        current_failures.append(f"Simulation was cancelled before actual Worker computation: {outcome}")
+                    if outcome['kind'] == 'superseded' and outcome['replacementRuns'] != 1_000:
+                        current_failures.append(f"Superseding Worker never published the replacement result: {outcome}")
+                if (lifecycle['activeWorkers'] or lifecycle['fallbackErrors'] or lifecycle['pageErrors'] or lifecycle['windowErrors']
+                    or lifecycle['finalCharts'] != {'activeCharts': 0, 'activeObservers': 0}):
+                    current_failures.append(f"Simulation Worker lifecycle leaked/failed: {lifecycle}")
+                failures.extend(f'{browser_name}: {failure}' for failure in current_failures)
+                browser_reports.append({'browser': browser_name, 'version': browser.version, 'results': results, 'simulation': simulation,
+                    'workerLifecycle': lifecycle, 'failures': current_failures,
+                    'fixedChromiumBaselineBudgetApplies': is_baseline, 'extendedTimingObservations': extended_timing})
+                browser.close()
+        source_at_finish = source_hashes()
+        if source_at_finish != source_before_build:
+            failures.append('Source changed while the production performance run was in progress')
         report = {
             "generatedAt": started.isoformat(),
             "finishedAt": datetime.now(timezone.utc).isoformat(),
-            "viewport": {"width": 1440, "height": 900, "deviceScaleFactor": 1},
-            "browser": executable or "playwright-default",
-            "results": results,
-            "simulation": simulation,
+            "viewport": {"width": 1440, "height": 900, "deviceScaleFactor": args.dpr},
+            "mode": 'production' if args.production else 'development',
+            "browserReports": browser_reports,
+            "failures": failures,
+            "sourceHashesAtBuild": source_before_build,
+            "buildSourceStable": source_before_build == source_after_build,
+            "sourceStableThroughout": source_before_build == source_at_finish,
+            "sourceHashesAtFinish": source_at_finish,
+            "artifactHashes": artifact_hashes,
+            "device": {"platform": platform.platform(), "machine": platform.machine(),
+                       "cpuCount": os.cpu_count(), "python": platform.python_version()},
         }
         print(json.dumps(report, indent=2, sort_keys=True))
-        if os.environ.get("QUANT_PERF_ARTIFACT") == "1":
+        if save_artifacts:
             output = artifact_dir / "backtest-performance-latest.json"
             output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
             print(f"performance artifact: {output}")
-        failures = check_budgets(results, simulation)
         if failures:
             print("performance budget failures:", file=sys.stderr)
             for failure in failures:
@@ -642,6 +876,8 @@ def main() -> int:
         except subprocess.TimeoutExpired:
             server.kill()
             server.wait(timeout=5)
+        if build_dir:
+            build_dir.cleanup()
 
 
 if __name__ == "__main__":

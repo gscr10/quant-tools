@@ -236,6 +236,41 @@ test('maps market identity and a settled report range for the Viewer header', ()
   assert.deepEqual(report.range, { from: 1_000, to: 2_000 });
 });
 
+test('header activity spans closed exits without narrowing the loaded history', () => {
+  const from = Date.UTC(2026, 7, 15);
+  const firstExit = Date.UTC(2026, 7, 16);
+  const lastExit = Date.UTC(2026, 9, 5);
+  const to = Date.UTC(2026, 9, 6);
+  const base = snapshot('activity');
+  base.seriesState = 'ready';
+  base.reportSeries = { schemaVersion: 1, runId: base.runToken,
+    snapshotRevision: base.revision, barIndex: 1,
+    points: [from, to].map((time, barIndex) => ({ time, barIndex,
+      equity: 1_010, realizedPnl: 10, openPnl: 0, underwater: 0, underwaterPercent: 0,
+      maxDrawdown: 0, maxDrawdownPercent: 0, benchmarkEquity: null,
+      benchmarkPnl: null, benchmarkReturnPercent: null })) };
+  const closed = (id, exit) => ({ ...base.trades[0], id,
+    entry: { ...base.trades[0].entry, time: from },
+    exit: { ...base.trades[0].exit, time: exit } });
+  const trades = [closed('late', lastExit),
+    { ...closed('open', to), open: true, exit: null }, closed('early', firstExit)];
+  const options = { getMarket: () => ({ symbol: 'BTCUSDT', timeframe: '15' }) };
+  const report = mapSnapshot({ ...base, trades, context: { ...base.context, trades } }, options);
+  assert.deepEqual(report.activityRange, { from: firstExit, to: lastExit });
+  assert.deepEqual(report.range, { from, to });
+  assert.equal(report.trades.length, 3);
+  assert.ok(Object.isFrozen(report.activityRange));
+  const partial = mapSnapshot({ ...base, trades, finality: 'partial-history' }, options);
+  assert.equal(partial.activityRange, null);
+  assert.deepEqual(partial.range, { from, to });
+  for (const remaining of [[], [trades[1]]]) {
+    const empty = mapSnapshot({ ...base, trades: remaining,
+      context: { ...base.context, trades: remaining } }, options);
+    assert.equal(empty.activityRange, null);
+    assert.deepEqual(empty.range, { from, to });
+  }
+});
+
 test('publishes deep-history coverage without treating a head run as full history', () => {
   const report = mapSnapshot(snapshot('history-coverage', {
     finality: 'partial-history',
@@ -1599,6 +1634,105 @@ test('simulation updates stay local to the current immutable snapshot', async ()
   );
   controller.destroy();
 });
+
+test('ending a Simulation mount resets every local control while preserving its report and cache', async () => {
+  let simulationRuns = 0;
+  const initial = snapshot('simulation-mount');
+  const source = new FakeSource([initial]);
+  const controller = new BacktestController(source, {
+    simulationRunner: (input) => {
+      simulationRuns += 1;
+      return simulateBacktestReference(input);
+    },
+  });
+  await controller.start();
+  const defaults = controller.getSnapshot().simulation;
+  controller.updateSimulation({
+    method: 'shuffle', runs: 250, variationPercent: 20, preserveWinLoss: true,
+    drawdownMultiple: 3, drawdownUnit: 'percent',
+    outcomeChartMode: 'cumulative', drawdownChartMode: 'cumulative',
+  });
+  source.emit({ type: 'snapshot', snapshot: { ...initial, revision: 2, ledgerRevision: 2 } });
+  const before = controller.getSnapshot();
+  const domain = controller.reportStore.get(initial.key).domain;
+  assert.equal(before.simulation.runs, 250, 'an update of the mounted report retains controls');
+  assert.equal(simulationRuns, 2);
+  controller.resetSimulationSession(initial.key);
+  const reset = controller.getSnapshot();
+  assert.deepEqual(reset.simulation, defaults);
+  assert.strictEqual(reset.trades, before.trades);
+  assert.strictEqual(controller.reportStore.get(initial.key).domain, domain);
+  assert.equal(reset.revision, 2);
+  assert.equal(reset.runId, before.runId);
+  assert.equal(reset.simulationRun, undefined);
+  assert.equal(simulationRuns, 2, 'reset reuses the default numerical cache');
+  controller.resetSimulationSession(initial.key);
+  assert.strictEqual(controller.getSnapshot(), reset, 'repeated unmount is idempotent');
+  source.emit({ type: 'snapshot', snapshot: { ...initial, revision: 3, ledgerRevision: 3 } });
+  assert.deepEqual(controller.getSnapshot().simulation, defaults, 'old controls cannot resume on a new revision');
+  controller.destroy();
+});
+
+test('Simulation unmount resets its owner after active selection changes without cancelling another key', async () => {
+  const first = snapshot('simulation-owner');
+  const second = snapshot('simulation-other', { key: { cellId: 'cell-2', indicatorId: 'simulation-other' } });
+  const worker = new FakeSimulationTaskRunner();
+  const controller = new BacktestController(new FakeSource([first, second]), {
+    simulationWorkerRunner: worker,
+  });
+  await controller.start();
+  controller.setActive(first.key);
+  controller.updateSimulation({ runs: 250, variationPercent: 15 });
+  controller.setActive(second.key);
+  controller.updateSimulation({ runs: 2_500 });
+  const active = controller.getSnapshot();
+  controller.resetSimulationSession(first.key);
+  assert.equal(controller.getReport(first.key).simulation.runs, 1_000);
+  assert.equal(controller.getReport(first.key).simulation.variationPercent, 0);
+  assert.strictEqual(controller.getSnapshot(), active);
+  assert.equal(worker.tasks[0].cancelled, false);
+  worker.tasks[0].complete();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(controller.getSnapshot().simulation.runs, 2_500);
+  controller.destroy();
+});
+
+for (const outcome of ['success', 'failure']) {
+  test(`unmounted Simulation ignores late Worker progress and ${outcome} after a new mount`, async () => {
+    const initial = snapshot(`simulation-late-${outcome}`);
+    const worker = new FakeSimulationTaskRunner();
+    const diagnostics = [];
+    const controller = new BacktestController(new FakeSource([initial]), {
+      simulationWorkerRunner: worker,
+      onDiagnostic: (message) => diagnostics.push(message),
+    });
+    await controller.start();
+    const defaults = controller.getSnapshot().simulation;
+    controller.updateSimulation({ runs: 2_500, variationPercent: 17 });
+    const old = worker.tasks[0];
+    // Model a non-cooperative external runner: cancellation cannot retract an
+    // already queued result/error, so controller ownership must reject it.
+    old.cancel = () => { old.cancelled = true; };
+    old.progress(1_250);
+    controller.resetSimulationSession(initial.key);
+    assert.equal(old.cancelled, true);
+    assert.equal(worker.tasks.length, 1, 'unmount does not start a replacement Worker');
+    assert.deepEqual(controller.getSnapshot().simulation, defaults);
+    assert.equal(controller.getSnapshot().simulationRun, undefined);
+    controller.updateSimulation({ runs: 2_500, variationPercent: 4 });
+    const next = controller.getSnapshot();
+    old.progress(2_500);
+    if (outcome === 'success') old.complete();
+    else old.fail(new Error('late failure from the unmounted tab'));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(controller.getSnapshot(), next);
+    assert.equal(diagnostics.includes('backtest Simulation failed'), false);
+    worker.tasks[1].complete();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(controller.getSnapshot().simulation.variationPercent, 4);
+    controller.destroy();
+  });
+}
 
 test('large Simulation runs publish Worker progress and complete without blocking projections', async () => {
   const source = new FakeSource([snapshot('simulation-worker-progress')]);

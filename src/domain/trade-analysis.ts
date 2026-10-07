@@ -116,11 +116,6 @@ function finite(value: unknown): number | null {
     : null;
 }
 
-function average(values: readonly number[]): number | null {
-  if (values.length === 0) return null;
-  return values.reduce((total, value) => total + value, 0) / values.length;
-}
-
 function rawTrade(trade: Trade): Record<string, unknown> | undefined {
   return trade.raw && typeof trade.raw === 'object'
     ? trade.raw as Record<string, unknown>
@@ -129,6 +124,8 @@ function rawTrade(trade: Trade): Record<string, unknown> | undefined {
 
 function timestampField(trade: Trade, kind: 'entry' | 'exit'): number | null {
   const source = trade as unknown as Record<string, unknown>;
+  const direct = finite(kind === 'entry' ? source.entryTime : source.exitTime);
+  if (direct !== null && direct > 0) return direct;
   const raw = rawTrade(trade);
   const candidates = kind === 'entry'
     ? [
@@ -265,6 +262,10 @@ export function timestampDurationBars(
   const entry = timestampField(trade, 'entry');
   const exit = timestampField(trade, 'exit');
   const minutes = timeframeMinutes(timeframe);
+  return durationFromTimestamps(entry, exit, minutes);
+}
+
+function durationFromTimestamps(entry: number | null, exit: number | null, minutes: number | null): number | null {
   if (entry === null || exit === null || minutes === null) return null;
   const differenceSeconds = (exit - entry) / timestampScale(entry, exit);
   if (!Number.isFinite(differenceSeconds) || differenceSeconds <= 0) return null;
@@ -296,26 +297,51 @@ export function scatterDurationBars(
   return timestampDurationBars(trade, report.context?.timeframe);
 }
 
-function pnlMetrics(rows: readonly Trade[]): TradeAnalysisPnlMetrics {
-  const deltas = rows.map(analysisTradePnl);
-  const finiteDeltas = deltas.filter((value): value is number => value !== null);
-  const winners = finiteDeltas.filter((value) => value > 0);
-  const losers = finiteDeltas.filter((value) => value < 0);
-  const breakevens = finiteDeltas.filter((value) => value === 0);
+interface AnalysisRecord {
+  readonly index: number;
+  readonly delta: number | null;
+  readonly duration: number | null;
+  readonly exitTime: number | null;
+}
+
+function pnlMetrics(rows: readonly AnalysisRecord[]): TradeAnalysisPnlMetrics {
+  let count = 0;
+  let winners = 0;
+  let losers = 0;
+  let breakevens = 0;
+  let total = 0;
+  let positive = 0;
+  let negative = 0;
+  let largestWinner: number | null = null;
+  let largestLoser: number | null = null;
+  for (const { delta } of rows) {
+    if (delta === null) continue;
+    count += 1;
+    total += delta;
+    if (delta > 0) {
+      winners += 1;
+      positive += delta;
+      largestWinner = largestWinner === null ? delta : Math.max(largestWinner, delta);
+    } else if (delta < 0) {
+      losers += 1;
+      negative += delta;
+      largestLoser = largestLoser === null ? delta : Math.min(largestLoser, delta);
+    } else breakevens += 1;
+  }
   return Object.freeze({
-    trades: finiteDeltas.length,
-    winningTrades: winners.length,
-    losingTrades: losers.length,
-    breakevenTrades: breakevens.length,
-    winRate: rows.length > 0 ? winners.length / rows.length : null,
+    trades: count,
+    winningTrades: winners,
+    losingTrades: losers,
+    breakevenTrades: breakevens,
+    winRate: rows.length > 0 ? winners / rows.length : null,
     // The reference coerces a missing delta to zero for this row-level mean.
     averageTrade: rows.length > 0
-      ? deltas.reduce<number>((total, value) => total + (value ?? 0), 0) / rows.length
+      ? total / rows.length
       : null,
-    averageWinner: average(winners),
-    averageLoser: average(losers),
-    largestWinner: winners.length > 0 ? Math.max(...winners) : null,
-    largestLoser: losers.length > 0 ? Math.min(...losers) : null,
+    averageWinner: winners > 0 ? positive / winners : null,
+    averageLoser: losers > 0 ? negative / losers : null,
+    largestWinner,
+    largestLoser,
   });
 }
 
@@ -323,46 +349,45 @@ function epochMilliseconds(timestamp: number): number {
   return Math.abs(timestamp) >= 100_000_000_000 ? timestamp : timestamp * 1_000;
 }
 
-function utcDayBucket(timestamp: number): string | null {
-  const date = new Date(epochMilliseconds(timestamp));
-  return Number.isNaN(date.valueOf()) ? null : date.toISOString().slice(0, 10);
-}
-
-function utcSundayWeekBucket(timestamp: number): string | null {
-  const date = new Date(epochMilliseconds(timestamp));
-  if (Number.isNaN(date.valueOf())) return null;
-  date.setUTCHours(0, 0, 0, 0);
-  date.setUTCDate(date.getUTCDate() - date.getUTCDay());
-  return date.toISOString().slice(0, 10);
+function utcDayBucket(timestamp: number): number | null {
+  const epoch = epochMilliseconds(timestamp);
+  // These buckets are used only for distinct-day/week counts, never labels.
+  // An integer UTC day preserves the Date range and boundary semantics
+  // without allocating Date/ISO strings for every direction of a large ledger.
+  return Number.isFinite(epoch) && Math.abs(epoch) <= 8.64e15
+    ? Math.floor(epoch / 86_400_000)
+    : null;
 }
 
 function durationMetrics(
-  rows: readonly Trade[],
-  timeframe: string | null | undefined,
+  records: readonly AnalysisRecord[],
 ): TradeAnalysisDurationMetrics {
-  const records = rows.map((trade, index) => ({
-    trade,
-    index,
-    delta: analysisTradePnl(trade),
-    duration: timestampDurationBars(trade, timeframe),
-    exitTime: timestampField(trade, 'exit'),
-  }));
-  const durations = records
-    .map(({ duration }) => duration)
-    .filter((value): value is number => value !== null);
-  const winningDurations = records
-    .filter(({ delta }) => delta !== null && delta > 0)
-    .map(({ duration }) => duration)
-    .filter((value): value is number => value !== null);
-  const losingDurations = records
-    .filter(({ delta }) => delta !== null && delta < 0)
-    .map(({ duration }) => duration)
-    .filter((value): value is number => value !== null);
-  const exitTimes = records
-    .map(({ exitTime }) => exitTime)
-    .filter((value): value is number => value !== null);
-  const days = new Set(exitTimes.map(utcDayBucket).filter((value): value is string => value !== null));
-  const weeks = new Set(exitTimes.map(utcSundayWeekBucket).filter((value): value is string => value !== null));
+  let durationCount = 0;
+  let durationSum = 0;
+  let winningCount = 0;
+  let winningSum = 0;
+  let losingCount = 0;
+  let losingSum = 0;
+  let longestDurationBars: number | null = null;
+  let shortestDurationBars: number | null = null;
+  const days = new Set<number>();
+  const weeks = new Set<number>();
+  for (const { duration, delta, exitTime } of records) {
+    if (duration !== null) {
+      durationCount += 1;
+      durationSum += duration;
+      longestDurationBars = longestDurationBars === null ? duration : Math.max(longestDurationBars, duration);
+      shortestDurationBars = shortestDurationBars === null ? duration : Math.min(shortestDurationBars, duration);
+      if (delta !== null && delta > 0) { winningCount += 1; winningSum += duration; }
+      if (delta !== null && delta < 0) { losingCount += 1; losingSum += duration; }
+    }
+    const day = exitTime === null ? null : utcDayBucket(exitTime);
+    if (day !== null) {
+      days.add(day);
+      // Epoch day zero is Thursday; Sunday starts the next week.
+      weeks.add(Math.floor((day + 4) / 7));
+    }
+  }
 
   // Invalid/missing exits sort after finite exits. The original input index is
   // the deterministic tie-break and keeps equal-timestamp rows stable.
@@ -395,54 +420,70 @@ function durationMetrics(
   }
 
   return Object.freeze({
-    averageDurationBars: average(durations),
-    averageWinningDurationBars: average(winningDurations),
-    averageLosingDurationBars: average(losingDurations),
-    averageTradesPerDay: days.size > 0 ? rows.length / days.size : null,
-    averageTradesPerWeek: weeks.size > 0 ? rows.length / weeks.size : null,
-    longestDurationBars: durations.length > 0 ? Math.max(...durations) : null,
-    shortestDurationBars: durations.length > 0 ? Math.min(...durations) : null,
+    averageDurationBars: durationCount > 0 ? durationSum / durationCount : null,
+    averageWinningDurationBars: winningCount > 0 ? winningSum / winningCount : null,
+    averageLosingDurationBars: losingCount > 0 ? losingSum / losingCount : null,
+    averageTradesPerDay: days.size > 0 ? records.length / days.size : null,
+    averageTradesPerWeek: weeks.size > 0 ? records.length / weeks.size : null,
+    longestDurationBars,
+    shortestDurationBars,
     longestWinningStreakBars: longestWinningStreakBars > 0 ? longestWinningStreakBars : null,
     longestLosingStreakBars: longestLosingStreakBars > 0 ? longestLosingStreakBars : null,
   });
 }
 
 function directionMetrics(
-  rows: readonly Trade[],
-  timeframe: string | null | undefined,
+  rows: readonly AnalysisRecord[],
 ): TradeAnalysisDirectionMetrics {
   return Object.freeze({
     pnl: pnlMetrics(rows),
-    duration: durationMetrics(rows, timeframe),
+    duration: durationMetrics(rows),
   });
 }
 
-/** Exact zero-anchored histogram algorithm captured from the reference app. */
+/** Reference zero-anchored buckets with a bounded allocation for nearly equal
+ * floating-point P&Ls. A tiny observed spread must not allocate trillions of
+ * empty buckets between zero and an otherwise ordinary trade profit. */
 export function createTradeAnalysisHistogram(
   input: readonly number[],
 ): readonly TradeAnalysisHistogramBin[] {
   const values = input.filter((value) => Number.isFinite(value));
   if (values.length === 0) return Object.freeze([]);
-  const minimum = Math.min(...values);
-  const maximum = Math.max(...values);
+  let minimum = Infinity;
+  let maximum = -Infinity;
+  for (const value of values) {
+    minimum = Math.min(minimum, value);
+    maximum = Math.max(maximum, value);
+  }
   const requestedBins = Math.ceil(Math.sqrt(values.length));
   let width = (maximum - minimum) / requestedBins;
   if (!Number.isFinite(width) || width === 0) {
     width = Math.abs(maximum) || Math.abs(minimum) || 1;
   }
-  const lower = -Math.ceil(Math.abs(minimum) / width) * width;
-  const upper = Math.ceil(maximum / width) * width;
-  const binCount = Math.max(1, Math.round((upper - lower) / width));
+  const estimatedBins = Math.ceil(maximum / width) + Math.ceil(Math.abs(minimum) / width);
+  const magnitude = Math.max(Math.abs(minimum), Math.abs(maximum));
+  if (!Number.isFinite(estimatedBins) || estimatedBins > 256 || magnitude / width > 1e9) {
+    // Large absolute bucket indices lose integer precision even when an
+    // all-negative cluster needs only a few bins. Widen that case too.
+    const wider = magnitude / Math.max(1, Math.min(128, requestedBins)) * (1 + 2 * Number.EPSILON);
+    width = Number.isFinite(wider) && wider > 0 ? wider : magnitude || 1;
+  }
+  // Work in integer bucket coordinates so two finite extreme endpoints do
+  // not overflow while subtracting their absolute monetary values.
+  const lowerIndex = -Math.ceil(Math.abs(minimum) / width);
+  const upperIndex = Math.ceil(maximum / width);
+  const binCount = Math.max(1, Math.min(256, upperIndex - lowerIndex));
   const counts = Array.from({ length: binCount }, () => 0);
   for (const value of values) {
-    const rawIndex = Math.floor((value - lower) / width);
+    const rawIndex = Math.floor(value / width - lowerIndex);
     const index = Math.max(0, Math.min(binCount - 1, rawIndex));
     counts[index] += 1;
   }
   return Object.freeze(counts.map((count, index) => {
-    const from = lower + index * width;
-    const to = from + width;
-    const midpoint = from + width / 2;
+    const bound = (value: number): number => Math.max(-Number.MAX_VALUE, Math.min(Number.MAX_VALUE, value));
+    const from = bound((lowerIndex + index) * width);
+    const to = bound((lowerIndex + index + 1) * width);
+    const midpoint = from / 2 + to / 2;
     return Object.freeze({
       midpoint,
       from,
@@ -476,8 +517,12 @@ export function createDurationTrend(
   if (!Number.isFinite(variance) || variance <= 0) return Object.freeze([]);
   const slope = covariance / variance;
   const intercept = meanY - slope * meanX;
-  const minimumX = Math.min(...points.map((point) => point.durationBars));
-  const maximumX = Math.max(...points.map((point) => point.durationBars));
+  let minimumX = Infinity;
+  let maximumX = -Infinity;
+  for (const point of points) {
+    minimumX = Math.min(minimumX, point.durationBars);
+    maximumX = Math.max(maximumX, point.durationBars);
+  }
   const firstY = intercept + slope * minimumX;
   const lastY = intercept + slope * maximumX;
   if (![slope, intercept, firstY, lastY].every(Number.isFinite)) return Object.freeze([]);
@@ -488,35 +533,45 @@ export function createDurationTrend(
 }
 
 export function calculateTradeAnalysis(report: BacktestReport): TradeAnalysisResult {
-  const rows = [...report.analysisRows];
-  const timeframe = report.context?.timeframe;
-  const longRows = rows.filter((trade) => analysisTradeDirection(trade) === 'long');
-  const shortRows = rows.filter((trade) => analysisTradeDirection(trade) === 'short');
-  const pnlValues = rows
-    .map(analysisTradePnl)
-    .filter((value): value is number => value !== null);
-  const durationPnl = rows.flatMap((trade): TradeAnalysisScatterPoint[] => {
+  const minutes = timeframeMinutes(report.context?.timeframe);
+  const rows: AnalysisRecord[] = [];
+  const longRows: AnalysisRecord[] = [];
+  const shortRows: AnalysisRecord[] = [];
+  const pnlValues: number[] = [];
+  const durationPnl: TradeAnalysisScatterPoint[] = [];
+  // Resolve each row once. All/Long/Short share the same immutable record,
+  // including raw reference aliases and the open-row compatibility projection.
+  // Parsing the timeframe and timestamps again in each table/plot direction
+  // otherwise dominates a 100k ledger's first aggregate.
+  for (const trade of report.analysisRows) {
     const pnl = analysisTradePnl(trade);
-    const duration = scatterDurationBars(trade, report);
-    if (pnl === null || duration === null) return [];
+    const exitTime = timestampField(trade, 'exit');
+    const timestampDuration = durationFromTimestamps(timestampField(trade, 'entry'), exitTime, minutes);
+    const duration = explicitDurationBars(trade) ?? timestampDuration;
     const direction = analysisTradeDirection(trade);
-    return [{
+    const record = { index: rows.length, delta: pnl, duration: timestampDuration, exitTime };
+    rows.push(record);
+    if (direction === 'long') longRows.push(record);
+    if (direction === 'short') shortRows.push(record);
+    if (pnl !== null) pnlValues.push(pnl);
+    if (pnl === null || duration === null) continue;
+    durationPnl.push(Object.freeze({
       durationBars: duration,
       pnl,
       direction,
-      exitTime: timestampField(trade, 'exit'),
+      exitTime,
       // Captured tooltip title is intentionally generic and must not expose a
       // provider/engine trade id or local numbering convention.
       label: 'Trade',
       color: pnl >= 0 ? TRADE_ANALYSIS_PROFIT_COLOR : TRADE_ANALYSIS_LOSS_COLOR,
-    }];
-  });
+    }));
+  }
   return Object.freeze({
-    all: directionMetrics(rows, timeframe),
-    long: directionMetrics(longRows, timeframe),
-    short: directionMetrics(shortRows, timeframe),
+    all: directionMetrics(rows),
+    long: directionMetrics(longRows),
+    short: directionMetrics(shortRows),
     pnlHistogram: createTradeAnalysisHistogram(pnlValues),
-    durationPnl: Object.freeze(durationPnl.map((point) => Object.freeze(point))),
+    durationPnl: Object.freeze(durationPnl),
     durationTrend: createDurationTrend(durationPnl),
   });
 }

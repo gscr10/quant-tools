@@ -17,6 +17,41 @@ function bar(index: number, open: number, high: number, low: number, close: numb
 }
 
 describe('process_orders_on_close', () => {
+    it.each(['stop=95', 'limit=105'])('fills a close-created marketable %s at the available close', async (trigger) => {
+        const result = await new PineTS([bar(0, 90, 110, 80, 100)], 'BTCUSDT', '60').run(`//@version=6
+strategy('marketable close', initial_capital=1000, process_orders_on_close=true)
+if bar_index == 0
+    strategy.entry('L', strategy.long, qty=1, ${trigger})
+`);
+        expect(result.strategy.opentrades).toMatchObject([{ entry_price: 100, entry_bar_index: 0 }]);
+    });
+
+    it('cannot retroactively fill a stop created at close against an earlier high', async () => {
+        const result = await new PineTS([
+            bar(0, 100, 110, 90, 100), bar(1, 100, 102, 98, 100),
+        ], 'BTCUSDT', '60').run(`//@version=6
+strategy('close causality', initial_capital=1000, process_orders_on_close=true)
+if bar_index == 0
+    strategy.entry('late stop', strategy.long, qty=1, stop=105)
+`);
+        expect(result.strategy.opentrades).toHaveLength(0);
+        expect(result.strategy._fill_events).toHaveLength(0);
+    });
+
+    it('does not assign pre-entry extremes or a past take-profit to a close-priced entry', async () => {
+        const result = await new PineTS([
+            bar(0, 100, 110, 90, 100),
+        ], 'BTCUSDT', '60').run(`//@version=6
+strategy('close bracket causality', initial_capital=1000, process_orders_on_close=true)
+if bar_index == 0
+    strategy.entry('L', strategy.long, qty=1)
+    strategy.exit('TP', 'L', limit=105)
+`);
+        expect(result.strategy.closedtrades).toHaveLength(0);
+        expect(result.strategy.opentrades).toMatchObject([{ entry_price: 100, max_runup: 0, max_drawdown: 0 }]);
+        expect(result.strategy._report_series![0]).toMatchObject({ maxDrawdown: 0, equity: 1000 });
+    });
+
     it('fills a market entry on the creating bar close only when enabled', async () => {
         const bars = [
             bar(0, 100, 112, 98, 110),

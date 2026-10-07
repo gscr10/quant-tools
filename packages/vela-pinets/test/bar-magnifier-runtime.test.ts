@@ -247,7 +247,12 @@ describe('Bar Magnifier runtime request resolution', () => {
         let calls = 0;
         const fetcher = async (): Promise<OHLCV[]> => {
             calls += 1;
-            return [{ time: calls, open: 1, high: 1, low: 1, close: 1, volume: 1 }];
+            // Reuse is valid only after full broker coverage validation. Both
+            // 1D parents need 24 real hourly children, not an arbitrary row.
+            return Array.from({ length: 48 }, (_, index) => ({
+                time: sourceBars[0]!.time + index * 60 * 60_000,
+                open: 100, high: 101, low: 99, close: 100, volume: 1,
+            }));
         };
         const run = () => runPineStatic({
             ind: indicatorFor({}, strategySource, {}),
@@ -261,7 +266,8 @@ describe('Bar Magnifier runtime request resolution', () => {
             fetchSeries: fetcher,
             lowerTimeframeFetchCache: cache,
         });
-        await run();
+        const first = await run();
+        expect((first.ctx as { executionPrecision?: unknown }).executionPrecision).toMatchObject({ applied: true, coverage: 1 });
         await run();
         expect(calls).toBe(1);
         cache.clear();

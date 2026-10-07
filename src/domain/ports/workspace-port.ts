@@ -3,6 +3,9 @@ import type {
   WorkspaceIndicatorItem,
 } from '../indicators.ts';
 
+/** Transient chart annotation; never a saved user indicator. */
+export const BACKTEST_EXECUTION_HIGHLIGHT_TYPE = 'quant-backtest-execution-highlight';
+
 export interface BacktestExecutionFocus {
   readonly cellId: string;
   readonly indicatorId: string;
@@ -10,6 +13,10 @@ export interface BacktestExecutionFocus {
   readonly time: number;
   readonly price?: number | null;
   readonly side: 'entry' | 'exit';
+  readonly symbol?: string;
+  readonly timeframe?: string;
+  readonly tradeNumber?: string | number;
+  readonly direction?: 'long' | 'short' | 'unknown';
 }
 
 export interface WorkspacePort {
@@ -24,6 +31,7 @@ export interface WorkspacePort {
   addNativeIndicator(nativeType: string): void;
   getOnChartIndicators(): WorkspaceIndicatorItem[];
   getBuiltInIndicators(): WorkspaceIndicatorItem[];
+  resolveScriptIndicatorName(id: string, title: string, source: string): string;
   resolveNativeIndicator(id: string, title: string): NativeIndicatorIdentity | undefined;
   /**
    * Focus a backtest execution through the public chart seam.  The adapter is

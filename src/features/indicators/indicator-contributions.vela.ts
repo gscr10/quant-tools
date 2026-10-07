@@ -15,6 +15,7 @@ export interface IndicatorContributionActions {
   toggleFavorites(): void;
   openScript(name: string, script: string, savedName?: string): void;
   openNativeInfo(name: string, nativeType: string): void;
+  resolveScriptIndicatorName(id: string, title: string, source: string): string;
   resolveNativeIndicator(id: string, title: string): NativeIndicatorIdentity | undefined;
   syncManager(): void;
 }
@@ -49,7 +50,8 @@ export function registerIndicatorContributions(
       order: -20,
       run: (context, indicator) => {
         if (indicator.source) {
-          const favorite = scriptFavorite(indicator.title, indicator.source);
+          const name = actions.resolveScriptIndicatorName(indicator.id, indicator.title, indicator.source);
+          const favorite = scriptFavorite(name, indicator.source);
           const enabled = favorites.toggle(favorite);
           actions.syncManager();
           context.toast(enabled ? 'Added to favorites' : 'Removed from favorites', 'success');
@@ -73,7 +75,8 @@ export function registerIndicatorContributions(
       run: (_context, indicator) => {
         if (indicator.source) {
           const savedName = scripts.list().find((script) => script.script === indicator.source)?.name;
-          actions.openScript(indicator.title, indicator.source, savedName);
+          const name = actions.resolveScriptIndicatorName(indicator.id, indicator.title, indicator.source);
+          actions.openScript(name, indicator.source, savedName);
           return;
         }
         const native = actions.resolveNativeIndicator(indicator.id, indicator.title);

@@ -115,6 +115,31 @@ evidence.write.assert_called()
 `], { stdio: 'pipe' });
 });
 
+test('duration runner waits for delayed CDP close events before declaring teardown failure', () => {
+  execFileSync('python3', ['-c', bootstrap + `
+page = mock.Mock()
+state = {'status': 'passed', 'result': {'observedDurationMs': 7200000},
+         'elapsedMs': 7200000, 'subscriptions': {}, 'recoveryCycles': [],
+         'activeSubscriptions': 0, 'callbacksAfterCleanup': 0, 'cleanupErrors': []}
+page.evaluate.return_value = state
+session = mock.Mock()
+session.send.return_value = {'metrics': []}
+evidence = mock.Mock()
+network = mock.Mock()
+active = {'binance': {'created': 2, 'closed': 1, 'active': 1, 'maxActive': 1,
+                      'framesReceived': 2, 'candleFrames': 2, 'lastCandleConnection': 2, 'errors': 0}}
+closed = {'binance': {'created': 2, 'closed': 2, 'active': 0, 'maxActive': 1,
+                      'framesReceived': 2, 'candleFrames': 2, 'lastCandleConnection': 2, 'errors': 0}}
+snapshots = [active, active, closed]
+network.snapshot.side_effect = lambda: snapshots.pop(0) if snapshots else closed
+result = module['run_duration_soak'](page, 7200, False, evidence, 300, 3,
+                                     True, [], session, network, 'binance')
+assert result['websockets']['binance']['active'] == 0
+assert result['teardownWaitMs'] >= 0
+assert any(call.args == (250,) for call in page.wait_for_timeout.call_args_list)
+`], { stdio: 'pipe' });
+});
+
 test('network evidence counts candle frames separately from connection and ping frames', () => {
   execFileSync('python3', ['-c', bootstrap + `
 network = module['NetworkEvidence'](mock.Mock())

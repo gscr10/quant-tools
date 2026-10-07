@@ -244,6 +244,31 @@ def assert_fixture_page(
         viewer.locator(".quant-backtest-tab", has_text=tab_name).click()
         viewer.locator(expected_selector).first.wait_for(state="visible")
 
+    # The point bridge must work in every supported browser after the real
+    # Highcharts chunk upgrades the Analysis charts. This is a keyboard-only
+    # check; pointer hover remains covered by the Chromium fixture regression.
+    viewer.locator(".quant-backtest-tab", has_text="Trades Analysis").click()
+    page.wait_for_function(
+        """() => document.querySelectorAll(
+          '.quant-backtest-analysis-chart-host [data-quant-report-point]',
+        ).length > 0"""
+    )
+    points = viewer.locator(".quant-backtest-analysis [data-quant-report-point]")
+    assert points.count() > 0
+    points.first.focus()
+    assert page.evaluate(
+        "document.activeElement?.getAttribute('data-quant-report-point')"
+    ) == "0"
+    page.wait_for_function(
+        """() => [...document.querySelectorAll('.highcharts-tooltip')]
+          .some(node => getComputedStyle(node).visibility !== 'hidden'
+            && node.textContent?.trim())"""
+    )
+    points.first.press("ArrowRight")
+    assert page.evaluate(
+        "document.activeElement?.getAttribute('data-quant-report-point')"
+    ) == "1"
+
     # Closing the Viewer must release Highcharts/ResizeObserver resources. A
     # short wait is enough for the component's synchronous destroy path while
     # still allowing a browser with slower layout scheduling to settle.

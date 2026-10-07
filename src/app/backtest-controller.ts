@@ -508,6 +508,26 @@ export class BacktestController {
     return report;
   }
 
+  /** A reference Simulation tab owns its controls only while mounted. Keep
+   * numerical caches, but discard its parameters and any unfinished task. */
+  resetSimulationSession(key: BacktestAdapterKey): void {
+    if (this.destroyed) return;
+    const changed = this.simulationSettings.delete(keyOf(key));
+    this.cancelPendingSimulation(key);
+    const entry = this.store.get(key);
+    if (!entry || (!changed && !entry.report.simulationRun)) return;
+    const report = freezeUiReport({
+      ...entry.report,
+      simulation: simulationEligible(entry)
+        ? toUiSimulation(entry.domain, {}, this.simulationRuntime())
+        : undefined,
+      simulationRun: undefined,
+    });
+    // No strategy rerun and no replacement Worker: an unmounted tab only
+    // restores the ordinary cached 1,000-run projection for its next visit.
+    this.store.upsert(key, entry.domain, report, entry.epoch, entry.revision);
+  }
+
   private simulationNeedsWorker(
     domain: DomainBacktestReport,
     settings: ReturnType<typeof normalizeSimulationEngineSettings>,
@@ -1255,6 +1275,16 @@ function domainToUiReport(
       : unavailable('currency', 'partial-ledger'),
   };
   const trades = ledgerAvailable ? toUiTrades(domain.trades) : [];
+  // The reference header describes closed activity, not the warm-up bars or
+  // an open position's placeholder exit. Keep the actual history range intact.
+  let firstClosedExit: number | undefined;
+  let lastClosedExit: number | undefined;
+  for (const trade of trades) {
+    if (trade.status !== 'closed' || typeof trade.exitTime !== 'number'
+      || !Number.isFinite(trade.exitTime)) continue;
+    firstClosedExit = Math.min(firstClosedExit ?? trade.exitTime, trade.exitTime);
+    lastClosedExit = Math.max(lastClosedExit ?? trade.exitTime, trade.exitTime);
+  }
   // Terminal UI states require exactly the same proof used to publish rows.
   // Neither a history-free engine report nor a mismatched ledger revision is
   // a ready report. This applies to every bar count and history depth.
@@ -1377,6 +1407,9 @@ function domainToUiReport(
     timeframe: domain.context?.timeframe,
     source: snapshot.source ?? snapshot.handle?.source,
     status,
+    activityRange: firstClosedExit !== undefined && lastClosedExit !== undefined
+      ? { from: firstClosedExit, to: lastClosedExit }
+      : null,
     range: domain.context?.range
       ? {
           from: domain.context.range.from,
@@ -2106,6 +2139,7 @@ function freezeUiReport(report: UiBacktestReport): UiBacktestReport {
     ...report,
     key: report.key ? Object.freeze({ ...report.key }) : report.key,
     range: report.range ? Object.freeze({ ...report.range }) : report.range,
+    activityRange: report.activityRange ? Object.freeze({ ...report.activityRange }) : report.activityRange,
     history: report.history
       ? Object.freeze({
           ...report.history,
@@ -2231,8 +2265,8 @@ function inferSettledRange(snapshot: BacktestAdapterSnapshot): BacktestContext['
   };
 
   // An accepted atomic series is the actual data range for both settled and
-  // live-provisional reports.  The latter is what the reference Viewer shows
-  // while the newest bar is still updating.
+  // live-provisional reports. The separate activityRange controls the header;
+  // trade labels must not narrow this history provenance.
   const points = snapshot.seriesState === 'ready' ? snapshot.reportSeries?.points ?? [] : [];
   points.forEach((point) => include(point.time));
   if (count >= 2) return { from, to };

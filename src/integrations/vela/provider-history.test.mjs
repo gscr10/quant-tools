@@ -99,6 +99,128 @@ test('point-range recovery keeps the Hyperliquid request window to one candle', 
   ]);
 });
 
+test('history guard retries a transient page failure before exposing it to Vela', async () => {
+  let attempts = 0;
+  class FlakyProvider {
+    __quantToolsNetworkGuard = true;
+
+    async getBars() {
+      attempts += 1;
+      if (attempts === 1) throw new Error('HTTP 503');
+      return [{ time: 60_000, open: 1, high: 2, low: 1, close: 2 }];
+    }
+  }
+
+  const provider = new FlakyProvider();
+  const bars = await guardProviderHistory(provider).getBars('BTCUSDT', '1m', { limit: 1 });
+  assert.deepEqual(bars, [{ time: 60_000, open: 1, high: 2, low: 1, close: 2 }]);
+  assert.equal(attempts, 2);
+});
+
+test('history guard re-fetches an intraday page gap without fabricating candles', async () => {
+  class GappedProvider {
+    calls = [];
+
+    async getBars(_ticker, _timeframe, range) {
+      this.calls.push({ ...range });
+      if (range.from === 120_000 && range.to === 120_000) {
+        return [{ time: 120_000, open: 2, high: 3, low: 2, close: 3 }];
+      }
+      return [
+        { time: 60_000, open: 1, high: 2, low: 1, close: 2 },
+        { time: 180_000, open: 3, high: 4, low: 3, close: 4 },
+      ];
+    }
+  }
+
+  const provider = new GappedProvider();
+  const bars = await guardProviderHistory(provider).getBars('BTCUSDT', '1m', { limit: 3 });
+  assert.deepEqual(bars.map((bar) => bar.time), [60_000, 120_000, 180_000]);
+  assert.deepEqual(provider.calls[1], { from: 120_000, to: 120_000, limit: 1 });
+});
+
+test('history guard expands equal-bound gap repair for forward paginators', async () => {
+  const calls = [];
+  const provider = guardProviderHistory({
+    async getBars(_ticker, _timeframe, range) {
+      calls.push({ ...range });
+      if (range.from === 60_000 && range.to === 60_000) return [];
+      if (range.from === 60_000 && range.to === 119_999) {
+        return [{ time: 60_000, open: 1, high: 2, low: 1, close: 2 }];
+      }
+      return [
+        { time: 0, open: 1, high: 2, low: 1, close: 2 },
+        { time: 120_000, open: 3, high: 4, low: 3, close: 4 },
+      ];
+    },
+  });
+  const bars = await provider.getBars('BTCUSDT', '1m', { limit: 3 });
+  assert.deepEqual(bars.map((bar) => bar.time), [0, 60_000, 120_000]);
+  assert.deepEqual(calls.slice(-2), [
+    { from: 60_000, to: 60_000, limit: 1 },
+    { from: 60_000, to: 119_999, limit: 1 },
+  ]);
+});
+
+test('history guard applies the same gap repair after a 15m timeframe switch', async () => {
+  const step = 15 * 60_000;
+  let repaired = false;
+  const provider = guardProviderHistory({
+    async getBars(_ticker, _timeframe, range) {
+      if (range.from === step && range.to === step && !repaired) {
+        repaired = true;
+        return [{ time: step, open: 2, high: 3, low: 2, close: 3 }];
+      }
+      return [
+        { time: 0, open: 1, high: 2, low: 1, close: 2 },
+        { time: step * 2, open: 3, high: 4, low: 3, close: 4 },
+      ];
+    },
+  });
+  const bars = await provider.getBars('BTCUSDT', '15', { limit: 3 });
+  assert.deepEqual(bars.map(bar => bar.time), [0, step, step * 2]);
+});
+
+test('history guard leaves a confirmed unresolved gap visible instead of inventing a bar', async () => {
+  class SparseProvider {
+    async getBars() {
+      return [
+        { time: 60_000, open: 1, high: 2, low: 1, close: 2 },
+        { time: 180_000, open: 3, high: 4, low: 3, close: 4 },
+      ];
+    }
+  }
+
+  const bars = await guardProviderHistory(new SparseProvider()).getBars('BTCUSDT', '1m', { limit: 2 });
+  assert.deepEqual(bars.map((bar) => bar.time), [60_000, 180_000]);
+});
+
+test('custom providers without a continuous venue contract preserve 2h and 4h session gaps', async () => {
+  // Generic third-party providers may contain legitimate closed sessions.
+  // The registered Binance/Hyperliquid paths instead declare continuous
+  // crypto calendars and are validated at all supported resolutions.
+  for (const [timeframe, step] of [
+    ['2h', 2 * 60 * 60 * 1_000],
+    ['4h', 4 * 60 * 60 * 1_000],
+  ]) {
+    let calls = 0;
+    const provider = guardProviderHistory({
+      async getBars() {
+        calls += 1;
+        return [
+          { time: 0, open: 1, high: 2, low: 1, close: 2 },
+          // Deliberately omit the middle candle. No repair request is expected
+          // for this out-of-scope resolution.
+          { time: step * 2, open: 3, high: 4, low: 3, close: 4 },
+        ];
+      },
+    });
+    const bars = await provider.getBars('BTCUSDT', timeframe, { limit: 2 });
+    assert.deepEqual(bars.map((bar) => bar.time), [0, step * 2]);
+    assert.equal(calls, 1, `${timeframe} must not fan out gap repair requests`);
+  }
+});
+
 test('point-range duration preserves Pine minute/month case semantics', async () => {
   class FakeProvider {
     calls = [];
@@ -192,4 +314,23 @@ test('hosts may explicitly opt into the upstream remote symbol-icon resolver', (
   const icon = providers.binance().resolveSymbolIcon?.(symbol);
   assert.equal(typeof icon, 'string');
   assert.match(icon, /^https?:\/\//);
+});
+
+test('Hyperliquid monthly history clamps pre-epoch count windows', async () => {
+  const original = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (_input, init = {}) => {
+    requests.push(JSON.parse(String(init.body)));
+    return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 20 }).hyperliquid();
+    assert.deepEqual(await provider.getBars('BTC', 'M', { limit: 2_000 }), []);
+    const candle = requests.find(request => request.type === 'candleSnapshot');
+    assert.ok(candle);
+    assert.ok(candle.req.startTime >= 0);
+    assert.equal(candle.req.interval, '1M');
+  } finally {
+    globalThis.fetch = original;
+  }
 });

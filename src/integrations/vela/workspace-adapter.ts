@@ -4,9 +4,11 @@ import type {
   NativeIndicatorIdentity,
   WorkspaceIndicatorItem,
 } from '../../domain/indicators.ts';
-import type { WorkspacePort } from '../../domain/ports/workspace-port.ts';
+import { BACKTEST_EXECUTION_HIGHLIGHT_TYPE, type WorkspacePort } from '../../domain/ports/workspace-port.ts';
 import type { BacktestExecutionFocus } from '../../domain/ports/workspace-port.ts';
-import { focusBacktestExecution } from './backtest-chart-adapter.ts';
+import { clearBacktestExecutionFocus, focusBacktestExecution } from './backtest-chart-adapter.ts';
+import { stripTransientWorkspaceIndicators } from '../storage/workspace-storage.ts';
+import { resolveScriptIndicatorName } from './indicator-display-name.ts';
 
 export class VelaWorkspaceAdapter implements WorkspacePort {
   private readonly workspace: VelaWorkspace;
@@ -15,12 +17,18 @@ export class VelaWorkspaceAdapter implements WorkspacePort {
     this.workspace = workspace;
   }
 
+  dispose(): void {
+    clearBacktestExecutionFocus(this.workspace);
+  }
+
   get root(): HTMLElement {
     return this.workspace.root;
   }
 
   getState(): unknown {
-    return this.workspace.getState();
+    // Template exports use this seam; Workspace autosave uses the storage
+    // boundary. Neither may persist a four-second navigation annotation.
+    return JSON.parse(stripTransientWorkspaceIndicators(JSON.stringify(this.workspace.getState())));
   }
 
   applyState(state: unknown): void {
@@ -56,6 +64,7 @@ export class VelaWorkspaceAdapter implements WorkspacePort {
     const rows = active.onChartRows();
     const nativeCount = rows.filter((row) => row.native).length;
     return rows.flatMap((row, index): WorkspaceIndicatorItem[] => {
+      if (row.nativeType === BACKTEST_EXECUTION_HIGHLIGHT_TYPE) return [];
       if (row.native && row.nativeType) {
         return [{
           name: row.name,
@@ -81,6 +90,7 @@ export class VelaWorkspaceAdapter implements WorkspacePort {
     let manifestIndex = 0;
     return this.workspace.active.libraryRows()
       .flatMap((row, libraryIndex): WorkspaceIndicatorItem[] => {
+        if (row.nativeType === BACKTEST_EXECUTION_HIGHLIGHT_TYPE) return [];
         if (row.native && row.nativeType) {
           return [{
             name: row.name,
@@ -101,6 +111,10 @@ export class VelaWorkspaceAdapter implements WorkspacePort {
           add: () => this.workspace.active.addFromLibrary(libraryIndex),
         }];
       });
+  }
+
+  resolveScriptIndicatorName(id: string, title: string, source: string): string {
+    return resolveScriptIndicatorName(this.workspace, id, title, source);
   }
 
   resolveNativeIndicator(id: string, title: string): NativeIndicatorIdentity | undefined {

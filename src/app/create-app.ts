@@ -141,6 +141,7 @@ export function createApp(
       openNativeInfo: (name, nativeType) => {
         openNativeIndicatorInfo(overlays, name, nativeType);
       },
+      resolveScriptIndicatorName: (id, title, source) => getWorkspacePort().resolveScriptIndicatorName(id, title, source),
       resolveNativeIndicator: (id, title) => getWorkspacePort().resolveNativeIndicator(id, title),
       syncManager: () => indicatorManager?.sync(),
     }));
@@ -183,6 +184,7 @@ export function createApp(
     workspaceAdapter = workspacePort;
     lifetime.add(() => {
       try {
+        workspacePort.dispose();
         workspace.destroy();
       } finally {
         workspaceRef = null;
@@ -222,9 +224,13 @@ export function createApp(
           },
           onTradeLocate: (report, trade, side) => {
             const key = report.key;
-            if (!key) return;
+            const unavailable = () => workspacePort.toast(`Unable to locate ${side} on chart`, 'error');
+            if (!key || !report.trades?.includes(trade) || (side === 'exit' && trade.status === 'open')) {
+              unavailable();
+              return;
+            }
             const cell = workspace.cell(key.cellId);
-            if (!cell) return;
+            if (!cell) { unavailable(); return; }
             const rawTime = side === 'entry' ? trade.entryTime : trade.exitTime;
             // Reports normally contain epoch milliseconds already, but use the
             // domain normalizer here as a defensive boundary for host/fixture
@@ -244,6 +250,10 @@ export function createApp(
                 time,
                 price,
                 side,
+                symbol: report.symbol,
+                timeframe: report.timeframe,
+                tradeNumber: trade.number ?? trade.id,
+                direction: trade.direction,
               });
               if (!focused) {
                 workspacePort.toast(`Unable to locate ${side} on chart`, 'error');
@@ -297,6 +307,15 @@ export function createApp(
       queueMicrotask(() => {
         managerSyncQueued = false;
         indicatorManager?.sync();
+        // Favorites can change in the list, editor or Viewer without a new
+        // strategy execution. Project the one shared service into every
+        // report, including background cells; only publish changed values.
+        const controller = backtestFeature?.controller;
+        for (const report of controller?.listReports() ?? []) {
+          if (!report.key || !report.source) continue;
+          const favorite = favorites.has(scriptFavorite(report.strategyName, report.source));
+          if (favorite !== report.favorite) controller?.setFavorite(report.key, favorite);
+        }
       });
     };
     lifetime.add(scripts.subscribe(scheduleManagerSync));

@@ -5,11 +5,17 @@ on:
     branches:
       - master
       - task/p1-final-gates
+      - task/p1-priority
   pull_request:
     branches:
       - master
   workflow_dispatch:
     inputs:
+      verify_mobile:
+        description: 'Optional full viewport and mobile/touch regression; excluded from current desktop acceptance'
+        required: false
+        type: boolean
+        default: false
       provider_duration_seconds:
         description: 'Optional real-provider soak duration (seconds); 0 uses the normal 10-round check'
         required: false
@@ -29,7 +35,7 @@ jobs:
   local-gates:
     runs-on: ubuntu-latest
     # The full cross-browser/a11y suite installs three browser engines and
-    # intentionally exercises cold-start, touch and visual gates.  Keep the
+    # intentionally exercises cold-start and desktop visual gates. Keep the
     # job bounded, but leave enough room for a busy hosted runner instead of
     # turning a slow install into a false Final Gate failure.
     timeout-minutes: 60
@@ -59,13 +65,39 @@ jobs:
         run: npm run test:pinets:golden
       - name: Verify development workspace regression
         run: npm run test:e2e
+      - name: Verify workspace fault isolation and storage restoration
+        run: npm run test:e2e:workspace-fault-isolation && npm run test:e2e:storage-restoration
       - name: Verify production workspace regression
-        run: python3 tests/e2e_app.py --preview
+        run: python3 tests/e2e_app.py --preview --scope desktop
+      - name: Verify production DOM, AX tree and live regions
+        run: npm run test:e2e:production-a11y
+      - name: Verify Settings controls and modal lifecycle
+        run: npm run test:e2e:settings
+      - name: Verify supported Pine input types through real engines
+        run: npm run test:e2e:settings-schema
+      - name: Verify trade location and temporary marker lifecycle
+        run: npm run test:e2e:trade-location
+      - name: Verify adaptive desktop production layout
+        run: npm run test:e2e:responsive
+      - name: Verify desktop Analysis tooltips and keyboard navigation
+        run: npm run test:e2e:analysis
+      - name: Verify desktop Trades Log and Calendar interactions
+        run: npm run test:e2e:trade-log-calendar
+      - name: Verify desktop Simulation controls and modal lifecycle
+        run: npm run test:e2e:simulation
+      - name: Verify desktop Dock resizing and collapsed controls
+        run: npm run test:e2e:dock
+      - name: Verify Summary and Dock keyboard chart navigation
+        run: npm run test:e2e:summary-keyboard
       - name: Verify deployment smoke failure detection locally
         run: npm run test:e2e:deployment:contract
-      - name: Verify touch matrix
-        run: npm run test:e2e:touch
-      - name: Verify visual and accessibility gates
+      - name: Optional full viewport and mobile touch regression (deferred scope)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_mobile }}
+        env:
+          QUANT_VISUAL_STRICT_PIXELS: '0'
+          QUANT_VISUAL_GEOMETRY_TOLERANCE: '24'
+        run: npm run test:e2e:mobile:regression
+      - name: Verify desktop visual and accessibility gates
         env:
           QUANT_VISUAL_STRICT_PIXELS: '0'
           QUANT_VISUAL_GEOMETRY_TOLERANCE: '24'

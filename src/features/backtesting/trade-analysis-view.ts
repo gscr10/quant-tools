@@ -115,7 +115,7 @@ export function formatTradeAnalysisValue(
 }
 
 function chartTitle(doc: Document, text: string): HTMLHeadingElement {
-  const title = createElement(doc, 'h4', 'quant-backtest-analysis-chart-title');
+  const title = createElement(doc, 'h3', 'quant-backtest-analysis-chart-title');
   title.textContent = text;
   return title;
 }
@@ -301,7 +301,7 @@ function renderWinRateDonut(doc: Document, report: BacktestReport): HTMLElement 
   svg.setAttribute('role', 'img');
   svg.setAttribute('aria-label', 'Winrate');
   const total = values.reduce((sum, point) => sum + point.y, 0);
-  const radius = 62;
+  const radius = 70;
   const circumference = Math.PI * 2 * radius;
   let offset = 0;
   values.forEach((point) => {
@@ -401,7 +401,9 @@ function renderAnalysisTable(
     tableRow.appendChild(label);
     COMPARISON_COLUMNS.forEach((column) => {
       const cell = createElement(doc, 'td');
-      const value = comparison?.[column.id]?.[row.key];
+      const population = unwrapMetric(comparison?.[column.id]?.trades);
+      const value = row.kind === 'count' && population === 0
+        ? undefined : comparison?.[column.id]?.[row.key];
       cell.textContent = formatTradeAnalysisValue(value, row.kind, currency, row.nullAsZero);
       if (row.colorize) {
         const number = unwrapMetric(value);
@@ -444,7 +446,7 @@ function renderDurationScatter(doc: Document, report: BacktestReport): HTMLEleme
     ? {
       name: 'Trend',
       kind: 'line',
-      color: NEUTRAL_COLOR,
+      color: '#a1a1aa',
       dashStyle: 'Dash',
       showInLegend: false,
       enableMouseTracking: false,

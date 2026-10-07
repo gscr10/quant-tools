@@ -53,7 +53,7 @@ test('Dock resize suspends chart reflow and settles it once after pointerup', as
 
 test('Dock chart flex sizing cannot depend on Highcharts intrinsic SVG width', async () => {
   const css = await readFile(new URL('../src/features/backtesting/backtest.css', import.meta.url), 'utf8');
-  assert.match(css, /\.quant-backtest-dock-sparkline > \.quant-backtest-chart-host\s*\{[^}]*flex: 1 1 0;[^}]*width: 100%;[^}]*height: 164px;[^}]*min-height: 164px;/);
+  assert.match(css, /\.quant-backtest-dock-sparkline > \.quant-backtest-chart-host\s*\{[^}]*flex: 1 1 0;[^}]*width: 100%;[^}]*height: 100%;[^}]*min-height: 0;/);
 });
 
 test('Simulation chart adapter formats percent axes and mode-specific tooltips', async () => {
@@ -73,4 +73,16 @@ test('Simulation chart adapter formats percent axes and mode-specific tooltips',
   assert.match(source, /gridLineWidth: options\.yAxisGridLineWidth/);
   assert.match(source, /groupPadding: options\.columnGroupPadding/);
   assert.match(source, /pointPadding: options\.columnPointPadding/);
+});
+
+test('report chart points retain a local keyboard tooltip bridge without the optional a11y chunk', async () => {
+  const source = await readFile(rendererUrl, 'utf8');
+  assert.match(source, /function applyChartPointAccessibility\(/);
+  assert.match(source, /data-quant-report-point/);
+  assert.match(source, /element\.setAttribute\('tabindex', index === tabIndex \? '0' : '-1'\)/);
+  assert.match(source, /chart\.tooltip\?\.refresh\(point\)/);
+  assert.match(source, /chart\.tooltip\?\.hide\(\)/);
+  assert.match(source, /event\.key === 'ArrowRight'/);
+  assert.match(source, /applyChartPointAccessibility\(chart, options\)/);
+  assert.match(source, /applyChartPointAccessibility\(record\.chart, options\)/);
 });

@@ -36,6 +36,7 @@ for (const reason of ['depth', 'aborted']) test(`late adapter consumes cached ${
   const s = await f.add('late-observer');
   assert.equal(s.history.reason, reason);
   assert.equal(s.status, reason === 'depth' ? 'ready' : 'partial');
+  assert.equal(s.history.complete, reason === 'depth');
   f.complete(reason === 'depth' ? 'aborted' : 'depth');
   assert.equal(f.adapter.getSnapshot(s.key).history.reason, reason);
   f.adapter.destroy(); dispose();

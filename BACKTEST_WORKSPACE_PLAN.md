@@ -1,5 +1,9 @@
 # Quant Tools 回测工作区一比一复刻与功能完备实施计划（最终复核版）
 
+> **历史版本，停止作为实施/验收依据。** 当前计划已迁至 [docs/backtesting/current/BACKTEST_WORKSPACE_PLAN.md](docs/backtesting/current/BACKTEST_WORKSPACE_PLAN.md)，需求及状态以 [BACKTEST_REQUIREMENTS_STATUS.md](docs/backtesting/current/BACKTEST_REQUIREMENTS_STATUS.md) 为准。
+> 2026-10-07 用户明确修正：功能、交互、图标和组件风格对标，整体布局适配本项目；不复制或预留 AI 侧栏、登录 banner，不要求整页像素/绝对坐标重合。下文旧的 1px / 0.5% / 1% 阈值及宿主布局要求仅保留追溯，不再有效。
+> 后续明确手机端适配暂缓；下文历史手机布局/触摸目标不作为当前阻塞，当前按新需求表 SCOPE-07 执行。
+
 > 版本：1.1
 >
 > 日期：2026-09-25

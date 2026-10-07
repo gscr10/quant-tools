@@ -11,6 +11,32 @@ import { VelaBacktestControlAdapter } from '../src/integrations/vela/backtest-co
 
 const key = { cellId: 'cell-1', indicatorId: 'strategy-1' };
 
+test('numeric Pine options accept numeric values and time remains epoch milliseconds', () => {
+  const snapshot = {
+    inputs: [
+      { key: 'length', title: 'Length', type: 'int', defval: 9, options: ['5', '9', '21'] },
+      { key: 'ratio', title: 'Ratio', type: 'float', defval: 1.5, options: ['0.5', '1.5', '2.5'] },
+      { key: 'start', title: 'Start', type: 'time', defval: 1704067200000 },
+    ], props: [],
+  };
+  assert.equal(validateBacktestSettingsDraft(snapshot, {}, {}), null);
+  assert.equal(validateBacktestSettingsDraft(snapshot, { length: 21, ratio: 2.5, start: 0 }, {}), null);
+  assert.match(validateBacktestSettingsDraft(snapshot, { length: 10 }, {}), /invalid option/);
+  assert.match(validateBacktestSettingsDraft(snapshot, { length: '21' }, {}), /valid number/);
+  assert.match(validateBacktestSettingsDraft(snapshot, { start: '1704067200000' }, {}), /valid number/);
+  assert.match(validateBacktestSettingsDraft(snapshot, { start: Number.NaN }, {}), /valid number/);
+});
+
+test('boolean and text settings reject incompatible DTO types before engine mutation', () => {
+  const snapshot = { inputs: [
+    { key: 'enabled', title: 'Enabled', type: 'bool', defval: true },
+    { key: 'symbol', title: 'Symbol', type: 'symbol', defval: 'BTCUSDT' },
+  ], props: [] };
+  assert.match(validateBacktestSettingsDraft(snapshot, { enabled: 'false' }, {}), /true or false/);
+  assert.match(validateBacktestSettingsDraft(snapshot, { symbol: 123 }, {}), /must be text/);
+  assert.equal(validateBacktestSettingsDraft(snapshot, { enabled: false, symbol: 'ETHUSDT' }, {}), null);
+});
+
 test('settings keep Inputs and Properties namespaces independent', () => {
   const snapshot = {
     inputs: [{ key: 'initial_capital', title: 'Signal length', type: 'int', defval: 3, max: 10 }],
@@ -198,6 +224,14 @@ test('settings UI keeps the reference Ok/reset-defaults/cancel contract and both
     'utf8',
   );
   assert.match(source, /dataset\.settingsTab/);
+  assert.match(source, /tab\.id = `quant-backtest-settings-tab-\$\{id\}`/);
+  assert.match(source, /tab\.setAttribute\('aria-controls', 'quant-backtest-settings-panel'\)/);
+  assert.match(source, /this\.panel\.setAttribute\('role', 'tabpanel'\)/);
+  assert.match(source, /this\.panel\.setAttribute\('aria-labelledby', `quant-backtest-settings-tab-\$\{this\.activeTab\}`\)/);
+  assert.match(source, /tabList\.setAttribute\('aria-orientation', 'horizontal'\)/);
+  assert.match(source, /\['ArrowLeft', 'ArrowRight', 'Home', 'End'\]\.includes\(event\.key\)/);
+  assert.match(source, /event\.key === 'Home'/);
+  assert.match(source, /event\.key === 'End'/);
   assert.match(source, /Inputs/);
   assert.match(source, /Properties/);
   assert.match(source, /Reset defaults/);

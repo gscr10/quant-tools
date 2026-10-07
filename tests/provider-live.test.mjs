@@ -663,6 +663,37 @@ test('Binance delayed spot endpoint keeps a late socket guarded after unsubscrib
   }
 });
 
+test('unsubscribe closes a socket even when an upstream provider omits its close', () => {
+  const originalWebSocket = globalThis.WebSocket;
+  let socket;
+  class FakeWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.closed = false;
+      socket = this;
+    }
+    close() { this.closed = true; }
+  }
+  const provider = {
+    subscribe() {
+      // Deliberately omit the upstream close to exercise the guard boundary.
+      void new WebSocket('wss://missing-close.example');
+      return () => {};
+    },
+  };
+  try {
+    globalThis.WebSocket = FakeWebSocket;
+    const guarded = guardProviderSubscription(provider, 'hyperliquid');
+    const unsubscribe = guarded.subscribe('BTC', '15', () => {});
+    assert.equal(socket.closed, false);
+    unsubscribe();
+    assert.equal(socket.closed, true);
+    assert.equal(globalThis.WebSocket, FakeWebSocket);
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+  }
+});
+
 test('nested live subscriptions restore the native WebSocket in release order', () => {
   const originalWebSocket = globalThis.WebSocket;
   const sockets = [];

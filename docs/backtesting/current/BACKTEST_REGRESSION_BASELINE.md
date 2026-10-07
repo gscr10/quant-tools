@@ -1,30 +1,46 @@
 # 回测开发非回归基线
 
-> **2026-10-01 当前独立复查**：见 [R-09 第三次复查](../reports/BACKTEST_R09_RECHECK_3_2026-10-01.md)、[R-08～R-11 复查报告](../reports/BACKTEST_R08_R11_RECHECK_2026-10-01.md) 及 [新证据](../../../audit-evidence/2026-10-01-r09-recheck-3/README.md)。当前工作树重新执行根测试 413/413、Vela-PineTS 283/283、构建、类型、依赖、主 E2E 和静态独立性检查；R-08/R-10/R-11 缺陷场景通过，R-09 三引擎 pointer-open 及主 E2E 通过。下方旧测试数量和旧失败仅作历史索引，不能替代新 Final Gate。
+> 最新业务修改对齐共享Tab滚动、Simulation挂载生命周期、极小轴记数、脚本错误/恢复、故障隔离和K线空页缓存保护：对应196/196、216/216、28标签、64项、198项及历史连续性31项通过；根652/652、类型、构建、生产主E2E及工程门禁通过。证据在忽略目录 `audit-evidence/2026-10-07-tab-parity-closure/`及各专项目录，旧实现失败和源码/产物哈希保留。未更新视觉基线/预算，较早长时/算法golden不声称本批重跑。
 
-> **2026-09-30 动态深审（历史快照）**：综合结论见 [BACKTEST_DYNAMIC_DEEP_AUDIT_2026-09-30.md](../reports/BACKTEST_DYNAMIC_DEEP_AUDIT_2026-09-30.md)，动态证据见 [audit-evidence/2026-09-30-dynamic-deep/README.md](../../../audit-evidence/2026-09-30-dynamic-deep/README.md)。该轮记录 R-05/R-06/R-07 及 D-01；当前状态以本文件第一条 2026-10-01 指针和最新计划为准。
+> 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。此前完整本地门禁保持原时点；本轮未改视觉基线，VoiceOver与参考交互差异仍开放。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
 
-> **第四轮独立复查（2026-09-30，历史快照）**：以 [BACKTEST_AUDIT_RECHECK_4_2026-09-30.md](../reports/BACKTEST_AUDIT_RECHECK_4_2026-09-30.md) 和 [第四轮证据](../../../audit-evidence/2026-09-30-recheck-4/README.md) 为准；当前源状态以本文件第一条动态深审指针为准。
+> 2026-10-07 桌面续验终态：根639/639、类型/构建、dev/prod主E2E及工程门禁通过；Dock 393/393、桌面 Dock 632项、Summary/Dock键盘176项及桌面32场景/1,792项、Analysis164、Log/Calendar858、H-06图例收藏/</>与L-11定位164项、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84，Settings刷新竞态、box-sizing、空态Ghost、H-06与L-11已在后续批次通过。证据与源码时点见 `audit-evidence/2026-10-07-dock-keyboard-closure/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver、共享参考差异和最终提交CI仍按需求表开放，未commit/push。
 
-> **此前独立复查（历史快照）**：见 [BACKTEST_AUDIT_RECHECK_4_2026-09-30.md](../reports/BACKTEST_AUDIT_RECHECK_4_2026-09-30.md)。其 R-06/R-07 边界已在当前工作树重新 probe。
+> 最新范围调整：手机适配及手机实机触摸按需求表 SCOPE-07 暂缓，不作为当前完成阻塞。已有手机代码和回归记录保留；新增响应式必跑门禁只验桌面，专门触摸矩阵改为手动可选。桌面窗口缩放、键盘、辅助技术和通用功能仍维持原非回归要求。
 
-> 第二、三轮修复记录曾报告 S-01～S-03、U-01 及 R-05～R-07 的对应场景通过，详见 [第二轮修复记录](../reports/BACKTEST_RECHECK_2_REMEDIATION_2026-09-30.md) 和 [第三轮修复记录](../reports/BACKTEST_RECHECK_3_REMEDIATION_2026-09-30.md)；第四轮复查重新发现 R-06/R-07 的适配器边界，因此“空行情缓存边界已修复”不作为当前结论。以下独立审计摘要及测试数字均保留为历史记录，Final Gate 仍开放。
+> 2026-10-07 UI 验收标准已按用户修正：参考对标检查功能、交互、图标及组件风格，布局适配本项目，不复刻 AI 侧栏/登录 banner 或要求整页像素重合。本地截图基线则继续检查项目自身的非预期回归；两类验证不能混用。现有截图差异必须解释并按实际改动复核，不因新标准无条件刷新基线或放宽功能断言。旧轮次的绝对几何和像素数字仅保留当时证据。
 
-> 第二轮独立修复复核（2026-09-30，历史快照）见 [BACKTEST_AUDIT_RECHECK_2_2026-09-30.md](../reports/BACKTEST_AUDIT_RECHECK_2_2026-09-30.md)。R/O 原场景已通过当时的新验证；当前状态以顶部第四轮复查为准，不能宣称全部 Final Gate 通过。
+> 当前需求、证据时点和未完成项以 [BACKTEST_REQUIREMENTS_STATUS.md](BACKTEST_REQUIREMENTS_STATUS.md) 为准。DATA-11、REL-01、ENGINE-03、STARTUP-01、REL-06及PERF-01的列明有限范围已有直接证据；完整工作区UI、真实设备和最终提交CI仍开放。PERF-01仅固定Chromium生产基准达原预算，Firefox超出观察值明确保留，不能写成全浏览器同预算。
+
+> **2026-10-07 最新统一回归**：根627/627、TypeScript、构建、dev/prod主E2E通过；dev生命周期7/7、非法外部请求0。生产桌面/手机32状态的page/window错误及blocked0，Analysis8×41通过。本地visual现已通过：先独立审阅8组旧新图及DOM A/B，确认8px为12px币种suffix使8行各增1px且无裁切；glyph/mobile Tab变化均有依据。旧实体1px边框检查改为border0+精确可见shadow ring，5类负控拒绝；已审基线与候选逐字节一致，普通strict门禁8图diff0，原0.001像素差/1px本地几何阈值不变。首跑失败保留，非无条件刷新基线。证据 `audit-evidence/2026-10-07-ui-layout-acceptance/`；616/624、桥接310/310和引擎1773+1仍注明原时点，全UI/设备/CI不由此关闭。
+
+> **本轮组件与性能边界**：Settings三浏览器控件/observer专项通过；Performance原组件51受控props与三浏览器各48组/432单元格一致，只关闭展示而非自然Benchmark/golden。Log/Calendar18组/2,610断言通过，Header调整后手机12组/1,752断言及24状态截图重新采集，分别源码稳定。工作区图标8组/988断言、资产3场景、手机长名4场景通过。PERF-01独立生产冷selector、分页、tooltip、取消/资源已验，冻结源码与后来UI修订明确分开。原风险/entry16/16、跨订单14/14、重放496字段、SMA2,520字段及生产两小时保留各自范围；不扩大为VoiceOver、真机或全UI。
+
+> **2026-10-01 独立复查（历史）**：见 `R-09 第三次复查`（本地忽略证据，公开仓库不携带）、`R-08～R-11 复查报告`（本地忽略证据，公开仓库不携带） 及 `新证据`（本地忽略证据，公开仓库不携带）。当前工作树重新执行根测试 413/413、Vela-PineTS 283/283、构建、类型、依赖、主 E2E 和静态独立性检查；R-08/R-10/R-11 缺陷场景通过，R-09 三引擎 pointer-open 及主 E2E 通过。下方旧测试数量和旧失败仅作历史索引，不能替代新 Final Gate。
+
+> **2026-09-30 动态深审（历史快照）**：综合结论见 `BACKTEST_DYNAMIC_DEEP_AUDIT_2026-09-30.md`（本地忽略证据，公开仓库不携带），动态证据见 `audit-evidence/2026-09-30-dynamic-deep/README.md`（本地忽略证据，公开仓库不携带）。该轮记录 R-05/R-06/R-07 及 D-01；当前状态以顶部需求状态表为准。
+
+> **第四轮独立复查（2026-09-30，历史快照）**：以 `BACKTEST_AUDIT_RECHECK_4_2026-09-30.md`（本地忽略证据，公开仓库不携带） 和 `第四轮证据`（本地忽略证据，公开仓库不携带） 为准；当前源状态以本文件第一条动态深审指针为准。
+
+> **此前独立复查（历史快照）**：见 `BACKTEST_AUDIT_RECHECK_4_2026-09-30.md`（本地忽略证据，公开仓库不携带）。其 R-06/R-07 边界已在当前工作树重新 probe。
+
+> 第二、三轮修复记录曾报告 S-01～S-03、U-01 及 R-05～R-07 的对应场景通过，详见 `第二轮修复记录`（本地忽略证据，公开仓库不携带） 和 `第三轮修复记录`（本地忽略证据，公开仓库不携带）；第四轮复查重新发现 R-06/R-07 的适配器边界，因此“空行情缓存边界已修复”不作为当前结论。以下独立审计摘要及测试数字均保留为历史记录，Final Gate 仍开放。
+
+> 第二轮独立修复复核（2026-09-30，历史快照）见 `BACKTEST_AUDIT_RECHECK_2_2026-09-30.md`（本地忽略证据，公开仓库不携带）。R/O 原场景已通过当时的新验证；当前状态以顶部第四轮复查为准，不能宣称全部 Final Gate 通过。
 > 建立日期：2026-09-25
-> 当前审计 HEAD：`53ab05795f45e5440eba1c1513b3bb63a659b9ae`
+> 历史审计 HEAD：`53ab05795f45e5440eba1c1513b3bb63a659b9ae`
 > 回测接入前应用基线：`89f277e82f71d9e6c3d0dfc66b0ed1aef44e2c7a`
-> 分支：`feature/backtest-workspace-build`
+> 历史分支：`feature/backtest-workspace-build`
 > Node：`v24.15.0`
 > npm：`11.13.0`
 
 这份基线用于回测工作区每个实现 Gate 的回归对账。这里的“基线”是回测代码接入前的既有行为；当前工作树的验证结果单独记录，不能用新增回测测试抵消旧功能回归。回测新增功能不能以“新测试通过”为由跳过既有功能验证；任何未解释的旧行为变化都阻止合并。
 
-> 文档中的早期 G4/G6/G8 小节保留为历史过程记录。最新状态以顶部 2026-09-30 recheck 为准；下方旧通过/失败均须按当时对象解读，不得替代新证据。
+> 文档中的早期 G4/G6/G8 小节保留为历史过程记录。最新状态以顶部需求状态表为准；下方旧通过/失败均须按当时对象解读，不得替代新证据。
 
 ## 2026-09-29 独立审计复核（修复前历史快照）
 
-本节只记录独立报告的边界。用户已明确此前测试集、fixture 和测试结论不能作为本轮证据；下方旧命令的历史数字继续保留以便追溯，但不构成 PASS 或发布 Gate。独立新建的服务探针、输入、实际结果和 F-01～F-10 详见 [`BACKTEST_INDEPENDENT_AUDIT_2026-09-29.md`](../reports/BACKTEST_INDEPENDENT_AUDIT_2026-09-29.md)。
+本节只记录独立报告的边界。用户已明确此前测试集、fixture 和测试结论不能作为本轮证据；下方旧命令的历史数字继续保留以便追溯，但不构成 PASS 或发布 Gate。独立新建的服务探针、输入、实际结果和 F-01～F-10 详见 `BACKTEST_INDEPENDENT_AUDIT_2026-09-29.md`（本地忽略证据，公开仓库不携带）。
 
 - 新启动 dev `127.0.0.1:5181`：Workspace 真实入口、15m→1h、UTC→Los Angeles、2×2、Pine Editor、策略运行和 Viewer 四页可操作；新启动 production preview `127.0.0.1:5182` 返回 HTTP 200。
 - 独立 `Both Independent` Settings 输入同时修改 Length/Precision，一次 Apply 观察到两个 Worker `update` 和两次 `script:run`；独立 adapter/domain probe 复现 revision 混用、context rejection 静默、嵌套快照/报告可变和 Trade # 负值边界。
@@ -171,7 +187,7 @@ G4b.2 当时已在 Full Access 环境下重新执行开发/生产 E2E 与 Provid
 - 已补齐浏览器当前月初始化、`Move to current month`、前后月、完整无交易日期格、空月 `+0.00 CUR / 0.00 / —`、整数 `% win`、locale Best/Worst 日期及账户币种分层显示。
 - 领域日期桶现在统一由 `calendarDateParts/calendarDateKey` 实现，Performance 的 daily/weekly/weekday 与 Calendar 共用同一时区解析；open/epoch sentinel、非法时间和未知 P&L 不会被伪造成 1970/零收益交易日，真实 breakeven 日保持中性色。
 - 新增纯函数 fixture 覆盖 UTC、America/Los_Angeles DST、Asia/Tokyo 正时区跨月、非法 timezone 回退、数字字符串时间戳、epoch sentinel、闰年、跨年月份移动、同日多笔、unknown P&L、零收益与 Best/Worst tie、活跃日均值和空月。
-- Calendar 聚合按 report revision、不可变 ledger 身份和 timezone 在 Viewer 内单次缓存，Intl formatter 按 timezone 复用；月导航及同 revision 的收藏/Simulation 投影复用 ledger 身份，不再重复扫描整本 ledger，真正替换 ledger 时仍会失效。同一 run 的 live revision 只使聚合缓存失效，不再把用户选中的月份跳回当前月；同一策略开始新 `runId` 时则回到当前月。内部 View Mode 与顶层 report tabs 使用稳定 tabpanel 关系，报告更新和月导航重绘后恢复焦点，Calendar grid 补齐 `row/gridcell` 语义；金额/币种在 `1024px` 以下分行，`767px` 以下使用 760px 横向滚动画布。
+- Calendar 聚合按 report revision、不可变 ledger 身份和 timezone 在 Viewer 内单次缓存，Intl formatter 按 timezone 复用；月导航及同 revision 的收藏/Simulation 投影复用 ledger 身份，不再重复扫描整本 ledger，真正替换 ledger 时仍会失效。同一 run 的 live revision 只使聚合缓存失效，不再把用户选中的月份跳回当前月；同一策略开始新 `runId` 时则回到当前月。内部 View Mode 与顶层 report tabs 使用稳定 tabpanel 关系，报告更新和月导航重绘后恢复焦点，Calendar grid 补齐 `row/gridcell` 语义；金额/币种在 `1024px` 以下分行，`767px` 以下按参考使用七列全宽布局，金额允许跨格但页面不产生横向滚动。
 - 当前根全量为 `191/191`，原有回归 `18/18`，TypeScript、dependency contract、fresh production build、Provider smoke 与开发/生产 E2E 均通过。E2E 将浏览器和行情时钟固定在运行当月 15 日，原子检查当前月标题、7 个 weekday、28–31 个日期格、非空日 P&L/交易数/整数胜率、四个汇总字段的精确反算、前后月/当前月结果与焦点、账户币种和活跃日均值，并在 `1025/1024/901/900/768/767/700/641/640 × 900` 边界用 `+999,999.99` 探针断言日期格无横向溢出；独立运行守卫仍为 `blockedExternalRequests=0`、`luxalgoRequests=0`、Viewer Storage `0/0/0`，开发态 lifecycle `6/6/1`。
 
 这证明 Calendar 当前实现与自动化验证范围已闭环，但 G6 仍因固定 BTCUSDT 最终数值/截图差分、Trade Log 虚拟化、精确 marker 高亮及复杂成交 fixture 未完成而保持开放。
@@ -247,9 +263,11 @@ percentile/histogram、streak/recovery 和 512-point band 上限，不再使用�
 标记为完成。G5/G6 的参考站最终数值与截图差分、G8 完整低周期/逐 Fill 撮合语义，以及 G9
 的完整视觉、长时性能、资源计数和故障注入 Final Gate 仍保持开放。
 
-## 当前证据状态
+## 历史 G7 证据状态（2026-09-27；不覆盖当前需求表）
 
-命令级回归证据已具备；参考站动态黑盒记录见 [`BACKTEST_REFERENCE_EVIDENCE.md`](../reports/BACKTEST_REFERENCE_EVIDENCE.md)。以下本项目 G0/集成证据尚未由本文件自动生成，在采集前不得将最终非回归 Gate 标记为完成：
+> 本节记录当时尚未生成的 G0/集成证据，作为历史基线保留。当前工作树的完成状态、已关闭合同和仍开放项目以 [`BACKTEST_REQUIREMENTS_STATUS.md`](BACKTEST_REQUIREMENTS_STATUS.md) 顶部及对应需求行 为准；不要把本节的“尚未补齐”解读为当前工作树仍未完成。
+
+命令级回归证据已具备；参考站动态黑盒记录见 `BACKTEST_REFERENCE_EVIDENCE.md`（本地忽略证据，公开仓库不携带）。以下本项目 G0/集成证据尚未由本文件自动生成，在采集前不得将最终非回归 Gate 标记为完成：
 
 - 浏览器名称/版本、viewport、DPR、locale、timezone 的固定记录。
 - 工具栏/指标/编辑器/模板操作的 DOM 快照、点击次数和视觉差分产物。
@@ -316,7 +334,7 @@ preview: blockedExternalRequests=0, luxalgoRequests=0, viewer writes/removes/cle
 
 ## 基线产物
 
-- 既有生产截图：[artifacts/quant-tools-production.png](../../../artifacts/quant-tools-production.png)
+- 既有生产截图：`artifacts/quant-tools-production.png`（本地忽略证据；公开仓库不携带该文件）
 - 既有自动化回归：[tests/e2e_app.py](../../../tests/e2e_app.py)
 - 存储/架构回归：[tests/storage.test.mjs](../../../tests/storage.test.mjs)、[tests/architecture.test.mjs](../../../tests/architecture.test.mjs)
 
@@ -408,7 +426,7 @@ smoke 已补齐，但生产发布生命周期和参考站视觉差分仍保持�
 | `npm run test:e2e` | PASS | `blockedExternalRequests=0`、`luxalgoRequests=0`、Viewer Storage `0/0/0`、dev lifecycle `6/6/1`；BTC fixture 24 bars/3 trades |
 | `npm run test:fixture:btcusdt` | PASS | 固定 fixture determinism `2/2`，canonical hashes 保持不变 |
 | `npm run check:dependencies` | PASS | 三依赖 workspace/registry fingerprint 与当前 `quant-tools-g8.1/schema=4` 对账通过（G4b.3/schema=3 为历史身份） |
-| `npm run test:visual:a11y` | PASS | 4 viewport、geometry golden、PNG diff、键盘 tab/Home/End、DOM ARIA 检查通过；仅输出已知 3.692:1 accent 对比度提示；基线说明见 [`BACKTEST_VISUAL_A11Y_BASELINE.md`](../reports/BACKTEST_VISUAL_A11Y_BASELINE.md) |
+| `npm run test:visual:a11y` | PASS | 4 viewport、geometry golden、PNG diff、键盘 tab/Home/End、DOM ARIA 检查通过；仅输出已知 3.692:1 accent 对比度提示；基线说明见 `BACKTEST_VISUAL_A11Y_BASELINE.md`（本地忽略证据，公开仓库不携带） |
 | `npm run check:dist:independence` | PASS | `dist/` 静态扫描 6 files / 4,059,904 bytes，reference host、Next chunk、auth/cookie/email 禁止项均为 0；规则见 [`BACKTEST_INDEPENDENCE_GATE.md`](BACKTEST_INDEPENDENCE_GATE.md) |
 | `npm run test:e2e:prod` | PASS | 生产 Preview `blockedExternalRequests=0`、`luxalgoRequests=0`、Viewer Storage `0/0/0`；production lifecycle instrumentation 按设计为 `null` |
 | `npm run test:providers` | PASS | Binance/Hyperliquid 各 `historyBars=5` 且 `live=true` |
@@ -497,8 +515,9 @@ Cookie 或参考站 storage state。PineTS 全仓联网套件仍因 `api.binance
 
 `npm test` 在本次增量中为 `201/201`；新增
 `tests/backtest-preferences.test.mjs` 与架构合同覆盖 key、schema 校验、坏值回退和
-Workbench 持久化边界。参考站是否实际跨刷新保留 Dock 偏好仍未动态冻结，因此矩阵 D-13
-保持 `PARTIAL`，本地实现不宣称该行为已与参考站一比一。
+Workbench 持久化边界。后续读取参考原始组件确认其高度/折叠使用组件内部状态，重挂载回到
+展开 280px，没有服务器或 storage 持久化；因此当前矩阵 D-13 已关闭“调查”部分，并保留
+本地版本化偏好作为明确增强，不宣称与参考重挂载行为完全相同。
 
 ### 跨浏览器与生产断网增量复核（2026-09-27）
 

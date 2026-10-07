@@ -61,5 +61,8 @@ export default defineConfig({
   },
   server: {
     allowedHosts: ['.monkeycode-ai.online'],
+    // Local DOM captures are evidence, not app entries. Writing them while a
+    // browser is open must not trigger Vite's HTML full-page reloads.
+    watch: { ignored: ['**/audit-evidence/**'] },
   },
 });

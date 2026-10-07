@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readdirSync, renameSync, rmSync, statSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { acquireBuildLock } from './fork-build-lock.mjs';
+import { ensureVelaViewport } from './ensure-vela-viewport.mjs';
 
 const root = process.cwd();
 const checkOnly = process.argv.includes('--check-only');
@@ -28,6 +29,8 @@ const requiredOutputs = [
 ];
 
 const inputRoots = [
+  'scripts/ensure-fork-build.mjs',
+  'scripts/ensure-vela-viewport.mjs',
   'package.json',
   'package-lock.json',
   'packages/pinets/package.json',
@@ -40,7 +43,20 @@ const inputRoots = [
   'packages/pinets/src',
   'packages/pinets/scripts',
   'packages/vela-pinets/src',
+  'node_modules/@luxalgo/vela/package.json',
+  'node_modules/@luxalgo/vela/dist/chunk-RVQWJOEE.js',
 ];
+
+function verifyVelaViewport() {
+  // The coordinator is also used with isolated fork-only build fixtures.
+  // Every real application declares Vela; a missing installation or a widened
+  // version there is an error, not a reason to silently skip compatibility.
+  const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  if (manifest.dependencies?.['@luxalgo/vela'] !== undefined) {
+    const result = ensureVelaViewport({ root, checkOnly });
+    if (result.status === 'applied') console.log('[vela-viewport] applied pinned 0.7.7 viewport compatibility patch');
+  }
+}
 
 function filesUnder(path) {
   const absolute = join(root, path);
@@ -129,6 +145,7 @@ function buildState() {
 }
 
 if (checkOnly) {
+  verifyVelaViewport();
   const state = buildState();
   if (existsSync(buildLock)) {
     console.error('[fork-build] another fork build is active; use npm run dev or wait for it to finish');
@@ -147,6 +164,7 @@ if (checkOnly) {
 
   const release = acquireBuildLock({ root });
   try {
+    verifyVelaViewport();
     // A second caller may have waited for the first to finish. Re-check after
     // acquiring the lock so it observes the completed outputs instead of
     // rebuilding the same fork artifacts a second time.

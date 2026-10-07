@@ -16,12 +16,13 @@ import {
   type Trade,
   type TradePopulations,
   isTradeOpen,
+  isImmutableBacktestReport,
   selectTradePopulations,
   tradeDirection,
   tradeNetPnl,
   tradeUnrealizedPnl,
 } from './backtesting.ts';
-import { calendarDateParts } from './calendar.ts';
+import { calendarDateParts, normalizeCalendarTimezone } from './calendar.ts';
 export { calendarDateKey } from './calendar.ts';
 
 export type { BacktestMetric, MetricSource, MetricUnit, MetricUnavailableReason } from './backtesting.ts';
@@ -107,33 +108,89 @@ export interface SummaryMetrics extends TradeKpis, DirectionalKpis {
 
 const DEFAULT_EPSILON = 1e-8;
 
+// A report produced by the domain factory is copied and recursively frozen.
+// Cache by that exact report identity and option set, never by a provider's
+// revision number or by a caller-owned array. Each WeakMap retains one option
+// set per live report, so changing timezone cannot grow an unbounded cache.
+const summaryCache = new WeakMap<BacktestReport, { key: number; value: SummaryMetrics }>();
+const performanceCache = new WeakMap<BacktestReport, { key: string; value: PerformanceMetrics }>();
+const analysisCache = new WeakMap<BacktestReport, { key: number; value: AnalysisMetrics }>();
+const derivedEquityCache = new WeakMap<BacktestReport, readonly EquityPoint[]>();
+const frozenDerivedValues = new WeakSet<object>();
+
+function freezeDerived<T>(value: T): T {
+  if (!value || typeof value !== 'object' || frozenDerivedValues.has(value)) return value;
+  let children: object[] | undefined;
+  // Track shared container objects (e.g. the equity/drawdown alias), but
+  // avoid adding every scalar curve point to a large WeakSet on the hot
+  // aggregation path. Register containers before recursion: provider-owned
+  // benchmark metadata can include a validated, frozen cyclic DTO.
+  for (const child of Object.values(value)) {
+    if (child && typeof child === 'object') {
+      (children ??= []).push(child);
+    }
+  }
+  if (children) {
+    frozenDerivedValues.add(value);
+    children.forEach(freezeDerived);
+  }
+  return Object.freeze(value);
+}
+
 function kpisForTrades(
   trades: readonly Trade[],
   openTrades: readonly Trade[] = [],
   breakevenEpsilon = DEFAULT_EPSILON,
 ): TradeKpis {
-  const pnlValues = valuesForTrades(trades);
-  const winning = pnlValues.filter((value) => value > breakevenEpsilon);
-  const losing = pnlValues.filter((value) => value < -breakevenEpsilon);
-  const breakeven = pnlValues.filter((value) => Math.abs(value) <= breakevenEpsilon);
-  const grossProfit = sum(winning);
-  const grossLoss = Math.abs(sum(losing));
-  const realizedNet = sum(pnlValues);
-  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : pnlValues.length > 0 && grossProfit > 0 ? Infinity : null;
-  const averageTrade = pnlValues.length > 0 ? realizedNet / pnlValues.length : null;
-  const averageWinner = winning.length > 0 ? grossProfit / winning.length : null;
-  const averageLoser = losing.length > 0 ? -grossLoss / losing.length : null;
+  let pnlCount = 0;
+  let winning = 0;
+  let losing = 0;
+  let breakeven = 0;
+  let grossProfit = 0;
+  let negativeGross = 0;
+  let realizedNet = 0;
+  let largestWinner: number | null = null;
+  let largestLoser: number | null = null;
+  let totalQuantity = 0;
+  let maxQuantity: number | null = null;
+  for (const trade of trades) {
+    const pnl = tradeNetPnl(trade);
+    if (pnl !== null) {
+      pnlCount += 1;
+      realizedNet += pnl;
+      if (pnl > breakevenEpsilon) {
+        winning += 1;
+        grossProfit += pnl;
+        largestWinner = largestWinner === null ? pnl : Math.max(largestWinner, pnl);
+      }
+      if (pnl < -breakevenEpsilon) {
+        losing += 1;
+        negativeGross += pnl;
+        largestLoser = largestLoser === null ? pnl : Math.min(largestLoser, pnl);
+      }
+      if (Math.abs(pnl) <= breakevenEpsilon) breakeven += 1;
+    }
+    const quantity = finite(trade.quantity);
+    if (quantity !== null) {
+      totalQuantity += quantity;
+      maxQuantity = maxQuantity === null ? quantity : Math.max(maxQuantity, quantity);
+    }
+  }
+  const grossLoss = Math.abs(negativeGross);
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : pnlCount > 0 && grossProfit > 0 ? Infinity : null;
+  const averageTrade = pnlCount > 0 ? realizedNet / pnlCount : null;
+  const averageWinner = winning > 0 ? grossProfit / winning : null;
+  const averageLoser = losing > 0 ? -grossLoss / losing : null;
   // Realized Summary win-rate excludes zero/breakeven outcomes from its
   // denominator. Trades/average P&L still retain the full closed population.
-  const winLossCount = winning.length + losing.length;
-  const winRate = winLossCount > 0 ? winning.length / winLossCount : null;
-  const quantity = trades.map((trade) => finite(trade.quantity)).filter((value): value is number => value !== null);
+  const winLossCount = winning + losing;
+  const winRate = winLossCount > 0 ? winning / winLossCount : null;
   const open = openPnlForTrades(openTrades);
   return {
     tradeCount: trades.length,
-    winningTrades: winning.length,
-    losingTrades: losing.length,
-    breakevenTrades: breakeven.length,
+    winningTrades: winning,
+    losingTrades: losing,
+    breakevenTrades: breakeven,
     winRate,
     grossProfit,
     grossLoss,
@@ -144,11 +201,11 @@ function kpisForTrades(
     averageTrade,
     averageWinner,
     averageLoser,
-    largestWinner: winning.length > 0 ? Math.max(...winning) : null,
-    largestLoser: losing.length > 0 ? Math.min(...losing) : null,
+    largestWinner,
+    largestLoser,
     expectancy: averageTrade,
-    totalQuantity: sum(quantity),
-    maxQuantity: quantity.length > 0 ? Math.max(...quantity) : null,
+    totalQuantity,
+    maxQuantity,
   };
 }
 
@@ -212,6 +269,12 @@ function derivedEquitySeries(
   closedTrades: readonly NormalizedTrade[],
 ): readonly EquityPoint[] {
   if (isBacktestReport(report) && report.equitySeries.length > 0) return report.equitySeries;
+  // Summary drawdown and Performance read the same fallback curve. Only
+  // factory-owned immutable reports can reuse it; caller-owned arrays remain
+  // recalculated so later edits cannot produce stale statistics.
+  const immutable = isImmutableBacktestReport(report);
+  const cached = immutable ? derivedEquityCache.get(report) : undefined;
+  if (cached) return cached;
   const account = reportAccount(report);
   const initial = account.initialCapital ?? 0;
   let equity = initial;
@@ -226,6 +289,7 @@ function derivedEquitySeries(
   // An open-only snapshot has no historical timestamp to anchor a formal
   // equity point. Do not synthesize Date.now(): that would make drawdown/CAGR
   // appear available while silently changing on every render.
+  if (immutable) derivedEquityCache.set(report, points);
   return points;
 }
 
@@ -238,10 +302,25 @@ export function calculateSummaryMetrics(
   input: BacktestReport | readonly Trade[],
   options: { readonly breakevenEpsilon?: number } = {},
 ): SummaryMetrics {
+  if (!isImmutableBacktestReport(input)) return aggregateSummaryMetrics(input, options);
+  const key = Math.max(0, options.breakevenEpsilon ?? DEFAULT_EPSILON);
+  const cached = summaryCache.get(input);
+  if (cached?.key === key) return cached.value;
+  const value = freezeDerived(aggregateSummaryMetrics(input, options));
+  summaryCache.set(input, { key, value });
+  return value;
+}
+
+function aggregateSummaryMetrics(
+  input: BacktestReport | readonly Trade[],
+  options: { readonly breakevenEpsilon?: number } = {},
+): SummaryMetrics {
   const epsilon = Math.max(0, options.breakevenEpsilon ?? DEFAULT_EPSILON);
   const populations = selectTradePopulations(asTradeArray(input), { breakevenEpsilon: epsilon });
-  // The reference Summary excludes zero-result rows from its Trades and
-  // win-rate population, while Analysis deliberately keeps those rows.
+  // The local Summary retains its closed, non-breakeven population. The
+  // reference Viewer currently counts every projected row (including open)
+  // for win rate while its Trades label comes from the closed engine count.
+  // Do not silently change this local contract during presentation alignment.
   const directional = { ...directionalKpis(
     { ...populations, closedTrades: summaryClosedTrades(populations, epsilon) },
     epsilon,
@@ -356,8 +435,8 @@ const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as cons
 /**
  * Reference Summary curve contract: one point per realized trade, ordered by
  * exit.  Keep zero-result closed trades: reference `historical_net_profit`
- * is index-paired with `trades_history`, while the Summary trade-count KPI
- * independently excludes breakeven rows.  Source order breaks timestamp ties
+ * is index-paired with `trades_history`, while our Summary trade-count KPI
+ * independently excludes breakeven rows. Source order breaks timestamp ties
  * deterministically, rather than inventing an engine order id ordering.
  */
 function realizedCumulativePnlSeries(
@@ -374,38 +453,30 @@ function realizedCumulativePnlSeries(
   });
 }
 
-function mondayBucket(parts: NonNullable<ReturnType<typeof calendarDateParts>>): string {
+function sundayBucket(parts: NonNullable<ReturnType<typeof calendarDateParts>>): string {
   const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
-  const delta = (date.getUTCDay() + 6) % 7;
-  date.setUTCDate(date.getUTCDate() - delta);
+  // The reference Performance/Analysis panels group weeks from Sunday.
+  // Preserve the selected calendar's date rather than regrouping UTC epochs.
+  date.setUTCDate(date.getUTCDate() - date.getUTCDay());
   return date.toISOString().slice(0, 10);
 }
 
-function bucketRows(
-  trades: readonly NormalizedTrade[],
-  bucket: (trade: NormalizedTrade) => string | null,
-): BucketPerformance[] {
-  const groups = new Map<string, { pnl: number; count: number; wins: number; losses: number }>();
-  for (const trade of trades) {
-    const key = bucket(trade);
-    const pnl = tradeNetPnl(trade);
-    if (key === null || pnl === null) continue;
-    const row = groups.get(key) ?? { pnl: 0, count: 0, wins: 0, losses: 0 };
-    row.pnl += pnl;
-    row.count += 1;
-    if (pnl > DEFAULT_EPSILON) row.wins += 1;
-    if (pnl < -DEFAULT_EPSILON) row.losses += 1;
-    groups.set(key, row);
+type MutableBucket = { bucket: string; pnl: number; tradeCount: number; winningTrades: number; losingTrades: number };
+
+function addBucket(groups: Map<string, MutableBucket>, bucket: string, pnl: number): void {
+  let row = groups.get(bucket);
+  if (!row) {
+    row = { bucket, pnl: 0, tradeCount: 0, winningTrades: 0, losingTrades: 0 };
+    groups.set(bucket, row);
   }
-  return [...groups.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, row]) => ({
-      bucket: key,
-      pnl: row.pnl,
-      tradeCount: row.count,
-      winningTrades: row.wins,
-      losingTrades: row.losses,
-    }));
+  row.pnl += pnl;
+  row.tradeCount += 1;
+  if (pnl > DEFAULT_EPSILON) row.winningTrades += 1;
+  if (pnl < -DEFAULT_EPSILON) row.losingTrades += 1;
+}
+
+function sortedBuckets(groups: Map<string, MutableBucket>): BucketPerformance[] {
+  return [...groups.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
 }
 
 function averageBucketPnl(rows: readonly BucketPerformance[]): number | null {
@@ -491,6 +562,20 @@ export function calculatePerformanceMetrics(
   report: BacktestReport,
   options: { readonly timezone?: string; readonly periodsPerYear?: number } = {},
 ): PerformanceMetrics {
+  if (!isImmutableBacktestReport(report)) return aggregatePerformanceMetrics(report, options);
+  const key = JSON.stringify(options.timezone ?? report.context?.timezone ?? 'UTC')
+    + ':' + String(options.periodsPerYear ?? 252);
+  const cached = performanceCache.get(report);
+  if (cached?.key === key) return cached.value;
+  const value = freezeDerived(aggregatePerformanceMetrics(report, options));
+  performanceCache.set(report, { key, value });
+  return value;
+}
+
+function aggregatePerformanceMetrics(
+  report: BacktestReport,
+  options: { readonly timezone?: string; readonly periodsPerYear?: number } = {},
+): PerformanceMetrics {
   const populations = selectTradePopulations(report.trades);
   const summary = calculateSummaryMetrics(report);
   const sourcePoints = derivedEquitySeries(report, populations.closedTrades);
@@ -516,39 +601,48 @@ export function calculatePerformanceMetrics(
   });
   const ratios = annualizedRatios(equityCurve, options.periodsPerYear ?? 252);
   const benchmark = benchmarkStats(report, report.account?.initialCapital ?? null);
-  const timezone = options.timezone ?? report.context?.timezone ?? 'UTC';
+  const timezone = normalizeCalendarTimezone(options.timezone ?? report.context?.timezone ?? 'UTC');
+  const utc = timezone === 'UTC' || timezone === 'Etc/UTC' || timezone === 'GMT' || timezone === 'Etc/GMT';
+  let previousUtcDay = NaN;
+  let previousDateParts: ReturnType<typeof calendarDateParts> = null;
   const buckets = populations.closedTrades;
-  const calendarPartsByTrade = new Map(buckets.map((trade) => [
-    trade,
-    trade.exitTime === null ? null : calendarDateParts(trade.exitTime, timezone),
-  ]));
-  const weekday = bucketRows(buckets, (trade) => {
-    const parts = calendarPartsByTrade.get(trade);
-    return parts ? WEEKDAY_LABELS[parts.weekday] ?? null : null;
-  });
-  const weekdayByBucket = new Map(weekday.map((row) => [row.bucket, row]));
-  const fixedWeekday = WEEKDAY_LABELS.map((bucket) => weekdayByBucket.get(bucket) ?? {
+  const daily = { all: new Map<string, MutableBucket>(), long: new Map<string, MutableBucket>(), short: new Map<string, MutableBucket>() };
+  const weekly = { all: new Map<string, MutableBucket>(), long: new Map<string, MutableBucket>(), short: new Map<string, MutableBucket>() };
+  const weekdays = new Map<string, MutableBucket>();
+  const weekByDay = new Map<string, string>();
+  // Aggregate all direction/date buckets in one ledger pass. Repeatedly
+  // filtering and normalizing the same 100k trades used to dominate this
+  // selector even though each output has only a few thousand buckets.
+  for (const trade of buckets) {
+    const pnl = tradeNetPnl(trade);
+    if (pnl === null || trade.exitTime === null) continue;
+    const utcDay = utc ? Math.floor(trade.exitTime / 86_400_000) : NaN;
+    const parts: ReturnType<typeof calendarDateParts> = utcDay === previousUtcDay
+      ? previousDateParts
+      : calendarDateParts(trade.exitTime, timezone);
+    previousUtcDay = utcDay;
+    previousDateParts = parts;
+    if (!parts) continue;
+    let week = weekByDay.get(parts.key);
+    if (!week) { week = sundayBucket(parts); weekByDay.set(parts.key, week); }
+    addBucket(daily.all, parts.key, pnl);
+    addBucket(weekly.all, week, pnl);
+    addBucket(weekdays, WEEKDAY_LABELS[parts.weekday], pnl);
+    const direction = tradeDirection(trade);
+    if (direction === 'long' || direction === 'short') {
+      addBucket(daily[direction], parts.key, pnl);
+      addBucket(weekly[direction], week, pnl);
+    }
+  }
+  const fixedWeekday = WEEKDAY_LABELS.map((bucket) => weekdays.get(bucket) ?? {
     bucket,
     pnl: 0,
     tradeCount: 0,
     winningTrades: 0,
     losingTrades: 0,
   });
-  const directions = {
-    all: buckets,
-    long: buckets.filter((trade) => tradeDirection(trade) === 'long'),
-    short: buckets.filter((trade) => tradeDirection(trade) === 'short'),
-  } as const;
-  const dailyRows = (trades: readonly NormalizedTrade[]) => bucketRows(
-    trades,
-    (trade) => calendarPartsByTrade.get(trade)?.key ?? null,
-  );
-  const weeklyRows = (trades: readonly NormalizedTrade[]) => bucketRows(trades, (trade) => {
-    const parts = calendarPartsByTrade.get(trade);
-    return parts ? mondayBucket(parts) : null;
-  });
-  const netDailyPnl = dailyRows(directions.all);
-  const weeklyPerformance = weeklyRows(directions.all);
+  const netDailyPnl = sortedBuckets(daily.all);
+  const weeklyPerformance = sortedBuckets(weekly.all);
   return {
     ...summary,
     equityCurve: Object.freeze(equityCurve),
@@ -560,13 +654,13 @@ export function calculatePerformanceMetrics(
     weekdayPerformance: Object.freeze(fixedWeekday),
     averagePnlPerDay: Object.freeze({
       all: averageBucketPnl(netDailyPnl),
-      long: averageBucketPnl(dailyRows(directions.long)),
-      short: averageBucketPnl(dailyRows(directions.short)),
+      long: averageBucketPnl(sortedBuckets(daily.long)),
+      short: averageBucketPnl(sortedBuckets(daily.short)),
     }),
     averagePnlPerWeek: Object.freeze({
       all: averageBucketPnl(weeklyPerformance),
-      long: averageBucketPnl(weeklyRows(directions.long)),
-      short: averageBucketPnl(weeklyRows(directions.short)),
+      long: averageBucketPnl(sortedBuckets(weekly.long)),
+      short: averageBucketPnl(sortedBuckets(weekly.short)),
     }),
     maxDrawdown: summary.maxDrawdown,
     maxDrawdownPct: summary.maxDrawdownPct,
@@ -645,6 +739,19 @@ function streaks(trades: readonly Trade[], epsilon = DEFAULT_EPSILON): {
 }
 
 export function calculateAnalysisMetrics(
+  input: BacktestReport | readonly Trade[],
+  options: { readonly breakevenEpsilon?: number } = {},
+): AnalysisMetrics {
+  if (!isImmutableBacktestReport(input)) return aggregateAnalysisMetrics(input, options);
+  const key = options.breakevenEpsilon ?? DEFAULT_EPSILON;
+  const cached = analysisCache.get(input);
+  if (cached?.key === key) return cached.value;
+  const value = freezeDerived(aggregateAnalysisMetrics(input, options));
+  analysisCache.set(input, { key, value });
+  return value;
+}
+
+function aggregateAnalysisMetrics(
   input: BacktestReport | readonly Trade[],
   options: { readonly breakevenEpsilon?: number } = {},
 ): AnalysisMetrics {

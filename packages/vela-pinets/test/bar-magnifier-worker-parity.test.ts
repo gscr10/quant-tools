@@ -117,7 +117,11 @@ plot(close)
             (message): message is Extract<WorkerToMain, { kind: 'fetchSeries' }> =>
                 message.kind === 'fetchSeries' && message.sessionId === sessionId,
         )!;
-        w.send({ kind: 'fetchSeriesResult', reqId: firstFetch.reqId, bars: [child(0, 100, 101, 99, 100)] });
+        // A single 10m row cannot certify the 1h window. Use the complete
+        // child feed so this test protects successful cache reuse, while the
+        // independent recovery tests verify incomplete responses are evicted.
+        w.send({ kind: 'fetchSeriesResult', reqId: firstFetch.reqId,
+            bars: Array.from({ length: 6 }, (_, index) => child(index, 100, 101, 99, 100)) });
         await waitFor(() => w.out.some((message) => message.kind === 'done' && message.sessionId === sessionId));
 
         const fetchCount = (): number => w.out.filter(

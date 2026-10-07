@@ -29,7 +29,9 @@ ${body}
 describe('strategy.cancel lifecycle', () => {
     it('cancels an immediately-marked order before the current-bar close pass', async () => {
         const bars = [
-            bar(0, 100, 105, 80, 95),
+            // The limit is reachable at the actual close. A past low alone
+            // cannot make an order created after that low close-eligible.
+            bar(0, 100, 105, 80, 90),
             bar(1, 96, 100, 85, 90),
         ];
         const order = `
@@ -124,7 +126,7 @@ if bar_index == 1
 
     it('cancels only matching pending IDs during the close pass', async () => {
         const bars = [
-            bar(0, 100, 105, 80, 95),
+            bar(0, 100, 105, 80, 91),
             bar(1, 96, 100, 85, 90),
         ];
         const result = await run(

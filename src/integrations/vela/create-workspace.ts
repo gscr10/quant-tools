@@ -4,6 +4,8 @@ import { WORKSPACE_DEFAULTS, WORKSPACE_TOPBAR } from '../../config/workspace-opt
 import { createPineEngineRegistry } from '../pinets/create-engine.ts';
 import { createWorkspaceProviders } from './provider-registry.ts';
 import { observeWorkspaceHistory } from './workspace-history-observer.ts';
+import { installVelaHistoryResilience } from './history-resilience.ts';
+import { installDefaultTimeframeSwitchPolicy } from './timeframe-switch-policy.ts';
 import { createMigratingWorkspaceStorage, WORKSPACE_HISTORY_BARS } from '../storage/workspace-storage.ts';
 
 export const WORKSPACE_STORAGE_KEY = 'quant-tools:workspace:v2';
@@ -15,7 +17,12 @@ export function createWorkspace(container: HTMLElement | string): VelaWorkspace 
   let destroyed = false;
   let detachOnlineRetry = (): void => {};
   let detachHistoryObserver = (): void => {};
+  let detachTimeframePolicy = (): void => {};
   try {
+    // Vela 0.7.7 converts a failed ranged provider page into an empty array;
+    // install the bounded integration patch before any workspace feed exists so
+    // a transient 1m/5m page failure cannot be marked as permanently covered.
+    installVelaHistoryResilience();
     const providers = createWorkspaceProviders({
       onIndexRecovered: (kind, provider) => {
         if (destroyed || !workspace) return;
@@ -42,6 +49,11 @@ export function createWorkspace(container: HTMLElement | string): VelaWorkspace 
       persist: WORKSPACE_STORAGE_KEY,
       autofocus: true,
     });
+    // Install before the history observer so both wrappers see the normalized
+    // identity switch. Every ordinary timeframe/symbol change starts from the
+    // newest default depth; explicit range presets and depth-only backfills are
+    // left untouched for the user's deliberate deep-history requests.
+    detachTimeframePolicy = installDefaultTimeframeSwitchPolicy(workspace, WORKSPACE_HISTORY_BARS);
     detachHistoryObserver = observeWorkspaceHistory(workspace);
 
     // A bounded first attempt plus one background retry keeps startup finite.
@@ -77,7 +89,10 @@ export function createWorkspace(container: HTMLElement | string): VelaWorkspace 
         try { detachOnlineRetry(); }
         finally {
           try { detachHistoryObserver(); }
-          finally { destroy(); }
+          finally {
+            try { detachTimeframePolicy(); }
+            finally { destroy(); }
+          }
         }
       } finally {
         pineEngines.dispose();
@@ -86,6 +101,7 @@ export function createWorkspace(container: HTMLElement | string): VelaWorkspace 
     return workspace;
   } catch (error) {
     detachHistoryObserver();
+    detachTimeframePolicy();
     pineEngines.dispose();
     throw error;
   }

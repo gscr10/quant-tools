@@ -132,6 +132,9 @@ export interface Order {
     stop?: number; // matches strategy.entry(stop=...)
     bar: number;
     time: number;
+    /** Lower-timeframe broker point that queued this order. All four points
+     * share a child timestamp, so time/bar alone cannot enforce causality. */
+    _queued_price_point?: number;
     oca_name?: string;
     oca_type?: 'cancel' | 'reduce' | 'none';
     comment?: string;
@@ -144,6 +147,10 @@ export interface Order {
     // exit orders that ride on open positions. Defaults to 'entry' when
     // unset for backward-compat.
     category?: 'entry' | 'exit';
+
+    /** Only strategy.entry obeys allow_entry_in/max_position_size.
+     * strategy.order shares the entry broker path but bypasses those rules. */
+    _isStrategyEntry?: boolean;
 
     // Exit-specific fields (only set when category === 'exit').
     // strategy.exit() parameters: profit (TP in ticks), loss (SL in ticks),
@@ -467,6 +474,7 @@ export interface StrategyState {
      * max_drawdown/max_cons_loss_days remain run-level halts. */
     _risk_day_key?: string;
     _risk_day_start_equity?: number;
+    _risk_day_peak_equity?: number;
     _risk_day_start_netprofit?: number;
     _risk_day_filled_orders?: number;
     _risk_intraday_halted?: boolean;

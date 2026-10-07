@@ -77,8 +77,19 @@ export function validateBacktestSettingsDraft(
           }
         }
       }
+      if (schema.type === 'bool' && typeof value !== 'boolean') {
+        return `${schema.title} must be true or false.`;
+      }
+      if (!isNumericSetting(schema.type) && schema.type !== 'bool' && typeof value !== 'string') {
+        return `${schema.title} must be text.`;
+      }
+      // Vela serializes numeric option labels as strings, while Pine inputs
+      // retain their numeric type. Compare within that type without turning
+      // the value sent to the engine into a string.
       if (schema.options && schema.options.length > 0
-        && (typeof value !== 'string' || !schema.options.includes(value))) {
+        && !schema.options.some((option) => isNumericSetting(schema.type)
+          ? typeof value === 'number' && Number(option) === value
+          : option === value)) {
         return `${schema.title} has an invalid option.`;
       }
     }
@@ -103,7 +114,7 @@ interface BacktestSettingsSnapshotLike {
 }
 
 function isNumericSetting(type: BacktestSettingSchema['type']): boolean {
-  return type === 'int' || type === 'float' || type === 'price';
+  return type === 'int' || type === 'float' || type === 'price' || type === 'time';
 }
 
 function isVisibleForValues(

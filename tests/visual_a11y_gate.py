@@ -10,11 +10,20 @@ Usage::
 
     python3 tests/visual_a11y_gate.py --update
     python3 tests/visual_a11y_gate.py
+    python3 tests/visual_a11y_gate.py --scope full
+    python3 tests/visual_a11y_gate.py --artifacts audit-evidence/visual-review
 
 The first command is only for an intentional visual-baseline review.  The
 normal command fails on a geometry, DOM/a11y, axe-core, keyboard, or pixel
 regression. Set ``QUANT_E2E_STARTUP_TIMEOUT`` when the local Vite cold start is
 slow.
+``--artifacts`` preserves all candidate screenshots and measurements before a
+baseline comparison fails. Review these candidates before using ``--update``;
+capturing evidence does not relax the pixel or geometry thresholds.
+The default desktop scope covers desktop/laptop baselines; ``--scope full``
+also runs the retained tablet/mobile matrix. Updating one scope preserves the
+other scopes' screenshot and geometry baselines. Compact desktop windows and
+the 200% equivalent layout are also exercised by ``test:e2e:responsive``.
 
 The runner uses ``tests/vite-performance.config.ts`` so fork bundle rebuilds
 performed by another local task cannot hot-reload the fixture while a geometry
@@ -53,6 +62,18 @@ VIEWPORTS = (
     ("tablet", 768, 900),
     ("mobile", 390, 844),
 )
+VIEWPORT_SCOPES = {"desktop": VIEWPORTS[:2], "full": VIEWPORTS}
+
+
+def merge_geometry_baseline(previous: dict[str, object], measured: dict[str, object]) -> dict[str, object]:
+    """Replace measured viewports while retaining every unselected baseline."""
+    matrix = {entry[0]: entry for entry in previous.get("viewportMatrix", [])}
+    matrix.update({entry[0]: entry for entry in measured["viewportMatrix"]})
+    return {
+        **previous,
+        "viewports": {**previous.get("viewports", {}), **measured["viewports"]},
+        "viewportMatrix": list(matrix.values()),
+    }
 
 
 def wait_for_server(process: subprocess.Popen[str]) -> None:
@@ -375,7 +396,11 @@ def geometry(page: Page) -> dict[str, object]:
                 boxSizing: style.boxSizing,
                 borderLeftWidth: style.borderLeftWidth,
                 borderRightWidth: style.borderRightWidth,
+                borderTopWidth: style.borderTopWidth,
+                borderBottomWidth: style.borderBottomWidth,
                 borderRadius: style.borderRadius,
+                boxShadow: style.boxShadow,
+                backgroundColor: style.backgroundColor,
               },
             };
           };
@@ -456,8 +481,13 @@ def assert_page_surface_geometry(
         card = item.get("logCard")
         assert card, (label, "missing log card", item)
         card_style = card["style"]
-        assert card_style["borderLeftWidth"] == "1px" and card_style["borderRightWidth"] == "1px", (label, card_style)
-        assert card_style["borderRadius"] != "0px", (label, card_style)
+        # The measured reference uses a 1px white/10% outer ring, not a
+        # physical border (which shifts every Calendar cell by 1px). Require
+        # the visible ring's actual color and geometry, not merely border:0.
+        assert all(card_style[f"border{side}Width"] == "0px" for side in ("Left", "Right", "Top", "Bottom")), (label, card_style)
+        assert "rgba(250, 250, 250, 0.1) 0px 0px 0px 1px" in card_style["boxShadow"], (label, card_style)
+        assert card_style["borderRadius"] == "8px", (label, card_style)
+        assert card_style["backgroundColor"] == "rgba(0, 0, 0, 0)", (label, card_style)
         assert card_style["paddingLeft"] == "16px" and card_style["paddingRight"] == "16px", (label, card_style)
     if require_toolbar:
         toolbar = item.get("simulationToolbar")
@@ -507,8 +537,9 @@ def keyboard_audit(page: Page) -> dict[str, object]:
     }
 
 
-def run_gate(update: bool) -> dict[str, object]:
+def run_gate(update: bool, artifacts: Path | None = None, scope: str = "desktop") -> dict[str, object]:
     global PORT, BASE_URL
+    viewports = VIEWPORT_SCOPES[scope]
     PORT = choose_port()
     BASE_URL = f"http://{HOST}:{PORT}/tests/fixtures/backtest-btcusdt.html"
     executable = os.environ.get("CHROMIUM_EXECUTABLE")
@@ -557,9 +588,10 @@ def run_gate(update: bool) -> dict[str, object]:
             browser: Browser = playwright.chromium.launch(**launch_options)
             geometry_results: dict[str, object] = {}
             screenshot_results: dict[str, object] = {}
+            pixel_failures: list[object] = []
             keyboard_results: dict[str, object] = {}
             a11y_results: dict[str, object] = {}
-            for label, width, height in VIEWPORTS:
+            for label, width, height in viewports:
                 context = browser.new_context(viewport={"width": width, "height": height}, device_scale_factor=1)
                 install_offline_guard(context)
                 page = context.new_page()
@@ -705,12 +737,16 @@ def run_gate(update: bool) -> dict[str, object]:
                     if state == "dock":
                         page.evaluate("document.activeElement?.blur()")
                     path = SCREENSHOT_ROOT / f"{label}-{state}.png"
+                    candidate = page.screenshot(animations="disabled")
+                    if artifacts is not None:
+                        candidate_path = artifacts / "screenshots" / path.name
+                        candidate_path.parent.mkdir(parents=True, exist_ok=True)
+                        candidate_path.write_bytes(candidate)
                     if update:
                         path.parent.mkdir(parents=True, exist_ok=True)
-                        page.screenshot(path=str(path), animations="disabled")
+                        path.write_bytes(candidate)
                     else:
                         assert path.exists(), f"missing visual golden: {path}; run --update after review"
-                        candidate = page.screenshot(animations="disabled")
                         screenshot_results[f"{label}-{state}"] = compare_png(candidate, path.read_bytes())
                         # Pixel baselines are authoritative on the developer's
                         # pinned visual environment. CI runners use a
@@ -721,17 +757,22 @@ def run_gate(update: bool) -> dict[str, object]:
                         strict_pixels = os.environ.get("QUANT_VISUAL_STRICT_PIXELS", "1").lower() not in {
                             "0", "false", "no",
                         }
-                        if strict_pixels:
-                            assert screenshot_results[f"{label}-{state}"]["ratio"] <= 0.001, (
-                                label, state, screenshot_results[f"{label}-{state}"]
-                            )
+                        if strict_pixels and screenshot_results[f"{label}-{state}"]["ratio"] > 0.001:
+                            pixel_failures.append((label, state, screenshot_results[f"{label}-{state}"]))
                 page.evaluate("window.__btcFixture.destroy()")
                 context.close()
             browser.close()
         GEOMETRY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        geometry_payload = {"viewports": geometry_results, "viewportMatrix": VIEWPORTS}
+        geometry_payload = {"viewports": geometry_results, "viewportMatrix": viewports}
+        result = {"scope": scope, "viewportMatrix": viewports, "geometry": geometry_results, "screenshots": screenshot_results, "keyboard": keyboard_results, "a11y": a11y_results}
+        if artifacts is not None:
+            artifacts.mkdir(parents=True, exist_ok=True)
+            (artifacts / "geometry.json").write_text(json.dumps(geometry_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            (artifacts / "measurements.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         if update:
-            GEOMETRY_PATH.write_text(json.dumps(geometry_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            previous = json.loads(GEOMETRY_PATH.read_text(encoding="utf-8")) if GEOMETRY_PATH.exists() else {}
+            baseline_payload = merge_geometry_baseline(previous, geometry_payload)
+            GEOMETRY_PATH.write_text(json.dumps(baseline_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         else:
             assert GEOMETRY_PATH.exists(), f"missing geometry golden: {GEOMETRY_PATH}"
             expected = json.loads(GEOMETRY_PATH.read_text(encoding="utf-8"))
@@ -755,7 +796,8 @@ def run_gate(update: bool) -> dict[str, object]:
                         raise AssertionError(f"missing geometry golden {label}.variants.{tab}")
                     for field in ("contentPage", "logCard", "simulationToolbar"):
                         compare_rect(f"variants.{tab}.{field}", variant[field], previous_variant[field])
-        return {"geometry": geometry_results, "screenshots": screenshot_results, "keyboard": keyboard_results, "a11y": a11y_results}
+        assert not pixel_failures, ("pixel regressions", pixel_failures)
+        return result
     finally:
         server.terminate()
         try:
@@ -773,8 +815,10 @@ def run_gate(update: bool) -> dict[str, object]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--update", action="store_true", help="write reviewed local screenshot/geometry goldens")
+    parser.add_argument("--artifacts", type=Path, help="save candidate screenshots and measurements for review (prefer ignored audit-evidence/)")
+    parser.add_argument("--scope", choices=VIEWPORT_SCOPES, default="desktop", help="desktop (default) or full retained tablet/mobile matrix")
     args = parser.parse_args()
-    result = run_gate(args.update)
+    result = run_gate(args.update, args.artifacts, args.scope)
     print(json.dumps(result, indent=2, sort_keys=True))
     print("visual/a11y gate passed")
     return 0

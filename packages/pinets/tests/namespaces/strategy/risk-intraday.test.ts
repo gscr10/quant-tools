@@ -61,7 +61,7 @@ describe('strategy intraday risk rules', () => {
         expect(context.strategy.risk_halted).toBe(true);
     });
 
-    it('counts same-bar close-pass fills immediately and rejects later orders', async () => {
+    it('counts same-bar close-pass fills, flattens at the cap and cancels later orders', async () => {
         const bars = [
             bar(0, 100, 100, 100, 100),
             bar(1, 100, 100, 100, 100),
@@ -75,9 +75,14 @@ if bar_index == 0
     strategy.order('second', strategy.long, qty=1)
 `);
 
-        expect(result.strategy.opentrades.map((trade: any) => trade.entry_id)).toEqual(['first']);
-        expect(result.strategy._risk_day_filled_orders).toBe(1);
-        expect(result.strategy._order_events.filter((event: any) => event.kind === 'rejected').map((event: any) => event.sourceOrderId)).toContain('second');
+        expect(result.strategy.opentrades).toHaveLength(0);
+        expect(result.strategy.closedtrades.map((trade: any) => trade.entry_id)).toEqual(['first']);
+        // The protective market close is an additional actual fill; it is
+        // allowed even though new entries are blocked after the first fill.
+        expect(result.strategy._risk_day_filled_orders).toBe(2);
+        expect(result.strategy._order_events).toEqual(expect.arrayContaining([
+            expect.objectContaining({ sourceOrderId: 'second', kind: 'cancelled', reason: 'risk.max_intraday_filled_orders' }),
+        ]));
     });
 
     it('limits filled orders per exchange day and resets at the next day', async () => {
@@ -86,6 +91,7 @@ if bar_index == 0
             bar(1, 100, 100, 100, 100),
             bar(2, 100, 100, 100, 100),
             bar(3, 100, 100, 100, 100, T0 + DAY),
+            bar(4, 100, 100, 100, 100, T0 + DAY + HOUR),
         ];
         const result: any = await new PineTS(bars as any, 'BTCUSDT', '60').run(`
 //@version=6
@@ -95,15 +101,15 @@ if bar_index == 0
     strategy.entry('first', strategy.long, qty=1)
 if bar_index == 1
     strategy.entry('same_day', strategy.long, qty=1)
-if bar_index == 2
+if bar_index == 3
     strategy.entry('next_day', strategy.long, qty=1)
 `);
 
-        // first fills on bar 1; same_day is rejected on bar 2 because the
-        // daily cap has been reached. next_day is queued after the cap's day
-        // has ended and fills at the first bar of the new exchange day.
-        expect(result.strategy.opentrades).toHaveLength(2);
-        expect(result.strategy.opentrades.map((trade: any) => trade.entry_id)).toEqual(['first', 'next_day']);
+        // Each day admits one entry and then flattens at its filled-order
+        // cap. An order submitted while halted cannot be parked overnight;
+        // next_day is submitted after the new day's broker pass resets it.
+        expect(result.strategy.opentrades).toHaveLength(0);
+        expect(result.strategy.closedtrades.map((trade: any) => trade.entry_id)).toEqual(['first', 'next_day']);
         expect(result.strategy._order_events.filter((event: any) => event.kind === 'rejected').map((event: any) => event.sourceOrderId)).toContain('same_day');
     });
 
@@ -113,6 +119,7 @@ if bar_index == 2
             bar(1, 1000, 1000, 800, 800),
             bar(2, 800, 800, 800, 800),
             bar(3, 800, 800, 800, 800, T0 + DAY),
+            bar(4, 800, 800, 800, 800, T0 + DAY + HOUR),
         ];
         const result: any = await new PineTS(bars as any, 'BTCUSDT', '60').run(`
 //@version=6
@@ -122,13 +129,37 @@ if bar_index == 0
     strategy.entry('first', strategy.long, qty=1)
 if bar_index == 1
     strategy.entry('blocked', strategy.long, qty=1)
-if bar_index == 2
+if bar_index == 3
     strategy.entry('new_day', strategy.long, qty=1)
 `);
 
-        expect(result.strategy.opentrades.map((trade: any) => trade.entry_id)).toEqual(['first', 'new_day']);
+        // A risk halt must flatten the losing position as well as block
+        // entries. The old expectation retained 'first' after the breach.
+        expect(result.strategy.opentrades.map((trade: any) => trade.entry_id)).toEqual(['new_day']);
+        expect(result.strategy.closedtrades).toMatchObject([{
+            entry_id: 'first', exit_price: 800, profit: -200, exit_id: 'risk.max_intraday_loss',
+        }]);
         expect(result.strategy._order_events.filter((event: any) => event.kind === 'rejected').map((event: any) => event.sourceOrderId)).toContain('blocked');
         expect(result.strategy._risk_intraday_halted).toBe(false);
+    });
+
+    it('cancels pending orders when an intraday loss halt is latched', async () => {
+        const result: any = await new PineTS([
+            bar(0, 1000, 1000, 1000, 1000),
+            bar(1, 1000, 1000, 800, 800),
+        ] as any, 'BTCUSDT', '60').run(`
+//@version=6
+strategy('cancel on risk halt', pyramiding=5)
+strategy.risk.max_intraday_loss(100, strategy.cash)
+if bar_index == 0
+    strategy.entry('L', strategy.long, qty=1)
+    strategy.order('waiting', strategy.long, qty=1, limit=500)
+`);
+
+        expect(result.strategy.pending_orders).toHaveLength(0);
+        expect(result.strategy._order_events).toEqual(expect.arrayContaining([
+            expect.objectContaining({ sourceOrderId: 'waiting', kind: 'cancelled', reason: 'risk.max_intraday_loss' }),
+        ]));
     });
 
     it('counts consecutive losing exchange days instead of consecutive losing trades', async () => {
