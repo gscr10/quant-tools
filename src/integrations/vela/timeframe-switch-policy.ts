@@ -9,9 +9,9 @@ type CellChart = Pick<ChartCell, 'chart'> & Partial<Pick<ChartCell, 'host'>>;
 /**
  * Apply the product rule for an ordinary market/timeframe switch.
  *
- * Vela intentionally keeps a caller supplied visible range for explicit range
- * presets.  An ordinary timeframe or symbol switch has no such range, so it
- * must start from the newest default-depth bars.  Keeping this decision at the
+ * Vela intentionally keeps caller supplied range/depth values for explicit
+ * history requests. An ordinary timeframe or symbol switch with neither value
+ * must start from the newest default-depth bars. Keeping this decision at the
  * integration boundary also covers Vela's topbar, mobile bar, workspace sync,
  * and host calls to `chart.setMarket` without changing the vendored package.
  */
@@ -29,9 +29,12 @@ export function normalizeDefaultMarketSwitch(
     (next.timeframe !== undefined && (!current || next.timeframe !== current.timeframe)) ||
     (next.session !== undefined && (!current || next.session !== current.session));
 
-  // A visible range is an explicit user request (range chips, deep windows,
-  // shared links). Its requested depth must remain intact.
-  if (!identityChanged || next.visibleRange !== undefined) return next;
+  // A visible range or explicit bar count is an explicit user request (range
+  // chips, deep windows, shared links, or a host asking for a specific depth).
+  // Preserve both when they accompany an identity change. Without this guard,
+  // `setMarket({ timeframe: '1', bars: 4_000 })` would be mistaken for an
+  // ordinary switch and silently reduced to the default 2,000-bar window.
+  if (!identityChanged || next.visibleRange !== undefined || next.bars !== undefined) return next;
 
   const bars = Number.isFinite(defaultBars) && defaultBars > 0
     ? Math.max(1, Math.trunc(defaultBars))
