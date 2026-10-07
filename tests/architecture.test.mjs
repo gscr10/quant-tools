@@ -52,6 +52,13 @@ test('long provider soak cannot block Vite on an unread output pipe', async () =
   assert.doesNotMatch(source, /stdout=subprocess\.PIPE/);
 });
 
+test('GitHub workflow installs browsers through the Python Playwright API', async () => {
+  const source = await readFile(new URL('../.github/workflows/final-gates.yml', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /^\s*- run:\s*npx playwright\b/m);
+  assert.match(source, /python3 -m playwright install --with-deps chromium firefox webkit/);
+  assert.match(source, /python3 -m playwright install --with-deps chromium/);
+});
+
 test('Pine Editor CodeMirror stays behind a first-open dynamic import', async () => {
   const source = await readFile(new URL('../src/app/create-app.ts', import.meta.url), 'utf8');
   const lazy = await readFile(new URL('../src/features/pine-editor/lazy-pine-editor.ts', import.meta.url), 'utf8');

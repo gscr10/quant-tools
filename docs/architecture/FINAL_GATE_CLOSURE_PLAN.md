@@ -1,6 +1,6 @@
 # Final Gate Closure Plan
 
-> 2026-10-07 桌面续验终态：根632/632、类型/构建、dev/prod主E2E及工程门禁通过；桌面32场景/1,792项、Analysis164、Log/Calendar858、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84及重建/生产E2E。证据与源码时点见 `audit-evidence/2026-10-07-desktop-acceptance-final/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver、共享参考差异和最终提交CI仍按需求表开放，未commit/push。
+> 2026-10-07 桌面续验终态：根632/632、类型/构建、dev/prod主E2E及工程门禁通过；桌面32场景/1,792项、Analysis164、Log/Calendar858、Settings和strict visual四图diff=0通过。Simulation最后Preserve scoped CSS补丁另验84/84及重建/生产E2E。证据与源码时点见 `audit-evidence/2026-10-07-desktop-acceptance-final/README.md`（本地忽略）；下方627及更早数字保留各自批次。手机专项默认deferred/full可选，桌面VoiceOver、共享参考差异和最终提交CI仍按需求表开放；当前提交已在本地建立，远端 CI 待本次提交。
 
 工作分支：`task/p1-priority`（从 `master` 的 `a7aa5bf` 创建）
 

@@ -1,14 +1,14 @@
 # 回测工作区需求状态表
 
-> 2026-10-07 继续复核：在当前未提交工作树重新执行 `npm test`（652/652）、Vela-PineTS（310/310）、TypeScript、生产构建、bundle/依赖/仓库/dist/release 门禁及 `npm run test:e2e:prod`，均通过。真实 Provider 低周期/跨周期检查 `tests/e2e_history_real.py` 的 16 个场景和双引擎主动手势分页 `tests/e2e_history_gestures.py` 的 26 个场景均通过；未发现新的业务回归。此记录只更新验证时点，不改变手机、Safari、线上部署、Replay、桌面 VoiceOver 等既有范围决定。
+> 2026-10-07 继续复核：在当前工作树重新执行 `npm test`（652/652）、Vela-PineTS（310/310）、TypeScript、生产构建、bundle/依赖/仓库/dist/release 门禁及 `npm run test:e2e:prod`，均通过。真实 Provider 低周期/跨周期检查 `tests/e2e_history_real.py` 的 16 个场景和双引擎主动手势分页 `tests/e2e_history_gestures.py` 的 26 个场景均通过；未发现新的业务回归。此记录只更新验证时点，不改变手机、Safari、线上部署、Replay、桌面 VoiceOver 等既有范围决定。
 
-> 最新对齐批次（2026-10-07）：H-09改为共享Tab滚动/实际高度夹紧，受控56项、真实dev70项及prod70项通过；S-11离开Simulation后恢复默认并按策略身份取消旧任务，浏览器216/216通过；D-10极小轴科学记数已对齐，8个实际surface/28个SVG标签通过。随后真实脚本错误重试/首次错误处理已修，Adapter32/32、相关Controller/History121/121及双引擎真实4/4通过；旧Workspace恢复两浏览器各三阶段通过；故障隔离8/8场景、198/198检查通过。K线空最新页缓存保护/连续性定向31项通过。Adapter/持久化修改后的根测试为652/652，类型、构建、生产主E2E和工程门禁已通过。证据在忽略目录 `audit-evidence/2026-10-07-tab-parity-closure/`、`2026-10-07-real-script-error-final/`、`2026-10-07-storage-restoration-final/`、`audit-evidence/2026-10-07-workspace-fault-isolation-final/`；旧per-Tab/保留参数/极小轴差异不再列为未完成，下面更早批次保留时点。未commit/push。
+> 最新对齐批次（2026-10-07）：H-09改为共享Tab滚动/实际高度夹紧，受控56项、真实dev70项及prod70项通过；S-11离开Simulation后恢复默认并按策略身份取消旧任务，浏览器216/216通过；D-10极小轴科学记数已对齐，8个实际surface/28个SVG标签通过。随后真实脚本错误重试/首次错误处理已修，Adapter32/32、相关Controller/History121/121及双引擎真实4/4通过；旧Workspace恢复两浏览器各三阶段通过；故障隔离8/8场景、198/198检查通过。K线空最新页缓存保护/连续性定向31项通过。Adapter/持久化修改后的根测试为652/652，类型、构建、生产主E2E和工程门禁已通过。证据在忽略目录 `audit-evidence/2026-10-07-tab-parity-closure/`、`2026-10-07-real-script-error-final/`、`2026-10-07-storage-restoration-final/`、`audit-evidence/2026-10-07-workspace-fault-isolation-final/`；旧per-Tab/保留参数/极小轴差异不再列为未完成，下面更早批次保留时点。本地提交已建立，远端 BUILD-03 以本次提交的 Actions 为准。
 
 > 2026-10-07 后续两项修复：pointer hover提示时Escape曾误关Viewer；Analysis点选Escape曾blur到BODY。现先隐藏提示、保留Tab/所选点焦点，Home继续导航；无提示时正常退出。两浏览器Simulation164/164、Performance/Analysis独立66/66及Analysis永久212/212通过，原失败均保留；最后源码根639/639、类型、新构建/生产主E2E及包体/独立性检查通过。证据在本地忽略目录 `audit-evidence/2026-10-07-pointer-tooltip-escape/`、`2026-10-07-shared-tooltip-escape/`；不是全量视觉或VoiceOver复验。并纠正旧golden/HMR/图例待办、参考状态误述和补丁/rollback范围冲突。
 
 > 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。此前完整本地门禁保持原时点；本轮未改视觉基线，VoiceOver与参考交互差异仍开放。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
 
-更新时间：2026-10-07（UI 验收按用户最新修正：功能、交互及组件风格对标，整体布局适配本项目）
+更新时间：2026-10-08（UI 验收按用户最新修正：功能、交互及组件风格对标，整体布局适配本项目；当前内容已本地 commit，远端 BUILD-03 仍待对应提交的 Actions 结果）
 
 **最新范围调整：手机端适配暂缓。** 手机布局、横竖屏、safe-area、手机触摸及手机实机专项不再作为本阶段开发或验收阻塞（SCOPE-07）；不是已通过，也不回退已有实现。当前继续桌面工作区全部模块的功能、组件、交互和本项目布局适配，包含桌面窗口缩放、键盘及辅助技术要求。已有手机证据保留，通用数据/引擎缺陷不因手机暂缓而免修。
 
@@ -20,7 +20,7 @@
 
 当前进展：非 OCA 跨订单顺序、形成中 K 线风险回滚、归档输入离线重放三项已有新构建证据；Margin call 审计缺失和实时 closeTime 遗漏已修。Calendar 跨格金额重叠已修为七列内可读缩写，并提供触摸/键盘可打开的完整日值；同输入参考组件差分和实际交互矩阵分别留证，不将 DOM 激活采集冒充真实 pointer 验收。全部工作区组件/状态尚未统一关闭。完整 Workspace 两小时实测仍限定其冻结生产构建、Chromium 和真实 Hyperliquid 范围，不扩大为全部设备、最新未提交源码或线上部署。
 
-复核对象：`task/p1-priority`，`2981cd3` 加未提交工作树。需求口径、代码实现和验收结果分别记录；末尾列明已取得证据及其时点，不用既往测试数字证明最新工作树整体通过。
+复核对象：`task/p1-priority`，当前提交 `56dd147`。需求口径、代码实现和验收结果分别记录；末尾列明已取得证据及其时点，不用既往测试数字证明最新工作树整体通过。
 
 较早 Log 卡片边框与视觉基线批次已核对坐标轴抗锯齿、Return-to-chart 图标和卡片填充高度，并通过当时的视觉/a11y、根测试、类型、构建及开发/生产 E2E。其后又有控件、Calendar、Performance 和性能修改；旧截图通过不覆盖最新源码，本轮最终统一门禁须单独记录，不自动刷新基线。
 
@@ -120,7 +120,7 @@ STARTUP-01 最后的资源预算也已独立通过：eager/lazy 隔离生产构�
 | ENGINE-01 | P0 | 默认回测精度 | 已完成 | 默认使用 `chart-ohlc`，按父周期 OHLC/OLHC 路径计算。 |
 | ENGINE-02 | P1 | 高精度模式开关 | 已完成（本期历史精度合同） | Settings → Properties → Backtest precision 提供 `Default precision` / `High precision`；通过 `use_bar_magnifier` 启用低周期 OHLC 回放，不是 tick/盘口。forming 子 K 的 `asOf` 截止、历史上限、覆盖率和未来边界已由双真实引擎浏览器 8/8 验证，含可见 fallback 及独立成交预期；组合证据见已关闭的 ENGINE-03，后续按BUILD-01非回归。1m→10s、5m→30s 因现有 Provider 缺秒级历史会明确回退；live 请求当前返回 `live-mode-not-supported`，不能声称所有周期/实时状态均应用高精度。15m→2m、1h→10m 等按已实现映射取数。参考视觉归 UI-08。 |
 | ENGINE-03 | P1 | 复杂撮合及原 TODO 的完整语义范围 | 已完成（下方列明的本期有限合同） | 基础订单、重算生效时点、OCA 路径顺序、收盘成交和 forming/覆盖率已有独立预期；Worker 协议组合及实际双引擎历史精度 8/8、风险/entry 16/16 均有证据。剩余三项已补齐：跨订单价格路径 12/12、形成中风险回滚 2/2 浏览器，以及完整归档离线重放 496 字段零差异。Margin call 审计和 live closeTime 的新缺陷也已修复并加入永久回归。固定 SMA 最新重算零差异；不宣称全部订单排列、交易所流动性 partial fill 或完整 TV 外部逐 Fill 对账。后续实际缺陷单独登记，不以无边界的“所有组合”反复重开本项。 |
-| ENGINE-04 | P1 | BTCUSDT/15m/SMA 参考数值 | 已完成（2026-10-06 固定窗口） | SMA 9/21，同一份 5,000 根参考 OHLC、源码/参数；新窗口是 **279 closed + 1 open = 280 行**，共 2,520 个字段、13 项汇总和 Simulation 输入通过。不是旧窗口的 280 closed + 1 open，也不是本地在线 2,000 根与参考 5,000 根天然一致。open 人口/展示差异归 UI，不能抹平为页面一比一。 |
+| ENGINE-04 | P1 | BTCUSDT/15m/SMA 参考数值 | 已完成（2026-10-07 当前引擎独立复跑） | SMA 9/21，同一份 5,000 根参考 OHLC、源码/参数；当前引擎 fresh replay 仍为 **279 closed + 1 open = 280 行**，共 2,520 个字段、13 项汇总和 Simulation 输入通过，证据在忽略目录 `audit-evidence/2026-10-07-reference-parity-rerun/`。不是旧窗口的 280 closed + 1 open，也不是本地在线 2,000 根与参考 5,000 根天然一致。open 人口/展示差异归 UI，不能抹平为页面一比一。 |
 | ENGINE-05 | P1 | Simulation | 已完成（本地范围） | 结果确定性、取消、Worker 隔离、不同视图和报告 revision 更新已覆盖；最新非默认 Shuffle/Resample 参数链在参考站、本地 PineEngine 与 PineWorkerEngine 中分别完成 3,954/21,954 字段对账，variation=0 正确隐藏 Outcome Distribution，Drawdown/Histogram/Cumulative、tooltip、backdrop close 和 variation→Tab→Escape 焦点路径通过。全模块组件/交互对照及真实辅助技术仍按 UI-08/UI-10 维护；运行期性能与生命周期分别见 PERF-01/REL-06。 |
 | ENGINE-06 | P2 | 其它策略、行情和时间窗口的 golden（含历史 1h fixture） | 当前范围外 | 本阶段只冻结并验收 Binance Spot `BTCUSDT/15m/SMA`；Parity Matrix 中较早的 `BTCUSDT/1h` fixture 仅作历史回归记录，不是当前验收阻塞。其它组合未来扩展时再提供固定行情和脚本。 |
 
