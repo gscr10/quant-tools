@@ -91,6 +91,44 @@ function makeReq(extra: Partial<ExecutionRequest> = {}): ExecutionRequest {
 }
 
 describe('PineWorkerEngine (proxy)', () => {
+    it('routes a live-workspace Bar Magnifier request to the static worker protocol', () => {
+        const fake = new FakeWorker();
+        const engine = new PineWorkerEngine({ createWorker: () => fake });
+        const prepared = {
+            ...PREPARED,
+            props: [{ key: 'use_bar_magnifier', title: 'Use bar magnifier', type: 'bool' as const, defval: true }],
+        };
+        engine.execute(makeReq({ prepared, mode: 'live' }), { onModel: () => {} });
+        expect(fake.last('execute')?.mode).toBe('static');
+    });
+
+    it('uses the live request property override when the declaration default is off', () => {
+        const fake = new FakeWorker();
+        const engine = new PineWorkerEngine({ createWorker: () => fake });
+        const prepared = {
+            ...PREPARED,
+            props: [{ key: 'use_bar_magnifier', title: 'Use bar magnifier', type: 'bool' as const, defval: false }],
+        };
+        engine.execute(makeReq({ prepared, mode: 'live', props: { use_bar_magnifier: true } }), { onModel: () => {} });
+        expect(fake.last('execute')?.mode).toBe('static');
+    });
+
+    it('freezes a host cutoff for property-only precision before crossing the Worker wire', () => {
+        const fake = new FakeWorker();
+        const engine = new PineWorkerEngine({ createWorker: () => fake });
+        const prepared = {
+            ...PREPARED,
+            props: [{ key: 'use_bar_magnifier', title: 'Use bar magnifier', type: 'bool' as const, defval: false }],
+        };
+        const before = Date.now();
+        engine.execute(makeReq({ prepared, mode: 'live', props: { use_bar_magnifier: true } }), { onModel: () => {} });
+        const after = Date.now();
+        const envelope = fake.last('execute')?.barMagnifier;
+        expect(envelope).toMatchObject({ requested: true });
+        expect(envelope?.asOf).toBeGreaterThanOrEqual(before);
+        expect(envelope?.asOf).toBeLessThanOrEqual(after);
+    });
+
     for (const mode of ['static', 'live'] as const) {
         it(`${mode} posts one combined update for an explicit Settings Apply`, () => {
             const fake = new FakeWorker();

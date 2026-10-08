@@ -16,7 +16,10 @@ type CellChart = Pick<ChartCell, 'chart'> & Partial<Pick<ChartCell, 'host'>>;
  * and host calls to `chart.setMarket` without changing the vendored package.
  */
 export function normalizeDefaultMarketSwitch(
-  current: Pick<NonNullable<Vela['market']>, 'symbol' | 'timeframe' | 'session' | 'offline'> | null | undefined,
+  current: (Pick<NonNullable<Vela['market']>, 'symbol' | 'timeframe' | 'session' | 'offline'> & {
+    /** Vela may echo the currently loaded depth into an identity switch. */
+    bars?: number;
+  }) | null | undefined,
   next: MarketSwitch,
   defaultBars: number,
 ): MarketSwitch {
@@ -29,12 +32,20 @@ export function normalizeDefaultMarketSwitch(
     (next.timeframe !== undefined && (!current || next.timeframe !== current.timeframe)) ||
     (next.session !== undefined && (!current || next.session !== current.session));
 
-  // A visible range or explicit bar count is an explicit user request (range
-  // chips, deep windows, shared links, or a host asking for a specific depth).
-  // Preserve both when they accompany an identity change. Without this guard,
-  // `setMarket({ timeframe: '1', bars: 4_000 })` would be mistaken for an
-  // ordinary switch and silently reduced to the default 2,000-bar window.
-  if (!identityChanged || next.visibleRange !== undefined || next.bars !== undefined) return next;
+  // A visible range or a *different* explicit bar count is a user request
+  // (range chips, deep windows, shared links, or a host asking for a specific
+  // depth). Vela's topbar internally echoes the current `bars` value when it
+  // changes timeframe; that echoed value is not a deliberate depth request and
+  // must not preserve a previous 6,000-bar backfill on the new timeframe.
+  // Without this distinction, `setTimeframe()` after a deep-history gesture
+  // silently bypasses the product rule of starting every new timeframe at the
+  // newest default 2,000 bars.
+  const echoedCurrentDepth = next.bars !== undefined
+    && current?.bars !== undefined
+    && next.bars === current.bars;
+  if (!identityChanged || next.visibleRange !== undefined || (next.bars !== undefined && !echoedCurrentDepth)) {
+    return next;
+  }
 
   const bars = Number.isFinite(defaultBars) && defaultBars > 0
     ? Math.max(1, Math.trunc(defaultBars))

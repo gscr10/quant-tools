@@ -6,6 +6,7 @@ import { createWorkspaceProviders } from './provider-registry.ts';
 import { observeWorkspaceHistory } from './workspace-history-observer.ts';
 import { installVelaHistoryResilience } from './history-resilience.ts';
 import { installDefaultTimeframeSwitchPolicy } from './timeframe-switch-policy.ts';
+import { installDateRangePolicy } from './range-switch-policy.ts';
 import { createMigratingWorkspaceStorage, WORKSPACE_HISTORY_BARS } from '../storage/workspace-storage.ts';
 
 export const WORKSPACE_STORAGE_KEY = 'quant-tools:workspace:v2';
@@ -18,6 +19,7 @@ export function createWorkspace(container: HTMLElement | string): VelaWorkspace 
   let detachOnlineRetry = (): void => {};
   let detachHistoryObserver = (): void => {};
   let detachTimeframePolicy = (): void => {};
+  let detachDateRangePolicy = (): void => {};
   try {
     // Vela 0.7.7 converts a failed ranged provider page into an empty array;
     // install the bounded integration patch before any workspace feed exists so
@@ -54,6 +56,10 @@ export function createWorkspace(container: HTMLElement | string): VelaWorkspace 
     // newest default depth; explicit range presets and depth-only backfills are
     // left untouched for the user's deliberate deep-history requests.
     detachTimeframePolicy = installDefaultTimeframeSwitchPolicy(workspace, WORKSPACE_HISTORY_BARS);
+    // The native bottom chips pair each date range with a finer timeframe. The
+    // app keeps the user's topbar resolution stable and expands only history
+    // when that date window needs more bars.
+    detachDateRangePolicy = installDateRangePolicy(workspace);
     detachHistoryObserver = observeWorkspaceHistory(workspace);
 
     // A bounded first attempt plus one background retry keeps startup finite.
@@ -90,8 +96,11 @@ export function createWorkspace(container: HTMLElement | string): VelaWorkspace 
         finally {
           try { detachHistoryObserver(); }
           finally {
-            try { detachTimeframePolicy(); }
-            finally { destroy(); }
+            try { detachDateRangePolicy(); }
+            finally {
+              try { detachTimeframePolicy(); }
+              finally { destroy(); }
+            }
           }
         }
       } finally {
@@ -101,6 +110,7 @@ export function createWorkspace(container: HTMLElement | string): VelaWorkspace 
     return workspace;
   } catch (error) {
     detachHistoryObserver();
+    detachDateRangePolicy();
     detachTimeframePolicy();
     pineEngines.dispose();
     throw error;

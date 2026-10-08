@@ -20,6 +20,8 @@ import {
     type PineToken,
     type PropsFilter,
     type PineExecutionRequest,
+    barMagnifierRequested,
+    materializeBarMagnifierRequest,
 } from './runtime';
 import { executionProvenance, hasCurrentBuildSentinel, PINE_EXECUTION_BUILD_INFO } from '../build-info';
 
@@ -109,7 +111,11 @@ export class PineEngine implements ScriptingEngine {
             return inertExecutionSession();
         }
         const token = req.prepared.token as PineSession;
-        const precisionRequest = req;
+        // Capture the parent snapshot cutoff on the host side. A Worker has a
+        // separate Date realm and may otherwise classify the same lower candle
+        // differently from the chart request (especially under a controlled
+        // browser clock or a slow provider response).
+        const precisionRequest = materializeBarMagnifierRequest(req);
         const getBars = req.getBars ?? ((): OHLCV[] => req.bars);
         let inputs: Record<string, InputValue> = { ...(req.inputs ?? {}) };
         let props: Record<string, InputValue> = { ...(req.props ?? {}) };
@@ -120,9 +126,13 @@ export class PineEngine implements ScriptingEngine {
         // Magnifier resolver; request.security keeps its existing provider
         // fetch semantics and is intentionally not cached here.
         const lowerTimeframeFetchCache = new LowerTimeframeFetchCache();
+        // A live stream cannot hold a stable parent snapshot while fetching
+        // lower-timeframe candles. Force only magnified strategies through the
+        // queued static path; ordinary indicators and strategies remain live.
+        const precisionRequested = barMagnifierRequested(req);
 
         // ── Live streaming: one persistent context, re-executes only the forming bar per tick ──
-        if (req.mode === 'live' && this.capabilities.streaming) {
+        if (req.mode === 'live' && this.capabilities.streaming && !precisionRequested) {
             let stream: LiveStreamHandle | null = null;
             let started = false;
 
@@ -287,7 +297,15 @@ export class PineEngine implements ScriptingEngine {
                 if (stopped) return;
                 inputs = { ...inputs, ...next };
                 if (nextProps) props = { ...props, ...nextProps };
-                if (!deferred) scheduleRun();
+                if (!deferred) {
+                    // A precision toggle may replace the lower-feed window for
+                    // the same parent bars. Ordinary input changes can reuse
+                    // a fulfilled lower window for the unchanged market.
+                    if (Object.prototype.hasOwnProperty.call(nextProps ?? {}, 'use_bar_magnifier')) {
+                        lowerTimeframeFetchCache.clear();
+                    }
+                    scheduleRun();
+                }
             }),
             setVisibleRange: (range) => {
                 if (stopped) return;

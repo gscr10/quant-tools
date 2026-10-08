@@ -64,6 +64,39 @@ export interface PineExecutionRequest extends ExecutionRequest {
     readonly barMagnifier?: PineBarMagnifierOptions;
 }
 
+/**
+ * Vela selects `mode: 'live'` before calling an engine. Bar Magnifier needs a
+ * stable parent snapshot, so magnified strategies use the static session path
+ * even when the surrounding workspace is live.
+ */
+export function barMagnifierRequested(request: PineExecutionRequest): boolean {
+    const explicit = request.barMagnifier?.requested;
+    if (typeof explicit === 'boolean') return explicit;
+    const override = request.props?.use_bar_magnifier;
+    if (typeof override === 'boolean') return override;
+    return request.prepared.props?.find((schema) => schema.key === 'use_bar_magnifier')?.defval === true;
+}
+
+/**
+ * Freeze the wall-clock cutoff at the host execution boundary.
+ *
+ * Vela calls the engine from the page and the worker evaluates PineTS in a
+ * separate realm.  Reading `Date.now()` only inside the worker makes a
+ * deterministic host clock (and, more importantly, a slow cross-realm
+ * request) appear to have a different "now".  The resulting lower feed can
+ * be marked as forming even though it was complete when the chart snapshot
+ * was requested.  Explicit Bar Magnifier envelopes keep their caller-owned
+ * cutoff; property-only requests receive one timestamp here and carry it
+ * through the Worker wire unchanged.
+ */
+export function materializeBarMagnifierRequest(request: PineExecutionRequest): PineExecutionRequest {
+    if (!barMagnifierRequested(request) || request.barMagnifier !== undefined) return request;
+    return {
+        ...request,
+        barMagnifier: { requested: true, asOf: Date.now() },
+    };
+}
+
 /** A reusable PineTS Indicator instance, recreated only when the input-set changes. */
 export interface IndicatorCache {
     lastKey?: string;

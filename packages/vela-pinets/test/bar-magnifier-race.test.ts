@@ -29,6 +29,11 @@ strategy('lower-feed race', use_bar_magnifier=true)
 plot(close, 'close')
 `;
 
+const LIVE_SOURCE = `//@version=6
+strategy('live-feed race', use_bar_magnifier=false)
+plot(close, 'close')
+`;
+
 async function waitFor(predicate: () => boolean): Promise<void> {
     const deadline = Date.now() + 5_000;
     while (!predicate() && Date.now() < deadline) {
@@ -43,6 +48,33 @@ function pointCount(model: IndicatorModel): number {
 }
 
 describe('PineEngine static Bar Magnifier races', () => {
+    it('forces a live-workspace precision request through static lower-timeframe replay', async () => {
+        const engine = new PineEngine();
+        const prepared = await engine.prepare(SOURCE, 'lower-feed-live-precision');
+        const parents = [parent(0)];
+        const children = Array.from({ length: 6 }, (_, index) => child(T0 + index * (10 * 60_000)));
+        const models: IndicatorModel[] = [];
+        const session = engine.execute({
+            prepared,
+            market: { symbol: 'BTCUSDT', timeframe: '60' },
+            bars: parents,
+            getBars: () => parents,
+            inputs: {},
+            mode: 'live',
+            fetchSeries: async () => children,
+        }, { onModel: (model) => models.push(model) });
+
+        await waitFor(() => models.length === 1);
+        const context = await session.getContext?.() as { executionPrecision?: {
+            applied?: boolean;
+            fallbackReason?: string;
+            coverage?: number;
+        } } | null;
+        expect(context?.executionPrecision).toMatchObject({ applied: true, coverage: 1 });
+        expect(context?.executionPrecision?.fallbackReason).not.toBe('live-mode-not-supported');
+        session.stop();
+    });
+
     it('invalidates same-range lower data on notifyBars and serializes runs', async () => {
         const engine = new PineEngine();
         const prepared = await engine.prepare(SOURCE, 'lower-feed-race');
@@ -152,7 +184,7 @@ describe('PineEngine static Bar Magnifier races', () => {
     it('clears lower-feed cache before restarting a live stream', async () => {
         const clear = vi.spyOn(LowerTimeframeFetchCache.prototype, 'clear');
         const engine = new PineEngine();
-        const prepared = await engine.prepare(SOURCE, 'lower-feed-live-restart');
+        const prepared = await engine.prepare(LIVE_SOURCE, 'lower-feed-live-restart');
         const bars = [parent(0)];
         const models: IndicatorModel[] = [];
         const session = engine.execute({
@@ -166,16 +198,14 @@ describe('PineEngine static Bar Magnifier races', () => {
         }, { onModel: (model) => models.push(model) });
 
         try {
-            // Completing history starts the first stream and must begin with a
-            // fresh lower-feed window, even though this live path currently
-            // reports Bar Magnifier as unsupported while child refresh is not
-            // synchronized.
+            // Completing history starts the first ordinary live stream with a
+            // fresh session cache.
             session.notifyBars('complete');
             await waitFor(() => models.length >= 1);
             const afterComplete = clear.mock.calls.length;
 
             // Input updates restart the persistent stream as well. A reused
-            // parent range must not retain the previous stream's child data.
+            // parent range must not retain the previous stream's data.
             session.update({ probe: 1 });
             await waitFor(() => models.length >= 2);
             expect(clear.mock.calls.length).toBeGreaterThan(afterComplete);

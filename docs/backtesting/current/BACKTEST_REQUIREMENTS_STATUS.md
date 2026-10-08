@@ -10,6 +10,8 @@
 
 > 2026-10-08 桌面主回归复跑：开发与生产 `npm run test:e2e` / `npm run test:e2e:prod` 均通过，页面错误、非法外部请求和 LuxAlgo 请求为 0，开发生命周期 7/7。为匹配 Binance `startTime`/`endTime` inclusive 合同，测试行情模拟器已修正分页边界；生产 Provider 的严格 OHLC/范围校验保持不放宽。该修复仅影响测试输入，不改变线上数据源行为。
 
+> 2026-10-07 高精度与底部日期范围回归：修复 live Workspace 启用 `use_bar_magnifier` 时误走 live stream、显示 `LTF → OHLC · 0% · live mode unsupported` 的问题。PineEngine/PineWorkerEngine 现在将高精度请求路由到有稳定父快照的 static lower-timeframe replay；实际应用路径会等待子周期覆盖校验，失败时仍显示真实 fallback reason。Settings 的 precision-only Apply 会重启可见策略会话并触发一次重新计算。底部 `1D/7D/1M/3M/6M/YTD/1Y/5Y/ALL` 仅改变日期范围，保留左上当前周期；范围请求采用 60ms latest-only debounce、串行深历史加载，并在 history completion 后再定位视口，避免快速点击启动旧的 5Y/1m 大请求或被迟到回填拉回最新尾部。顶部市场/周期切换会取消过期范围请求，Cell 销毁时会解除包装和监听，避免旧布局长期保留引用。根测试、Vela-PineTS、类型、构建、开发/生产 E2E 及范围专项均通过；本轮精度/范围改动仍需随现有回归继续维护。
+
 > 2026-10-07 桌面非文字可辨识续验：已修复 Calendar 焦点框、Settings 默认控件边界及 Simulation 置信区间低对比度/区间键盘不可达。实际两浏览器控件20项取色、16项键盘通过；区间轮廓及中位线最低4.41:1，原始68点可读，Simulation四场景144/144通过，计算值未改。最新根639/639、类型、重建/生产主E2E、紧凑桌面4场景228项及6项清理、包体/仓库/dist检查通过。此前完整本地门禁保持原时点；本轮未改视觉基线，VoiceOver与参考交互差异仍开放。证据仅在忽略目录 `audit-evidence/2026-10-07-essential-control-contrast/after/` 和 `audit-evidence/2026-10-07-simulation-band-contrast/`。
 
 更新时间：2026-10-08（UI 验收按用户最新修正：功能、交互及组件风格对标，整体布局适配本项目；当前内容已本地 commit。GitHub CI 暂不纳入本阶段验收）
@@ -122,7 +124,7 @@ STARTUP-01 最后的资源预算也已独立通过：eager/lazy 隔离生产构�
 | 编号 | 优先级 | 需求 | 当前结论 | 验收口径 / 剩余工作 |
 | --- | --- | --- | --- | --- |
 | ENGINE-01 | P0 | 默认回测精度 | 已完成 | 默认使用 `chart-ohlc`，按父周期 OHLC/OLHC 路径计算。 |
-| ENGINE-02 | P1 | 高精度模式开关 | 已完成（本期历史精度合同） | Settings → Properties → Backtest precision 提供 `Default precision` / `High precision`；通过 `use_bar_magnifier` 启用低周期 OHLC 回放，不是 tick/盘口。forming 子 K 的 `asOf` 截止、历史上限、覆盖率和未来边界已由双真实引擎浏览器 8/8 验证，含可见 fallback 及独立成交预期；组合证据见已关闭的 ENGINE-03，后续按BUILD-01非回归。1m→10s、5m→30s 因现有 Provider 缺秒级历史会明确回退；live 请求当前返回 `live-mode-not-supported`，不能声称所有周期/实时状态均应用高精度。15m→2m、1h→10m 等按已实现映射取数。参考视觉归 UI-08。 |
+| ENGINE-02 | P1 | 高精度模式开关 | 已完成（本期历史精度合同） | Settings → Properties → Backtest precision 提供 `Default precision` / `High precision`；通过 `use_bar_magnifier` 启用低周期 OHLC 回放，不是 tick/盘口。forming 子 K 的 `asOf` 截止、历史上限、覆盖率和未来边界已由双真实引擎浏览器 8/8 验证，含可见 fallback 及独立成交预期；组合证据见已关闭的 ENGINE-03，后续按BUILD-01非回归。1m→10s、5m→30s 因现有 Provider 缺秒级历史会明确回退；应用 Workspace 的 live 请求已路由到 static lower replay，不再错误返回 `live-mode-not-supported`；直接调用仍在形成的 live lower-feed 仍不支持，不能声称逐 tick 实时高精度。15m→2m、1h→10m 等按已实现映射取数。参考视觉归 UI-08。 |
 | ENGINE-03 | P1 | 复杂撮合及原 TODO 的完整语义范围 | 已完成（下方列明的本期有限合同） | 基础订单、重算生效时点、OCA 路径顺序、收盘成交和 forming/覆盖率已有独立预期；Worker 协议组合及实际双引擎历史精度 8/8、风险/entry 16/16 均有证据。剩余三项已补齐：跨订单价格路径 12/12、形成中风险回滚 2/2 浏览器，以及完整归档离线重放 496 字段零差异。Margin call 审计和 live closeTime 的新缺陷也已修复并加入永久回归。固定 SMA 最新重算零差异；不宣称全部订单排列、交易所流动性 partial fill 或完整 TV 外部逐 Fill 对账。后续实际缺陷单独登记，不以无边界的“所有组合”反复重开本项。 |
 | ENGINE-04 | P1 | BTCUSDT/15m/SMA 参考数值 | 已完成（2026-10-07 当前引擎独立复跑） | SMA 9/21，同一份 5,000 根参考 OHLC、源码/参数；当前引擎 fresh replay 仍为 **279 closed + 1 open = 280 行**，共 2,520 个字段、13 项汇总和 Simulation 输入通过，证据在忽略目录 `audit-evidence/2026-10-07-reference-parity-rerun/`。不是旧窗口的 280 closed + 1 open，也不是本地在线 2,000 根与参考 5,000 根天然一致。open 人口/展示差异归 UI，不能抹平为页面一比一。 |
 | ENGINE-05 | P1 | Simulation | 已完成（本地范围） | 结果确定性、取消、Worker 隔离、不同视图和报告 revision 更新已覆盖；最新非默认 Shuffle/Resample 参数链在参考站、本地 PineEngine 与 PineWorkerEngine 中分别完成 3,954/21,954 字段对账，variation=0 正确隐藏 Outcome Distribution，Drawdown/Histogram/Cumulative、tooltip、backdrop close 和 variation→Tab→Escape 焦点路径通过。全模块组件/交互对照及真实辅助技术仍按 UI-08/UI-10 维护；运行期性能与生命周期分别见 PERF-01/REL-06。 |
@@ -142,7 +144,7 @@ ENGINE-04 的需求验收记录保持有效；之后修改撮合源码时，仍�
 | 净持仓、FIFO/ANY、部分平仓、pyramiding、reversal、OCA | `close-entries-rule.test.ts`、`pyramiding-reversal.test.ts`、`oca.test.ts`、`order-ledger.test.ts` | 账本、关系和 Worker 组合已验，实际双引擎风险/部分 margin 及跨订单验证补齐有限集成。维持净持仓，不新增多空同时持仓 Hedge Mode。 |
 | 手续费、滑点、最小变动单位、margin | `commission-order.test.ts`、`close-entries-accounting-boundary.test.ts`、`margin-call.test.ts`、`margin-audit.test.ts` 及订单/精度测试 | 多 lot 手续费、三类费用、双向滑点、部分 margin、反转与风险平仓已有独立算术及浏览器证据。新增 Margin call 的 order/fill/parent 关系审计；7 个回归通过，完整归档重放验证费用、数量、关系和曲线。 |
 | `process_orders_on_close`、`backtest_fill_limits_assumption` | `process-orders-on-close.test.ts`、`limit-verification.test.ts`、`recalculation-causality-boundary.test.ts` | 收盘下单不得使用已经过去的 OHLC，重算创建订单按生效位置撮合；定向独立预期及 Worker 组合通过，作为持续回归保留。 |
-| `calc_on_order_fills`、`calc_on_every_tick` | `calc-on-recalculation.test.ts`、`streaming-rollback.test.ts`、`risk-forming-rollback.test.ts` | 模拟价格点、生效时序和形成中风险回滚已验：默认 live 两种真实引擎 2/2，更新同根后再追加一根与静态账本/audit/曲线一致。历史模拟点不称为真实交易所 ticks；高精度 live 仍显式回退。 |
+| `calc_on_order_fills`、`calc_on_every_tick` | `calc-on-recalculation.test.ts`、`streaming-rollback.test.ts`、`risk-forming-rollback.test.ts` | 模拟价格点、生效时序和形成中风险回滚已验：默认 live 两种真实引擎 2/2，更新同根后再追加一根与静态账本/audit/曲线一致。历史模拟点不称为真实交易所 ticks；应用 Workspace 高精度走静态 lower replay，直接 live lower-feed 仍显式回退。 |
 | 日内/连续亏损风控、方向/仓位限制与交易所日期 | `risk-intraday.test.ts`、`risk-liquidation.test.ts`、`risk-entry-controls.test.ts` | 新增 27 项平仓与 26 项 entry 限制独立预期：日内亏损/成交上限、最大回撤、连续亏损均正确撤单/平仓；费用、部分 margin、反转和重算不重复扣量或生成虚假成交。仓位上限对 entry 缩量、禁止方向 entry 只平仓；两项 entry 规则不限制 strategy.order，账户级熔断仍有效。默认及实际 applied 的低周期均验；交易所日切换及春/秋 DST 已有独立预期；BTC UTC 范围不新增其它交易所日历或无界异常时区矩阵。 |
 | order/fill、parent/reversal、账本与曲线身份 | PineTS `ledger.ts`、Vela-PineTS `contextSnapshot.ts`、Adapter；`raw-ledger-boundary.test.ts` | 带身份的 audit DTO、联合 context、旧 revision 拒绝已有验证；本轮 Margin call 因果顺序和 live 曲线 closeTime 补齐，归档重放核对结果。不增加参考站没有的 raw 展示面板。 |
 | 低周期数据、历史上限与精度展示 | runtime/Worker parity、高精度缺口 12/12、Settings | forming 子 K 的请求前 `asOf`、Hyperliquid 最近约 5,000 根子 K 上限、833/2,000 覆盖率、未来边界和 no-lookahead 已由 PineTS/Vela 定向测试覆盖；两种真实浏览器引擎 forming/closed/history-cap/inclusive-future 共 8/8 已验。风险/跨订单浏览器另验 applied 精度与独立预期；生产主 E2E 只证明集成 smoke，不冒充所有组合。秒级/live 不可用明确回退，不插值、不默认高精度。 |
@@ -173,7 +175,7 @@ ENGINE-04 的需求验收记录保持有效；之后修改撮合源码时，仍�
 | 有限验收项 | 当前判断 | 明确通过条件 |
 | --- | --- | --- |
 | 非 OCA 跨订单价格段顺序 | 已修复远 stop110 抢先 near105、TP105 未释放后到 entry110 额度；10 个引擎回归通过，实际浏览器 3 场景 × 双引擎 × 两精度 12/12 | 独立预期：near stop 净利/权益 -1/10006；TP105→entry110 为 2/10004；entry105→TP110 保持拒绝后到退出提前释放额度，为 8/10008。数量、费用和关系已验；同价保留已有 entry-first 规则。 |
-| 实时风险状态回滚 | 已通过双真实引擎 2/2；本轮另修 live closeTime 遗漏 | forming close90 产生风险平仓 -22/978；同根改105后恢复仓位2、净利-1/权益1009。下一根固化后与静态已收盘输入的交易/audit/完整曲线一致；高精度 live 仍显式 fallback。 |
+| 实时风险状态回滚 | 已通过双真实引擎 2/2；本轮另修 live closeTime 遗漏 | forming close90 产生风险平仓 -22/978；同根改105后恢复仓位2、净利-1/权益1009。下一根固化后与静态已收盘输入的交易/audit/完整曲线一致；应用 Workspace 高精度不再走 live fallback，直接 live lower-feed 仍显式 fallback。 |
 | 归档输入离线重放 | 已通过 margin+risk 305 + position-cap 191 = 496 字段；有限导出包独立进程再放同样零差异；最新 closeTime 产物再次重放通过 | 真 execute 元数据、参数、源码、父/子 OHLC、asOf/market/syminfo、引擎指纹与结果一并归档，离线禁止网络。对比成交、费用、审计关系、完整曲线及精度，runId 只用于归属不要求字面相同。不新增产品导出入口。 |
 
 ## 三、回测工作区功能模块

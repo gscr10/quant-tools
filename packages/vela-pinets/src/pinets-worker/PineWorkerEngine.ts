@@ -11,7 +11,12 @@ import type { BarRange } from '@luxalgo/vela/plugin';
 import type { InputValue } from '@luxalgo/vela/plugin';
 import type { MainToWorker, WorkerErrorEvent, WorkerToMain, WorkerLike } from './protocol';
 import { errorFromWorker, serializeWorkerError } from './error-envelope';
-import type { PropsFilter, PineExecutionRequest } from '../pinets/runtime';
+import {
+    barMagnifierRequested,
+    materializeBarMagnifierRequest,
+    type PropsFilter,
+    type PineExecutionRequest,
+} from '../pinets/runtime';
 import workerCode from 'inline-worker:./worker.ts';
 import { updatePineSettings } from '../pinets/settingsBatch';
 import { hasCurrentBuildSentinel, PINE_EXECUTION_BUILD_INFO } from '../build-info';
@@ -179,8 +184,14 @@ export class PineWorkerEngine implements ScriptingEngine {
             return inertExecutionSession();
         }
         const sessionId = ++this.sessionId;
-        const precisionRequest = req;
-        const mode: 'static' | 'live' = req.mode === 'live' ? 'live' : 'static';
+        // Materialize the cutoff before crossing the Worker boundary. The
+        // worker's Date realm must not disagree with the host snapshot and
+        // mark otherwise-complete child candles as forming.
+        const precisionRequest = materializeBarMagnifierRequest(req);
+        // Vela requests live execution for the whole workspace. A magnified
+        // strategy must use the static queue so its lower timeframe can be
+        // fetched and validated against one parent snapshot.
+        const mode: 'static' | 'live' = req.mode === 'live' && !barMagnifierRequested(req) ? 'live' : 'static';
         let bars: OHLCV[];
         try {
             bars = this.barsOf(req);

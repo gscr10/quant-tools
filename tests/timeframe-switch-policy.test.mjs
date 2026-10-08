@@ -78,7 +78,7 @@ test('ordinary timeframe switches reset to latest default depth and frame ALL', 
 });
 
 test('depth-only requests and explicit range requests remain user controlled', () => {
-  const current = { symbol: 'binance:BTCUSDT', timeframe: '60', session: undefined, offline: false };
+  const current = { symbol: 'binance:BTCUSDT', timeframe: '60', session: undefined, offline: false, bars: 2_000 };
   const depth = { bars: 50_000 };
   const range = { timeframe: '1', bars: 20_000, visibleRange: '3M' };
   assert.strictEqual(normalizeDefaultMarketSwitch(current, depth, 2_000), depth);
@@ -88,6 +88,12 @@ test('depth-only requests and explicit range requests remain user controlled', (
   // visibleRange preset was included.
   const switchedDepth = { timeframe: '1', bars: 4_000 };
   assert.strictEqual(normalizeDefaultMarketSwitch(current, switchedDepth, 2_000), switchedDepth);
+  // Vela echoes the currently loaded depth from a topbar timeframe change;
+  // that echo is not an explicit request to carry deep history forward.
+  assert.deepEqual(
+    normalizeDefaultMarketSwitch({ ...current, bars: 6_000 }, { timeframe: '1', bars: 6_000 }, 2_000),
+    { timeframe: '1', bars: 2_000, visibleRange: 'ALL' },
+  );
   const offline = { timeframe: '1', data: [{ time: 1, open: 1, high: 1, low: 1, close: 1, volume: 1 }], bars: 1 };
   assert.strictEqual(normalizeDefaultMarketSwitch(current, offline, 2_000), offline);
 });

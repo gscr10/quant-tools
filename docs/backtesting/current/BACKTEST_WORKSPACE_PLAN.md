@@ -1403,7 +1403,7 @@ reference/candidate 视觉差分；无近似正式指标。当前实现与本地
 - [x] 在策略 Properties 增加 Default/High precision 选择器，直接映射 Pine 的 mutable `use_bar_magnifier` 属性；Cancel/Reset 不提交，precision-only 的 Ok 通过既有 `setProps` 批量链路只触发一次 update，且 UI 不维护平行状态。
 - [x] 展示 requested/applied precision、低周期、覆盖率和回退原因；不支持父周期会显式报告 `lower-timeframe-undetermined`，缺少 fallback reason 的未应用 envelope 被 Adapter 拒绝。
 - 成对父/子 OHLC 的独立成交预期和双真实引擎验证按 ENGINE-03 验收；完整 TV 外部逐 Fill 按 SCOPE-05 不作为本期关闭条件。
-- [x] 覆盖低周期缺失、重复、越界、仅部分覆盖、断档以及显式回退场景；仍在形成的 live 请求按不支持回退。
+- [x] 覆盖低周期缺失、重复、越界、仅部分覆盖、断档以及显式回退场景；Workspace 的 live+precision 请求改走 static lower replay，只有直接仍在形成的 live lower-feed 请求按不支持回退。
 - [x] 重建 `packages/vela-pinets` 内联 Worker，并通过 parity 测试对齐 in-process 和 Worker 的 precision envelope/结果边界。
 
 G8.1 当前 checkpoint 已通过上述本期有限合同的定向证据；其 `quant-tools-g8.1` / schema 4
