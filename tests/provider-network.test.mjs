@@ -535,7 +535,124 @@ test('Binance invalidates a cached mirror when a symbol is unavailable and recov
   }
 });
 
-test('Binance does not mirror a non-retryable futures response to a spot host', async () => {
+test('Binance futures falls back from a region-blocked fapi host to the web edge', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  const kline = [[
+    POINT, '1', '2', '0.5', '1.5', '10', POINT + 3_599_999,
+    '0', '1', '0', '0', '0',
+  ]];
+  try {
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.startsWith('https://fapi.binance.com/fapi/v1/klines')) {
+        return jsonResponse({ code: 0, msg: 'restricted' }, 451);
+      }
+      if (url.startsWith('https://www.binance.com/fapi/v1/klines')) {
+        return jsonResponse(kline);
+      }
+      throw new Error(`unexpected request: ${url}`);
+    };
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 15 }).binance();
+    assert.equal((await provider.getBars('BTCUSDT.P', '60', { limit: 1 })).length, 1);
+    assert.equal((await provider.getBars('BTCUSDT.P', '240', { limit: 1 })).length, 1);
+    assert.deepEqual(calls.map((url) => [new URL(url).hostname, new URL(url).searchParams.get('interval')]), [
+      ['fapi.binance.com', '1h'],
+      ['www.binance.com', '1h'],
+      ['www.binance.com', '4h'],
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Binance futures keeps the dedicated fapi host when its first request succeeds', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  const kline = [[
+    POINT, '1', '2', '0.5', '1.5', '10', POINT + 3_599_999,
+    '0', '1', '0', '0', '0',
+  ]];
+  try {
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.startsWith('https://fapi.binance.com/fapi/v1/klines')) return jsonResponse(kline);
+      throw new Error(`unexpected request: ${url}`);
+    };
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 15 }).binance();
+    assert.equal((await provider.getBars('BTCUSDT.P', '60', { limit: 1 })).length, 1);
+    assert.equal((await provider.getBars('BTCUSDT.P', '240', { limit: 1 })).length, 1);
+    assert.deepEqual(calls.map((url) => new URL(url).hostname), [
+      'fapi.binance.com',
+      'fapi.binance.com',
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Binance futures shares one fapi-to-web-edge fallback for concurrent 1h requests', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  let release;
+  const kline = [[
+    POINT, '1', '2', '0.5', '1.5', '10', POINT + 3_599_999,
+    '0', '1', '0', '0', '0',
+  ]];
+  try {
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.startsWith('https://fapi.binance.com/fapi/v1/klines')) {
+        return jsonResponse({ code: 0, msg: 'restricted' }, 451);
+      }
+      if (url.startsWith('https://www.binance.com/fapi/v1/klines')) {
+        await new Promise((resolve) => { release = resolve; });
+        return jsonResponse(kline);
+      }
+      throw new Error(`unexpected request: ${url}`);
+    };
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 100 }).binance();
+    const first = provider.getBars('BTCUSDT.P', '60', { limit: 1 });
+    const second = provider.getBars('BTCUSDT.P', '60', { limit: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    release?.();
+    const [one, two] = await Promise.all([first, second]);
+    assert.equal(one.length, 1);
+    assert.equal(two.length, 1);
+    assert.deepEqual(calls.map((url) => new URL(url).hostname), [
+      'fapi.binance.com',
+      'www.binance.com',
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Binance futures preserves a terminal 400 without probing the web edge', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  try {
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      calls.push(url);
+      return jsonResponse({ code: -1121, msg: 'Invalid symbol.' }, 400);
+    };
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 15 }).binance();
+    await assert.rejects(provider.getBars('DOESNOTEXIST.P', '60', { limit: 1 }), /HTTP 400/);
+    assert.deepEqual(calls.map((url) => new URL(url).hostname), ['fapi.binance.com']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Binance futures surfaces web-edge failure after a region-blocked fapi response', async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   try {
@@ -546,9 +663,52 @@ test('Binance does not mirror a non-retryable futures response to a spot host', 
     };
 
     const provider = createWorkspaceProviders({ requestTimeoutMs: 15 }).binance();
-    await assert.rejects(provider.getBars('BTCUSDT.P', '15', { limit: 1 }), /HTTP 451/);
-    assert.equal(calls.length, 1);
-    assert.equal(new URL(calls[0]).hostname, 'fapi.binance.com');
+    await assert.rejects(provider.getBars('BTCUSDT.P', '240', { limit: 1 }), /HTTP 451/);
+    assert.deepEqual(calls.map((url) => new URL(url).hostname), [
+      'fapi.binance.com',
+      'www.binance.com',
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Binance futures forgets a web edge that fails after being cached', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  let phase = 0;
+  const kline = [[
+    POINT, '1', '2', '0.5', '1.5', '10', POINT + 3_599_999,
+    '0', '1', '0', '0', '0',
+  ]];
+  try {
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      calls.push(url);
+      const host = new URL(url).hostname;
+      if (host === 'fapi.binance.com') {
+        if (phase === 2) return jsonResponse(kline);
+        return jsonResponse({ code: 0, msg: 'restricted' }, 451);
+      }
+      if (host === 'www.binance.com') {
+        if (phase === 1) return jsonResponse({ code: 0, msg: 'restricted' }, 451);
+        return jsonResponse(kline);
+      }
+      throw new Error(`unexpected request: ${url}`);
+    };
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 15 }).binance();
+    assert.equal((await provider.getBars('BTCUSDT.P', '60', { limit: 1 })).length, 1);
+    phase = 1;
+    await assert.rejects(provider.getBars('BTCUSDT.P', '60', { limit: 1 }), /HTTP 451/);
+    phase = 2;
+    assert.equal((await provider.getBars('BTCUSDT.P', '60', { limit: 1 })).length, 1);
+    assert.deepEqual(calls.map((url) => new URL(url).hostname), [
+      'fapi.binance.com',
+      'www.binance.com',
+      'www.binance.com',
+      'fapi.binance.com',
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
   }

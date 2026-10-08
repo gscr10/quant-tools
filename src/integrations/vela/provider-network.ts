@@ -9,6 +9,12 @@ import type { DataProvider } from '@luxalgo/vela';
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const BINANCE_GLOBAL_HOST = 'api.binance.com';
 const BINANCE_US_HOST = 'api.binance.us';
+const BINANCE_FUTURES_HOST = 'fapi.binance.com';
+// Binance does not publish a US mirror for USDⓈ-M futures. The public web
+// edge still exposes the same read-only `/fapi/v1` routes, including CORS,
+// and is reachable in regions where the dedicated futures hostname returns
+// the location restriction response (HTTP 451).
+const BINANCE_FUTURES_FALLBACK_HOST = 'www.binance.com';
 const HYPERLIQUID_INFO_URL = 'https://api.hyperliquid.xyz/info';
 const MAX_METADATA_CACHE_ENTRIES = 64;
 
@@ -28,6 +34,8 @@ type ProviderRuntime = DataProvider & {
   spotBase?: () => Promise<string>;
   spotBaseUrl?: string | null;
   spotBaseProbe?: Promise<string> | null;
+  /** Preferred public web edge after the dedicated futures host is blocked. */
+  futuresBaseUrl?: string | null;
 };
 
 /**
@@ -270,6 +278,45 @@ function binanceMirror(url: string): string | null {
   }
 }
 
+/**
+ * Return the public web-edge equivalent for a Binance USDⓈ-M futures URL.
+ * Spot URLs intentionally return null: `www.binance.com/api/v3` is not a
+ * substitute for the independent Binance.US spot mirror and must not change
+ * the market selected by the caller. Keep the path/query untouched so this
+ * works for klines, exchangeInfo, and any other read-only futures route.
+ */
+function binanceFuturesFallback(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== BINANCE_FUTURES_HOST || !parsed.pathname.startsWith('/fapi/')) {
+      return null;
+    }
+    parsed.hostname = BINANCE_FUTURES_FALLBACK_HOST;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** Use a previously healthy futures web edge without probing a blocked fapi
+ * host on every timeframe/history request. */
+function rewriteBinanceFuturesUrl(provider: ProviderRuntime, url: string): string {
+  if (!provider.futuresBaseUrl) return url;
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== BINANCE_FUTURES_HOST || !parsed.pathname.startsWith('/fapi/')) {
+      return url;
+    }
+    const base = new URL(provider.futuresBaseUrl);
+    parsed.protocol = base.protocol;
+    parsed.hostname = base.hostname;
+    parsed.port = base.port;
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 async function fetchBinanceJson(
   url: string,
   timeoutMs: number,
@@ -281,6 +328,20 @@ async function fetchBinanceJson(
     return result;
   } catch (error) {
     const mirror = binanceMirror(url);
+    const futuresFallback = binanceFuturesFallback(url);
+    // A futures request has no Binance.US equivalent. In a restricted
+    // location the dedicated fapi host commonly returns 403/451, so use the
+    // public web edge once while preserving the futures path. This is a
+    // single bounded alternate attempt; never recurse or rotate through spot
+    // hosts.
+    const futuresFallbackEligible = error instanceof ProviderHttpError
+      ? error.status === 403 || error.status === 451 || isRetryable(error)
+      : isRetryable(error);
+    if (futuresFallback !== null && futuresFallbackEligible) {
+      const result = await fetchJson('binance', futuresFallback, {}, timeoutMs);
+      onSuccess(futuresFallback);
+      return result;
+    }
     if (mirror === null) {
       if (!isSameEndpointRetryable(error)) throw error;
     } else if (!(error instanceof ProviderHttpError) && !isRetryable(error)) {
@@ -291,8 +352,9 @@ async function fetchBinanceJson(
     // host answers 400 for global-only symbols.  Vela's original spot probe
     // treats any non-ok response as a reason to try the other host, so retain
     // that behavior here instead of restricting mirror failover to 5xx/429.
-    // Spot has a genuinely independent public mirror.  Futures does not, so a
-    // single same-endpoint retry is the least surprising transient recovery.
+    // Spot has a genuinely independent public mirror. A futures URL has
+    // already taken the web-edge branch above; the remaining same-endpoint
+    // retry is only for other Binance routes without a mirror.
     const retryUrl = mirror ?? url;
     const result = await fetchJson('binance', retryUrl, {}, timeoutMs);
     onSuccess(retryUrl);
@@ -310,6 +372,8 @@ function rememberBinanceEndpoint(provider: ProviderRuntime, url: string): void {
     } else if (parsed.hostname === BINANCE_US_HOST) {
       provider.spotBaseUrl = `https://${BINANCE_US_HOST}/api/v3`;
       provider.spotBaseProbe = null;
+    } else if (parsed.hostname === BINANCE_FUTURES_FALLBACK_HOST && parsed.pathname.startsWith('/fapi/')) {
+      provider.futuresBaseUrl = `https://${BINANCE_FUTURES_FALLBACK_HOST}/fapi/v1`;
     }
   } catch {
     // A non-URL (or a non-spot URL) is a futures/third-party seam; leave the
@@ -380,18 +444,35 @@ export function guardProviderNetwork<T extends DataProvider>(
     Object.defineProperty(guarded, 'json', {
       configurable: true,
       enumerable: false,
-      value: (url: string) => inFlightRequest(
-        inFlight,
-        completed,
-        requestKey('binance', url),
-        metadataTtlMs,
-        isBinanceMetadataUrl(url),
-        () => fetchBinanceJson(
-          url,
+      value: (url: string) => {
+        const requestUrl = rewriteBinanceFuturesUrl(guarded, url);
+        const operation = () => fetchBinanceJson(
+          requestUrl,
           timeoutMs,
           (successfulUrl) => rememberBinanceEndpoint(guarded, successfulUrl),
-        ),
-      ),
+        ).catch((error: unknown) => {
+          // A previously healthy web edge can become unavailable later. Do
+          // not pin the provider to that failed route forever: the next call
+          // must be allowed to probe the dedicated futures endpoint again.
+          try {
+            const parsed = new URL(requestUrl);
+            if (parsed.hostname === BINANCE_FUTURES_FALLBACK_HOST && parsed.pathname.startsWith('/fapi/')) {
+              guarded.futuresBaseUrl = null;
+            }
+          } catch {
+            // URL validation belongs to fetchJson; preserve its original error.
+          }
+          throw error;
+        });
+        return inFlightRequest(
+          inFlight,
+          completed,
+          requestKey('binance', requestUrl),
+          metadataTtlMs,
+          isBinanceMetadataUrl(requestUrl),
+          operation,
+        );
+      },
       writable: true,
     });
   } else {
