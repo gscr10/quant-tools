@@ -8,6 +8,7 @@
 
 import type { BacktestSettingsSnapshot } from './ports/backtest-settings.ts';
 import type { BacktestExecutionSnapshot } from './ports/backtest-results.ts';
+import type { BacktestResolvedWindow } from './ports/backtest-window.ts';
 
 export const BACKTEST_SCHEMA_VERSION = 1 as const;
 
@@ -396,6 +397,8 @@ export interface BacktestReport {
   readonly finality: BacktestFinality;
   readonly forming?: boolean;
   readonly context?: BacktestContext;
+  /** Explicit dates of the bounded dataset used for this engine run. */
+  readonly window?: BacktestResolvedWindow;
   /** Inputs/Properties schema and the values used for this run. */
   readonly settings?: BacktestSettingsSnapshot;
   /** Last bounded engine position; does not imply a complete equity series. */
@@ -526,6 +529,7 @@ export function createBacktestReport(init: BacktestReportInit): BacktestReport {
     finality: init.finality ?? 'unknown',
     forming: init.forming ?? false,
     context: init.context,
+    window: init.window,
     settings: freezeSettings(init.settings),
     execution: freezeExecution(init.execution),
     history: init.history,

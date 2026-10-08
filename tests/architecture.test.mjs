@@ -91,6 +91,17 @@ test('bundle budget protects the post-editor-split startup baseline', async () =
   assert.match(source, /highcharts:\s*\{ raw: 450_000, gzip: 160_000 \}/);
 });
 
+test('worker engine imports precision helpers without pulling the full runtime graph', async () => {
+  const { transpileModule, ModuleKind } = await import('typescript');
+  const source = await readFile(
+    new URL('../packages/vela-pinets/src/pinets-worker/PineWorkerEngine.ts', import.meta.url),
+    'utf8',
+  );
+  const { outputText } = transpileModule(source, { compilerOptions: { module: ModuleKind.ESNext } });
+  assert.doesNotMatch(outputText, /from\s+['"]\.\.\/pinets\/runtime['"]/);
+  assert.doesNotMatch(outputText, /from\s+['"]pinets['"]/);
+});
+
 test('workspace defaults, toolbar composition, providers, and dependency versions stay frozen', async () => {
   const { WORKSPACE_DEFAULTS, WORKSPACE_TOPBAR } = await import(
     '../src/config/workspace-options.ts'

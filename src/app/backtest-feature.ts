@@ -4,6 +4,7 @@ import type {
   BacktestSimulationChange,
   BacktestTrade,
 } from '../features/backtesting/backtest-types.ts';
+import type { BacktestWindowSelection } from '../domain/ports/backtest-window.ts';
 import { createBacktestWorkbench, type BacktestWorkbench } from '../features/backtesting/backtest-workbench.ts';
 import { BacktestController } from './backtest-controller.ts';
 import {
@@ -16,6 +17,11 @@ import type { QuantWorkspace } from '../integrations/vela/create-workspace.ts';
 import type { BacktestPreferencesRepository } from '../domain/ports/backtest-preferences.ts';
 import { diffBacktestSettingValues, resolveBacktestSettingValues } from '../domain/backtest-settings.ts';
 import { velaSettingsControls } from '../integrations/vela/settings-controls.ts';
+import {
+  createBacktestWindowMarketLoader,
+  type BacktestWindowMarketLoader,
+  type BacktestWindowMarketRequest,
+} from '../integrations/vela/backtest-window-loader.ts';
 
 /**
  * The app-level composition boundary for backtesting.
@@ -109,9 +115,35 @@ export function mountBacktestFeature(
   let workbench: BacktestWorkbench | null = null;
   let activeCellUnsubscribe: (() => void) | null = null;
   let layoutUnsubscribe: (() => void) | null = null;
+  let cellDestroyedUnsubscribe: (() => void) | null = null;
   let resizeObserver: ResizeObserver | null = null;
   let viewerSuppressionObserver: MutationObserver | null = null;
   let windowResizeRegistered = false;
+  const windowLoaders = new Map<object, {
+    loader: BacktestWindowMarketLoader;
+    cellId: string;
+    request?: BacktestWindowMarketRequest;
+  }>();
+  const loaderFor = (
+    chart: Parameters<typeof createBacktestWindowMarketLoader>[0],
+    cellId: string,
+  ): BacktestWindowMarketLoader => {
+    const existing = windowLoaders.get(chart);
+    if (existing) return existing.loader;
+    const loader = createBacktestWindowMarketLoader(chart, {
+      onPending: (request) => {
+        const entry = windowLoaders.get(chart);
+        if (entry) entry.request = request;
+        controller.beginBacktestWindowLoadForCell(cellId);
+      },
+      onCommit: () => controller.commitBacktestWindowForCell(cellId),
+      onError: (error) => {
+        controller.failBacktestWindowForCell(cellId, error);
+      },
+    });
+    windowLoaders.set(chart, { loader, cellId });
+    return loader;
+  };
   // Vela's focus/aria-hidden manager may restore attributes on the chart root
   // asynchronously (for example when its own popover cleanup runs after the
   // Viewer opens). Keep the application-level suppression contract stable while
@@ -209,6 +241,8 @@ export function mountBacktestFeature(
     activeCellUnsubscribe = null;
     cleanup('layout subscription', () => layoutUnsubscribe?.());
     layoutUnsubscribe = null;
+    cleanup('cell destroyed subscription', () => cellDestroyedUnsubscribe?.());
+    cellDestroyedUnsubscribe = null;
     cleanup('resize observer', () => resizeObserver?.disconnect());
     resizeObserver = null;
     cleanup('window resize listener', () => {
@@ -217,6 +251,10 @@ export function mountBacktestFeature(
     windowResizeRegistered = false;
     cleanup('viewer suppression observer', () => viewerSuppressionObserver?.disconnect());
     viewerSuppressionObserver = null;
+    cleanup('backtest window loaders', () => {
+      for (const entry of windowLoaders.values()) entry.loader.destroy();
+      windowLoaders.clear();
+    });
     cleanup('workbench', () => workbench?.destroy());
     workbench = null;
     // A Workbench constructor can fail after appending its root but before it
@@ -347,7 +385,47 @@ export function mountBacktestFeature(
         if (report) options.onTradeLocate?.(report, trade, side);
       },
       onRetry: () => {
+        const key = controller.getSnapshot()?.key;
+        const chart = key && workspace.cell(key.cellId)?.chart;
+        const entry = chart && windowLoaders.get(chart);
+        // Fixed-date retries must retain their dataset contract even if the
+        // adapter classified the failure as aborted history. Its generic
+        // online retry would otherwise replace dates with the latest tail.
+        if (key && entry?.request && (entry.request.mode === 'window'
+          || controller.backtestWindowNeedsRetry(key.cellId))) {
+          void entry.loader.apply(entry.request).catch((error) => diagnose('backtest window retry failed', error));
+          return;
+        }
         void controller.retryActive().then(selectLiveCell);
+      },
+      getBacktestWindow: (report) => report.key
+        ? controller.getBacktestWindow(report.key)
+        : { preset: 'default' },
+      onBacktestWindowChange: (report, selection: BacktestWindowSelection) => {
+        const key = report.key;
+        if (!key) return;
+        // Clear the old report immediately. The next engine snapshot comes
+        // from the selected market dataset; an old ledger must never be shown
+        // while the provider request or static run is still in flight.
+        controller.setBacktestWindow(key, selection);
+        const cell = workspace.cell(key.cellId);
+        if (!cell) return;
+        const selectedReport = controller.getReport(key);
+        const loader = loaderFor(cell.chart, cell.id);
+        const request = selection.preset === 'default'
+          ? { mode: 'default' as const, defaultBars: 2_000 }
+          : {
+              mode: 'window' as const,
+              from: selectedReport?.window?.from ?? selection.from ?? undefined,
+              to: selectedReport?.window?.to ?? selection.to ?? undefined,
+            };
+        try {
+          void loader.apply(request).catch((error) => {
+            diagnose('backtest window re-run failed', error);
+          });
+        } catch (error) {
+          diagnose('backtest window history request failed', error);
+        }
       },
     });
     workbench = mountedWorkbench;
@@ -366,6 +444,14 @@ export function mountBacktestFeature(
     // identity so a multi-cell Dock never keeps showing a background strategy.
     layoutUnsubscribe = workspace.on('layout:changed', () => {
       selectLiveCell();
+    });
+    cellDestroyedUnsubscribe = workspace.on('cell:destroyed', ({ id }) => {
+      for (const [chart, entry] of windowLoaders) {
+        if (entry.cellId !== id) continue;
+        entry.loader.destroy();
+        windowLoaders.delete(chart);
+      }
+      controller.clearBacktestWindowCell(id);
     });
 
     syncHostBounds();

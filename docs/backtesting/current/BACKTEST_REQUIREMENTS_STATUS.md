@@ -1,5 +1,34 @@
 # 回测工作区需求状态表
 
+## 2026-10-08 新增：独立回测时间窗口
+
+本次新增需求按以下合同实施，既有默认回测与底部视口范围的合同继续保留：
+
+| 项目 | 行为 |
+| --- | --- |
+| 初始进入 | 沿用当前图表周期、默认最新 2,000 根，自动进行初始回测。 |
+| 入口 | 回测 Dock 标题旁的 `Default · 2,000 bars`；可选 1 个月、3 个月、6 个月、1 年或自选起止日期。 |
+| 真正重算 | 使用所选区间的行情重新执行策略、本金和仓位重新开始；指标在区间内自然预热。不会筛选旧交易账本来冒充新回测。 |
+| 周期 | 选择日期不会更改左上周期；之后切换任何受数据源支持的周期，保持日期区间并按新周期重新取数、重算。同一 Cell 的所有策略共用窗口，新加策略同样适用。 |
+| 日期边界 | 日期按 UTC；快捷月数采用日历月并处理月末/闰年。日期窗口仅纳入完整处于区间内的已收盘 K 线，避免周/月线带入结束日之后的价格；不足一根完整 K 线明确提示。默认回测的实时行为保持原样。 |
+| 数据与恢复 | 分页补齐所需历史；数据源缺历史、缺根或请求失败时明确报错并禁用旧结果和 Simulation，重试保持原窗口。快速选择/切周期的旧响应不能覆盖新结果。 |
+| 返回默认 | 选择 Default 后恢复该市场/周期最新 2,000 根及原在线模式。窗口只在当前页面会话内保留，不把行情写入持久化存储。 |
+| Settings | 桌面宽度 560px，模态使用整个工作区可用高度；长 Properties 在表单内滚动，底部确认/取消保持可达。 |
+
+验收入口：`test:e2e:backtest-window`（菜单与桌面交互）、`test:e2e:backtest-window-loader`（真实双引擎静态数据与周期切换）、`test:e2e:backtest-window-lifecycle`（真实工作区重算、高精度、并发和 Retry）。截图与原始运行数据只保存到忽略的 `audit-evidence/`。本次变更已本地提交，未 push。
+
+本轮新增功能验证记录（2026-10-08）：
+
+- 根测试 **697/697**，Vela-PineTS **314/314**，类型检查和包内 lint 通过。窗口 loader **25/25** 包含真实 `MultiProviderFeed` 的同市场跨实例订阅隔离：两边静态、另一边恢复 Default/销毁、再次订阅、无关 demo 的原生模拟 tick 均分别验证，未通过屏蔽所有订阅冒充通过。
+- 最终开发与生产主 E2E 均通过，非法外部请求和 LuxAlgo 请求为 0，开发挂载/销毁为 **7/7**。交易表头的测试读取改为一次 DOM 采样，避免实时表格替换发生在多次读取之间；列名、列数与排序断言保持不变。双引擎日期窗口还比较了静置前后的完整真实策略 close plots，确保静态历史不会被 Vela demo 的模拟价格 tick 改写。
+- 双 Workspace 额外浏览器验证 **4/4**：A 固定窗口/B 在线、B 真实价格继续更新、B 固定窗口/A 返回 Default、A 销毁后 B 固定窗口，完整 close plots 与订阅行为均符合各自模式，页面错误为 0。探针使用与主应用相同的 Vite Vela 模块；直接混用 raw dist 和预构建模块会产生两个不同原型，不能据其结果判断主应用行为。材料在 `audit-evidence/backtest-window-layout/cross-workspace-resolved.py` 与同名 JSON。
+- 日期菜单 Chromium/Firefox × 5 个桌面窗口 **10/10**；真实 PineEngine/PineWorkerEngine 的窗口/高精度/新增策略/旧响应/失败重试/Default 生命周期各 **18/18**。实际双引擎日期数据验证为 1m **3,000** 根 → 同日期 5m **600** 根 → Default **2,000** 根，页面错误为 0。
+- 新构建真实 Binance.US Spot `BTCUSDT · 15m · SMA 9/21`，通过显式本机代理获取未替换的行情响应。默认 **2,000** 根、101 closed + 1 open，选择 `2026-08-09` 至 `2026-09-08` 后实际 **2,976** 根、169 closed + 1 open，runId 更新，完整历史与 Simulation 就绪，稳定采样中账本和指标未被实时 tick 改写。单独递增的快照 revision 不视为价格或账本变化。该证据证明窗口真实重算，不扩展为该窗口与参考站的数值对账。复跑材料在 `audit-evidence/backtest-window-real-provider/run-window-sma.py`、`window-sma-final-result.json`。
+- 在应用主页面使用内置 SMA 的完整 Properties 实测：1280×720 时对话框 **560×611**、表单可视高度 **446**；1440×900 时 **560×791**、可视高度 **626**。顶/底工具栏占位保留，31 个 Properties 可内部滚动，底部操作按钮和 Escape 焦点恢复通过。完整引擎 fixture 的高度更大，不以其尺寸代替主应用尺寸。证据在 `audit-evidence/backtest-window-layout/app-geometry.json` 和 `after-app-*-properties.png`。
+- 重新构建时还修复了既有高精度入口重复引入整个 PineTS runtime 的包体回归：请求判断/时间戳辅助函数抽到同包轻量模块，执行语义与兼容导出保留。Worker 产物由 **1,465,377** 降到 **835,110** bytes，gzip 为 **209,370** bytes，原 bundle 阈值未放宽。生产主 E2E、新窗口双引擎流程、依赖/仓库/dist 独立性检查通过。
+
+这些记录只覆盖本次时间窗口、Settings 布局及关联回归，不扩大或重新关闭下方历史计划中其它范围。后续默认页面仍先运行原初始回测；自选窗口不跨刷新持久化。
+
 > 2026-10-07 继续复核：在当前工作树重新执行 `npm test`（653/653）、Vela-PineTS（310/310）、TypeScript、生产构建、bundle/依赖/仓库/dist/release 门禁及 `npm run test:e2e:prod`，均通过。真实 Provider 低周期/跨周期检查 `tests/e2e_history_real.py` 的 16 个场景和双引擎主动手势分页 `tests/e2e_history_gestures.py` 的 26 个场景均通过；未发现新的业务回归。实体桌面 VoiceOver 按用户最新决定移出本阶段验收；手机、Safari、线上部署、Replay 仍按各自范围决定处理。
 
 > 最新对齐批次（2026-10-07）：H-09改为共享Tab滚动/实际高度夹紧，受控56项、真实dev70项及prod70项通过；S-11离开Simulation后恢复默认并按策略身份取消旧任务，浏览器216/216通过；D-10极小轴科学记数已对齐，8个实际surface/28个SVG标签通过。随后真实脚本错误重试/首次错误处理已修，Adapter32/32、相关Controller/History121/121及双引擎真实4/4通过；旧Workspace恢复两浏览器各三阶段通过；故障隔离8/8场景、198/198检查通过。K线空最新页缓存保护/连续性定向31项通过。Adapter/持久化修改后的根测试为653/653，类型、构建、生产主E2E和工程门禁已通过。证据在忽略目录 `audit-evidence/2026-10-07-tab-parity-closure/`、`2026-10-07-real-script-error-final/`、`audit-evidence/2026-10-07-storage-restoration-final/`、`audit-evidence/2026-10-07-workspace-fault-isolation-final/`；旧per-Tab/保留参数/极小轴差异不再列为未完成，下面更早批次保留时点。本地门禁已完成；GitHub CI 按当前决定暂缓，不作为本地验收条件。
