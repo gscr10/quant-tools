@@ -51,7 +51,7 @@ UI 验收标准已按最新用户修正：功能、交互、图标和组件风�
 - [ ] UI-10 剩余项：生产32状态/34交互、DOM/AX通知及210个文字已验；后续两浏览器20项必要边界取色、16项键盘、Simulation区间68原始点/正式144项及SVG fallback已验。原218次axe文字对比度incomplete保留，不误称非文字缺陷。实际VoiceOver仍未验，本机AX自动化未授权；其它缺口必须列具体控件/状态，不把已验hover/键盘重新列待办。手机/Safari专项暂缓。
 - [x] 原 7：2026-10-06 固定窗口 SMA 9/21、5,000 根相同 OHLC 的 279 closed + 1 open（280 行）已通过；最新跨订单/margin audit/closeTime 产物重新执行，2,520 字段、13 汇总差异为 0，证据在 `audit-evidence/2026-10-07-frozen-sma-cross-order-final/`。未使用旧本地结果，不冒称浏览器 Worker/Simulation 或新参考窗口全部再验；其它 golden 不重入队。
 - [x] 原 8 / ENGINE-03：按需求表完整映射原 TODO 的本期有限合同已关闭。基础订单/重算/风险/默认与高精度、forming/覆盖率浏览器 8/8、风险/entry 实际双引擎两精度 16/16，加本轮跨订单 12/12、实时风险回滚 2/2 和完整归档离线重放 496 字段。新修 Margin call order/fill/parent 审计与 live closeTime；旧归档 80 个审计差异保留，不修改旧结果或放宽比较。当前完整默认/高精度输入包可独立重放；无需完整 TV 外部逐 Fill，也不新增盘口流动性模拟或产品导出按钮。后续实际缺陷按新反例登记，不无限追加所有排列。
-- [x] 原 8 已验子项：默认 chart-ohlc、Properties 精度开关、历史低周期回放和明确 fallback；秒级/live 不支持时不能称已应用高精度。
+- [x] 原 8 已验子项：默认 chart-ohlc、Properties 精度开关、历史低周期回放和明确 fallback；秒级或直接 live lower-feed 不支持时不能称已应用高精度，Workspace 高精度请求会走 static replay。
 - [x] 高精度子周期尾部缺根缓存恢复：失败精度校验仅失效本次请求窗口，迟到结果不能删除更新后的缓存；重新启用高精度会重取恢复数据，双引擎独立成交预期及可见 fallback 已验证。1m/5m 的秒级子行情不可用时仍明确回退，不能声称所有周期高精度。
 - [x] 窄屏 Vela 0.7.7 兼容补丁已纳入构建锁、完整 SHA 和指纹；隔离安装/构建通过，升级注意事项见 `docs/forks/vela-viewport.md`。不再将当前集成描述为完全未修改 Vela 产物。
 
@@ -459,7 +459,7 @@ PineTS 全仓套件仍包含依赖 `api.binance.com`/`fapi.binance.com` 的联�
 
 当前范围（2026-10-07）：逐项映射与执行状态见 [需求表的复杂撮合细项](BACKTEST_REQUIREMENTS_STATUS.md#复杂撮合细项原第-8-项不另立一套范围)。本节保留原始技术调研和分阶段记录；完整 TV 外部逐 Fill、真实逐笔/盘口和秒级数据源扩建不作当前关闭条件，不能反过来省略本地复合订单、重算、费用和风控语义。许可证不作为本地自用阶段阻塞。
 
-状态：G8 第一版及 in-process/Worker parity、order/fill audit、默认/高精度开关和历史回放已有证据；复杂撮合组合边界及最终非回归仍为 PARTIAL。高精度 live 当前显式回退，不能写成完整实时高精度已实现。
+状态：G8 第一版及 in-process/Worker parity、order/fill audit、默认/高精度开关和历史回放已有证据；复杂撮合组合边界及最终非回归仍为 PARTIAL。应用 Workspace 中的高精度请求已从 live stream 路径切到 static lower-timeframe replay，不再错误显示 `live-mode-not-supported`；直接调用仍在形成的 live lower-feed 仍按不支持回退，不能写成实时逐 tick 高精度已实现。
 
 优先级：继续以独立预期核对未收口的本地撮合组合；不重复实施已有证据的基础用例。下方旧阶段中的 TV 对账/许可待办按上述当前口径处理，不重入本期队列。
 

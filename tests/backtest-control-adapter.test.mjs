@@ -126,3 +126,26 @@ test('successful Settings mutations notify Vela persistence for the active cell'
     ['stateChanged'],
   ]);
 });
+
+test('precision property restarts a visible live script so the engine can switch modes', () => {
+  const calls = [];
+  const handle = {
+    id: 'strategy-1',
+    nativeType: undefined,
+    visible: true,
+    setProps(values) { calls.push(['props', values]); },
+    setVisible(value) { calls.push(['visible', value]); this.visible = value; },
+  };
+  const workspace = {
+    active: { id: 'cell-1' },
+    cell: () => ({ chart: { indicators: () => [handle] } }),
+    context: () => ({ stateChanged() {} }),
+  };
+  const adapter = new VelaBacktestControlAdapter(workspace);
+  assert.equal(adapter.applySettings(key, {}, { use_bar_magnifier: true }), true);
+  assert.deepEqual(calls, [
+    ['props', { use_bar_magnifier: true }],
+    ['visible', false],
+    ['visible', true],
+  ]);
+});

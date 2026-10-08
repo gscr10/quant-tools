@@ -137,6 +137,7 @@ export class VelaBacktestControlAdapter implements BacktestControlPort {
       const handle = this.getHandle(key);
       if (!handle || handle.nativeType) return false;
       handle.setProps(values);
+      restartPrecisionSession(handle, values);
       this.markStateDirty(key);
       return true;
     } catch {
@@ -156,6 +157,7 @@ export class VelaBacktestControlAdapter implements BacktestControlPort {
         if (Object.keys(inputs).length) handle.setInputs(inputs);
         if (Object.keys(props).length) handle.setProps(props);
       });
+      restartPrecisionSession(handle, props);
       this.markStateDirty(key);
       return true;
     } catch {
@@ -209,6 +211,23 @@ export class VelaBacktestControlAdapter implements BacktestControlPort {
       return null;
     }
   }
+}
+
+/**
+ * Vela's public `setProps` updates an existing live session in place. Toggling
+ * Bar Magnifier changes the required execution mode, so restart the visible
+ * script once after the property write; the engine then selects its static
+ * lower-timeframe path. Hidden scripts have no session and are left alone.
+ */
+function restartPrecisionSession(
+  handle: IndicatorHandle,
+  values: Record<string, number | string | boolean>,
+): void {
+  if (!Object.prototype.hasOwnProperty.call(values, 'use_bar_magnifier')) return;
+  if (values.use_bar_magnifier !== true && values.use_bar_magnifier !== false) return;
+  if (handle.visible !== true || typeof handle.setVisible !== 'function') return;
+  handle.setVisible(false);
+  handle.setVisible(true);
 }
 
 function toSettingSchema(schema: InputSchema): BacktestSettingSchema {

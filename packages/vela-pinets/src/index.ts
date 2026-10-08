@@ -15,7 +15,7 @@ export type {
 } from './pinets/runtime';
 export { LowerTimeframeFetchCache } from './pinets/runtime';
 /** Canonical TradingView Bar Magnifier parent→child mapping used by both engines. */
-export { barMagnifierTimeframe } from './pinets/runtime';
+export { barMagnifierRequested, barMagnifierTimeframe } from './pinets/runtime';
 export {
     AUDIT_LEDGER_CONTEXT_KEY,
     AUDIT_LEDGER_SCHEMA_VERSION,

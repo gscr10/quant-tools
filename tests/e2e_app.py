@@ -307,10 +307,15 @@ def install_fixed_clock(context: BrowserContext) -> None:
 
 def mock_klines(url: str) -> list[list[object]]:
     query = parse_qs(urlparse(url).query)
-    count = min(int(query.get("limit", ["500"])[0]), 500)
+    # Precision regression uses the 1h→5m mapping.  The lower feed therefore
+    # needs the full requested child window (up to the provider's bounded
+    # page), rather than the old 500-row cap which made every magnified run
+    # look like a partial-coverage fallback.
+    count = min(int(query.get("limit", ["500"])[0]), 10_000)
     interval = query.get("interval", ["15m"])[0]
     minutes = {
         "1m": 1,
+        "2m": 2,
         "3m": 3,
         "5m": 5,
         "15m": 15,
@@ -328,6 +333,11 @@ def mock_klines(url: str) -> list[list[object]]:
     default_end = FIXED_BROWSER_NOW_MS
     end = int(query.get("endTime", [str(default_end)])[0])
     end -= end % step
+    # Keep the newest fixture row closed at the pinned browser clock. A live
+    # lower-timeframe candle is intentionally covered by the dedicated
+    # forming-history tests; this workspace flow must prove that complete
+    # child data makes the precision toggle effective.
+    end = min(end, FIXED_BROWSER_NOW_MS - step)
     # Binance treats startTime/endTime as inclusive bounds.  The previous
     # fixture only honored endTime, so a Vela page request with both bounds
     # returned rows from before startTime and the provider boundary quite
@@ -2390,6 +2400,18 @@ def verify_backtest_workspace(
         "document.querySelector('.quant-backtest-dock-range')"
         "?.dataset.executionPrecision?.startsWith('LTF')"
     )
+    # A requested precision run must publish an applied lower-timeframe
+    # envelope. The old live path only showed `LTF → OHLC · 0% · live mode
+    # unsupported`, which made the toggle cosmetic.
+    assert page.evaluate(
+        "document.querySelector('.quant-backtest-dock-range')?.dataset.executionPrecision"
+    ).startswith('LTF → LTF')
+    assert page.evaluate(
+        "document.querySelector('.quant-backtest-dock-range')?.dataset.executionFallback"
+    ) == 'false'
+    assert page.evaluate(
+        "document.querySelector('.quant-backtest-dock-range')?.dataset.executionFallbackReason"
+    ) != 'live-mode-not-supported'
 
     # Reopening reads the applied Vela Property rather than a parallel UI
     # preference. Restore the default so the remainder of this regression

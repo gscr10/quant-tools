@@ -313,6 +313,13 @@ ctx.addEventListener('message', (event) => {
                 if (!s.deferred) tryStartStream(s); // re-stream with the merged inputs/props baked in
                 return;
             }
+            // Only the precision property changes the lower-feed contract.
+            // Ordinary input updates should retain a fulfilled window so a
+            // strategy edit does not trigger a second identical provider
+            // request; toggling the magnifier must still force a fresh run.
+            if (Object.prototype.hasOwnProperty.call(msg.props ?? {}, 'use_bar_magnifier')) {
+                s.lowerTimeframeFetchCache.clear();
+            }
             if (s.deferred) post({ kind: 'done', sessionId: s.id }); // merged; the deferred first run picks it up
             else enqueueRun(s);
             return;
