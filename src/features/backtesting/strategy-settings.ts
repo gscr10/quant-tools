@@ -423,18 +423,16 @@ export class StrategySettingsPanel {
   }
 
   private observeLayout(): void {
-    // The reference Settings dialog is centred above the summary Dock. The
-    // backdrop still covers the whole Workbench so focus/pointer ownership
-    // stays modal. Read only our own Dock, without private Vela geometry.
+    // Settings is a modal surface over the whole Workbench. Keep layout
+    // observation scoped to our own elements; the Dock remains behind the
+    // backdrop and never reserves space inside the dialog.
     const dock = this.element.parentElement?.querySelector<HTMLElement>('.quant-backtest-dock');
     const update = (): void => {
       if (!this.isOpen || this.destroyed) return;
-      const bounds = this.element.getBoundingClientRect();
-      const dockBounds = dock?.getBoundingClientRect();
-      const inset = dockBounds && dockBounds.width > 0 && dockBounds.height > 0
-        ? Math.min(bounds.height, Math.max(0, bounds.bottom - dockBounds.top))
-        : 0;
-      const value = `${inset}px`;
+      // Settings is a modal surface. The Dock remains visually behind the
+      // backdrop and must not reduce the dialog's usable height; otherwise a
+      // 720px chart leaves only ~360px for a long Properties form.
+      const value = '0px';
       if (this.element.style.getPropertyValue('--quant-backtest-settings-dock-inset') !== value) {
         this.element.style.setProperty('--quant-backtest-settings-dock-inset', value);
       }
@@ -444,7 +442,7 @@ export class StrategySettingsPanel {
     if (!this.layoutObserver && typeof ResizeObserver !== 'undefined') {
       // Updating the observed element's padding inside delivery causes a
       // ResizeObserver loop error. Coalesce layout writes into the next frame;
-      // the initial open still positions synchronously above the Dock.
+      // the initial open still positions synchronously.
       this.layoutObserver = new ResizeObserver(() => {
         if (this.layoutFrame !== null || !this.isOpen) return;
         this.layoutFrame = this.element.ownerDocument.defaultView!.requestAnimationFrame(() => {

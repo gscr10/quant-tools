@@ -1,5 +1,7 @@
 # TODO
 
+> 2026-10-08 新增需求：独立回测时间窗口（1/3/6 个月、1 年、自选日期）和 Settings 尺寸优化。以[需求状态表首节](BACKTEST_REQUIREMENTS_STATUS.md)为准：真正补齐日期行情后重新执行，保留左上周期，默认 2,000 根可恢复，包含高精度、旧响应、缺历史/缺根、跨策略/Cell 和重试回归。既有暂缓范围不变；本次未 commit/push。
+
 > **当前状态（2026-10-07）**：需求表纳入本阶段的本地功能、数据、回测、桌面 Workspace、构建和回归门禁均已完成。实体桌面 VoiceOver、手机、Safari、GitHub CI、线上部署/CDN/rollback、Replay 按已确认范围暂缓；长期脚本持久化待讨论；其它策略/品种/窗口 golden 和完整 TradingView 外部逐 Fill 对账不属于本阶段关闭条件。历史章节只用于追溯，当前判断以 [BACKTEST_REQUIREMENTS_STATUS.md](BACKTEST_REQUIREMENTS_STATUS.md) 为准。
 
 > 最新对齐批次（2026-10-07）：共享Tab滚动196/196、Simulation挂载生命周期216/216、极小轴8个实际图表28标签、Adapter脚本错误双引擎64项、旧Workspace恢复两浏览器三阶段、故障隔离198项和K线连续性31项通过；根653/653、Adapter32/32、相关Controller/History121/121通过。类型、构建、生产主E2E和工程门禁已通过。其他未关闭项以需求表为准；GitHub CI 按当前决定暂缓，不作为本阶段阻塞；手机/Safari/线上/Replay继续暂缓。

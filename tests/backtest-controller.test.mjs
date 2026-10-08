@@ -187,6 +187,78 @@ function snapshot(indicatorId, overrides = {}) {
   };
 }
 
+test('window replacement gates all strategies in the cell and preserves another cell', async () => {
+  const one = snapshot('window-one', { seriesState: 'ready' });
+  const two = snapshot('window-two', { seriesState: 'ready' });
+  const other = snapshot('other', { key: { cellId: 'cell-2', indicatorId: 'other' }, seriesState: 'ready' });
+  const source = new FakeSource([one, two, other]);
+  const controller = new BacktestController(source);
+  await controller.start();
+  controller.setBacktestWindow(one.key, { preset: 'custom', from: 100, to: 3_000 });
+  for (const key of [one.key, two.key]) {
+    assert.equal(controller.getReport(key).status, 'computing');
+    assert.equal(controller.getReport(key).capabilities.canSimulate, false);
+    assert.deepEqual(controller.getReport(key).trades, []);
+    assert.equal(controller.getBacktestWindow(key).from, 100);
+  }
+  assert.equal(controller.getReport(other.key).status, 'ready');
+  // A live update may have a higher revision while the provider fetch is
+  // pending; it still belongs to the old dataset.
+  source.emit({ type: 'snapshot', snapshot: snapshot('window-one', { revision: 8, seriesState: 'ready' }) });
+  assert.equal(controller.getReport(one.key).status, 'computing');
+  controller.commitBacktestWindowForCell('cell-1');
+  source.emit({ type: 'snapshot', snapshot: snapshot('window-one', { revision: 9, epoch: 1, seriesState: 'ready' }) });
+  assert.equal(controller.getReport(one.key).status, 'computing', 'new epoch alone cannot revive the old run');
+  source.emit({ type: 'snapshot', snapshot: snapshot('window-one', { revision: 10, epoch: 1, runToken: 'fresh-window', seriesState: 'ready' }) });
+  assert.equal(controller.getReport(one.key).status, 'ready');
+  assert.equal(controller.getReport(one.key).window.from, 100);
+  assert.equal(controller.getReport(one.key).metrics.netProfit, 10, 'fresh engine arithmetic is retained unchanged');
+  const added = snapshot('window-new', { seriesState: 'ready', runToken: 'new-strategy' });
+  source.emit({ type: 'snapshot', snapshot: added });
+  assert.equal(controller.getReport(added.key).window.from, 100, 'late-added strategies share the chart window');
+  controller.destroy();
+});
+
+test('failed window fetch cannot be overwritten by old live success or error and can retry', async () => {
+  const initial = snapshot('failed-window', { seriesState: 'ready' });
+  const source = new FakeSource([initial]);
+  const controller = new BacktestController(source);
+  await controller.start();
+  controller.setBacktestWindow(initial.key, { preset: '1M' });
+  const selected = controller.getBacktestWindow(initial.key);
+  controller.failBacktestWindowForCell('cell-1', new Error('HTTP 503'));
+  source.emit({ type: 'snapshot', snapshot: snapshot('failed-window', { revision: 4, seriesState: 'ready' }) });
+  source.emit({ type: 'error', key: initial.key, epoch: 0, revision: 5, error: new Error('old error') });
+  assert.equal(controller.getReport(initial.key).error, 'HTTP 503');
+  assert.equal(controller.backtestWindowNeedsRetry('cell-1'), true);
+  controller.beginBacktestWindowLoadForCell('cell-1');
+  controller.commitBacktestWindowForCell('cell-1');
+  source.emit({ type: 'snapshot', snapshot: snapshot('failed-window', { revision: 6, epoch: 1, runToken: 'retry-window', seriesState: 'ready' }) });
+  assert.equal(controller.getReport(initial.key).status, 'ready');
+  assert.deepEqual(controller.getReport(initial.key).window, selected, 'Retry keeps the original click-time bounds');
+  assert.equal(controller.backtestWindowNeedsRetry('cell-1'), false);
+  controller.destroy();
+});
+
+test('strategies added while a window is loading cannot expose the previous dataset', async () => {
+  const initial = snapshot('present', { seriesState: 'ready' });
+  const source = new FakeSource([initial]);
+  const controller = new BacktestController(source);
+  await controller.start();
+  controller.setBacktestWindow(initial.key, { preset: 'custom', from: 100, to: 3_000 });
+  const added = snapshot('added-during-fetch', { seriesState: 'ready' });
+  source.emit({ type: 'snapshot', snapshot: added });
+  assert.equal(controller.getReport(added.key).status, 'computing');
+  assert.equal(controller.getReport(added.key).capabilities.canSimulate, false);
+  controller.commitBacktestWindowForCell('cell-1');
+  source.emit({ type: 'snapshot', snapshot: snapshot('added-during-fetch', { epoch: 1, revision: 2, seriesState: 'ready', runToken: 'fresh-added' }) });
+  assert.equal(controller.getReport(added.key).status, 'ready');
+  controller.setBacktestWindow(initial.key, { preset: 'default' });
+  assert.equal(controller.getReport(added.key).window, undefined);
+  assert.equal(controller.getReport(added.key).status, 'computing');
+  controller.destroy();
+});
+
 test('maps one Vela snapshot to an immutable UI report with explicit capabilities', () => {
   const report = mapSnapshot(snapshot('s1'), {
     getMarket: () => ({ provider: 'binance', symbol: 'BTCUSDT', timeframe: '1h', currency: 'USD' }),

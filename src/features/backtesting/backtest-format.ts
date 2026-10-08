@@ -160,8 +160,12 @@ function parseReportDate(value: number | string | null | undefined): Date | null
 
 /** Format the activity label identically in the summary Dock and full Viewer.
  * Keep the loaded report range available to history/navigation consumers. */
-export function formatBacktestRange(report: Pick<BacktestReport, 'range' | 'activityRange'>): string {
-  const range = report.activityRange === undefined ? report.range : report.activityRange;
+export function formatBacktestRange(report: Pick<BacktestReport, 'range' | 'activityRange' | 'window'>): string {
+  // An explicit calculation window is the user's requested report boundary,
+  // even when its first/last trade occurred well inside it (or no trades ran).
+  const range = report.window
+    ? { from: report.window.from, to: report.window.to }
+    : report.activityRange === undefined ? report.range : report.activityRange;
   if (range?.label) return range.label;
   const from = parseReportDate(range?.from);
   const to = parseReportDate(range?.to);

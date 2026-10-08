@@ -41,6 +41,9 @@ test('Dock and Viewer display activity dates while preserving legacy host ranges
   const activityRange = { from: Date.UTC(2025, 11, 31, 23), to: Date.UTC(2026, 0, 1, 1) };
   assert.equal(formatBacktestRange({ range, activityRange }), 'Dec 31, 2025 - Jan 1, 2026');
   assert.equal(formatBacktestRange({ range, activityRange: null }), '');
+  assert.equal(formatBacktestRange({ range, activityRange: null,
+    window: { preset: 'custom', label: 'Custom dates', from: Date.UTC(2026, 0, 1), to: Date.UTC(2026, 0, 31) } }),
+  'Jan 1 - Jan 31, 2026', 'a selected calculation window remains visible without closed activity');
   assert.equal(formatBacktestRange({ range }), 'Dec 1, 2025 - Jan 3, 2026');
   const oneExit = Date.UTC(2026, 0, 2);
   assert.equal(formatBacktestRange({ range, activityRange: { from: oneExit, to: oneExit } }), 'Jan 2 - Jan 2, 2026');

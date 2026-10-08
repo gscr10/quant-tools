@@ -2765,10 +2765,6 @@ def verify_backtest_workspace(
         # source-only contract tests cannot hide a wiring or CSS regression.
         trade_table = viewer.locator(".quant-backtest-trade-table")
         assert trade_table.count() == 1
-        headers = [
-            value.strip()
-            for value in trade_table.locator("thead th").all_text_contents()
-        ]
         # A live report can replace the table between the view-mode click and
         # the first DOM read.  Wait for the complete sortable header row before
         # comparing the snapshot; otherwise one read can observe the outgoing
@@ -2783,10 +2779,15 @@ def verify_backtest_workspace(
               return headers.length > 0 && buttons.length === headers.length;
             }"""
         )
-        headers = [
-            value.strip()
-            for value in trade_table.locator("thead th").all_text_contents()
-        ]
+        # Read all header facts in one browser task. Separate Playwright RPCs
+        # can otherwise compare the old table's labels with its replacement's
+        # button count, even after the readiness check above has passed.
+        header_snapshot = trade_table.evaluate("""table => ({
+            labels: [...table.querySelectorAll('thead th')].map(node => node.textContent.trim()),
+            buttons: table.querySelectorAll('thead button').length,
+            sort: table.querySelector('thead th')?.getAttribute('aria-sort'),
+        })""")
+        headers = header_snapshot["labels"]
         assert headers[0:3] == ["Trade #", "Entry", "Exit"], headers
         assert headers[-1] == "Cumulative P&L", headers
         expected_headers = ["Trade #", "Entry", "Exit"]
@@ -2798,8 +2799,8 @@ def verify_backtest_workspace(
             expected_headers.extend(["MFE", "MAE"])
         expected_headers.append("Cumulative P&L")
         assert headers == expected_headers, headers
-        assert trade_table.locator("thead button").count() == len(headers)
-        assert trade_table.locator("thead th").first.get_attribute("aria-sort") == "descending"
+        assert header_snapshot["buttons"] == len(headers), header_snapshot
+        assert header_snapshot["sort"] == "descending", header_snapshot
 
         entry_sort = trade_table.locator("thead button", has_text="Entry")
         entry_sort.click()

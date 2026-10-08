@@ -11,11 +11,15 @@ export function isOnlineHistoryReload(chart: Vela): boolean {
  * Retry call as online; arbitrary setMarket({data:[]}) remains an inline EMPTY
  * contract for the timeframe/gesture policy. The mark is synchronous and does
  * not leak across pending loads, other cells, exceptions or later calls. */
-export function reloadOnlineHistory(chart: Vela, bars: number): Promise<void> {
+export function reloadOnlineHistory(
+  chart: Vela,
+  bars: number,
+  market: Pick<Parameters<Vela['setMarket']>[0], 'symbol' | 'timeframe' | 'session'> = {},
+): Promise<void> {
   const nested = onlineReloads.has(chart);
   onlineReloads.add(chart);
   try {
-    return chart.setMarket({ bars, data: [] });
+    return chart.setMarket({ ...market, bars, data: [] });
   } finally {
     if (!nested) onlineReloads.delete(chart);
   }

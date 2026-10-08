@@ -33,6 +33,10 @@ import {
   type BacktestStatus as DomainBacktestStatus,
   type Trade,
 } from '../domain/backtesting.ts';
+import {
+  resolveBacktestWindow,
+  type BacktestResolvedWindow,
+} from '../domain/backtest-window.ts';
 import type {
   BacktestSettingSchema,
   BacktestSettingsSnapshot,
@@ -52,6 +56,7 @@ import type {
   BacktestStatus as UiBacktestStatus,
   BacktestTrade,
   BacktestErrorDetails,
+  BacktestWindowSelection,
 } from '../features/backtesting/backtest-types.ts';
 import {
   BacktestStore,
@@ -236,6 +241,16 @@ export class BacktestController {
   private startPromise: Promise<void> | null = null;
   private readonly simulationCache: SimulationCache = new Map();
   private readonly simulationSettings = new Map<string, BacktestSimulationChange>();
+  /** Last accepted engine envelope; window changes are metadata on fresh runs. */
+  private readonly latestSnapshots = new Map<string, BacktestAdapterSnapshot>();
+  private readonly backtestWindows = new Map<string, BacktestResolvedWindow>();
+  private readonly cellWindowLoads = new Map<string, { phase: 'loading' | 'executing' | 'failed'; error?: string }>();
+  private readonly pendingBacktestWindows = new Map<string, {
+    epoch: number;
+    revision: number;
+    runId: string | null;
+    phase: 'loading' | 'executing' | 'failed';
+  }>();
   private readonly simulationWorker: BacktestSimulationTaskRunner | null;
   private readonly ownsSimulationWorker: boolean;
   private readonly simulationWorkerThreshold: number;
@@ -391,6 +406,140 @@ export class BacktestController {
 
   getReport(key: BacktestAdapterKey): UiBacktestReport | null {
     return this.store.getReport(key);
+  }
+
+  getBacktestWindow(key: BacktestAdapterKey): BacktestWindowSelection {
+    return this.backtestWindows.get(key.cellId) ?? { preset: 'default' };
+  }
+
+  /** Selecting a window replaces the dataset for every strategy in this cell. */
+  setBacktestWindow(key: BacktestAdapterKey, selection: BacktestWindowSelection): UiBacktestReport | null {
+    if (this.destroyed) return null;
+    const resolved = resolveBacktestWindow(selection);
+    if (resolved) this.backtestWindows.set(key.cellId, resolved);
+    else this.backtestWindows.delete(key.cellId);
+    this.beginBacktestWindowLoadForCell(key.cellId);
+    return this.store.getReport(key);
+  }
+
+  private publishWindowUnavailable(key: BacktestAdapterKey, error?: string): void {
+    const previous = this.store.get(key);
+    const snapshot = this.latestSnapshots.get(keyOf(key));
+    if (!previous && !snapshot) return;
+    const mapped = previous?.report ?? this.errorReport(key, '', snapshot!.revision);
+    const domain = createBacktestReport({ key, revision: previous?.revision ?? snapshot!.revision,
+      runId: previous?.domain.runId ?? snapshot?.runToken ?? '', title: mapped.strategyName,
+      status: error ? 'error' : 'computing', finality: 'unknown',
+      window: this.backtestWindows.get(key.cellId), settings: previous?.domain.settings,
+      error: error ? { message: error } : null });
+    const report = freezeUiReport({
+      ...mapped,
+      status: error ? 'error' : 'computing',
+      window: domain.window,
+      error,
+      errorDetails: error ? { message: error, kind: 'provider', retryable: true } : undefined,
+      activityRange: null,
+      range: undefined,
+      history: undefined,
+      execution: undefined,
+      metrics: {
+        netProfit: unavailable('currency', 'partial-ledger'),
+        trades: unavailable('count', 'partial-ledger'),
+      },
+      summary: undefined,
+      comparison: undefined,
+      analysis: undefined,
+      trades: [],
+      cumulativePnl: [],
+      netDailyPnl: [],
+      weekdayPerformance: [],
+      equity: [],
+      simulation: undefined,
+      simulationRun: undefined,
+      simulationWarning: undefined,
+      cumulativePnlSource: undefined,
+      capabilities: { ...mapped.capabilities, canSimulate: false, canLocateTrades: false },
+    });
+    this.cancelPendingSimulation(key);
+    this.store.upsert(key, domain, report, previous?.epoch ?? snapshot!.epoch, domain.revision);
+  }
+
+  /** Surface a provider/window load failure instead of leaving the Dock in a
+   * permanent computing state. The selected window remains stored so the user
+   * can retry it from the same control after connectivity recovers. */
+  failBacktestWindow(key: BacktestAdapterKey, error: unknown): UiBacktestReport | null {
+    this.failBacktestWindowForCell(key.cellId, error);
+    return this.store.getReport(key);
+  }
+
+  failBacktestWindowForCell(cellId: string, error: unknown): void {
+    if (this.destroyed) return;
+    const message = (error instanceof Error ? error.message : String(error)) || 'Backtest window could not be loaded.';
+    this.cellWindowLoads.set(cellId, { phase: 'failed', error: message });
+    for (const entry of this.store.list()) {
+      if (entry.key.cellId === cellId) this.publishWindowUnavailable(entry.key, message);
+    }
+  }
+
+  backtestWindowNeedsRetry(cellId: string): boolean {
+    return this.cellWindowLoads.get(cellId)?.phase === 'failed';
+  }
+
+  /** Called by the market loader before it starts fetching a new dataset. */
+  beginBacktestWindowLoad(key: BacktestAdapterKey): void {
+    const id = keyOf(key);
+    const snapshot = this.latestSnapshots.get(id);
+    this.pendingBacktestWindows.set(id, {
+      epoch: snapshot?.epoch ?? this.store.get(key)?.epoch ?? 0,
+      revision: snapshot?.revision ?? this.store.get(key)?.revision ?? 0,
+      runId: snapshot?.runToken ?? this.store.get(key)?.domain.runId ?? null,
+      phase: 'loading',
+    });
+    this.publishWindowUnavailable(key);
+  }
+
+  /** Apply the gate to every strategy in a chart cell. Topbar market/timeframe
+   * changes rerun all strategies even when the Dock selection did not change. */
+  beginBacktestWindowLoadForCell(cellId: string): void {
+    if (this.destroyed) return;
+    this.cellWindowLoads.set(cellId, { phase: 'loading' });
+    for (const entry of this.store.list()) {
+      if (entry.key.cellId === cellId) this.beginBacktestWindowLoad(entry.key);
+    }
+  }
+
+  /** Called synchronously immediately before Vela receives the new candles. */
+  commitBacktestWindow(key: BacktestAdapterKey): void {
+    const id = keyOf(key);
+    const current = this.pendingBacktestWindows.get(id);
+    const snapshot = this.latestSnapshots.get(id);
+    if (!current) {
+      this.beginBacktestWindowLoad(key);
+      return this.commitBacktestWindow(key);
+    }
+    this.pendingBacktestWindows.set(id, {
+      ...current,
+      epoch: snapshot?.epoch ?? current.epoch,
+      revision: snapshot?.revision ?? current.revision,
+      runId: snapshot?.runToken ?? current.runId,
+      phase: 'executing',
+    });
+  }
+
+  commitBacktestWindowForCell(cellId: string): void {
+    if (this.destroyed) return;
+    this.cellWindowLoads.set(cellId, { phase: 'executing' });
+    for (const entry of this.store.list()) {
+      if (entry.key.cellId === cellId) this.commitBacktestWindow(entry.key);
+    }
+  }
+
+  clearBacktestWindowCell(cellId: string): void {
+    this.backtestWindows.delete(cellId);
+    this.cellWindowLoads.delete(cellId);
+    for (const [id, snapshot] of this.latestSnapshots) {
+      if (snapshot.key.cellId === cellId) this.pendingBacktestWindows.delete(id);
+    }
   }
 
   /** Select the first live strategy in a chart cell, preserving revision order. */
@@ -721,6 +870,10 @@ export class BacktestController {
     this.sourceSubscribed = false;
     this.simulationCache.clear();
     this.simulationSettings.clear();
+    this.latestSnapshots.clear();
+    this.backtestWindows.clear();
+    this.cellWindowLoads.clear();
+    this.pendingBacktestWindows.clear();
     this.invalidSettings.clear();
     this.latestSettingsIdentity.clear();
     if (this.ownsSimulationWorker) {
@@ -767,6 +920,8 @@ export class BacktestController {
       this.simulationCache.delete(keyOf(event.key));
       this.simulationSettings.delete(keyOf(event.key));
       if (this.store.remove(event.key)) {
+        this.latestSnapshots.delete(keyOf(event.key));
+        this.pendingBacktestWindows.delete(keyOf(event.key));
         this.store.ensureActive();
         this.resumeActiveSimulation();
       }
@@ -777,6 +932,7 @@ export class BacktestController {
     // surfacing an explicit error if no report exists yet.
     if (event.type === 'error') {
       const key = event.key;
+      if (this.suppressPendingBacktestWindow(key, event.epoch, event.revision)) return;
       if (this.invalidSettings.has(keyOf(key))) {
         this.publishSettingsInvalid(key, event.epoch, event.revision);
         return;
@@ -818,8 +974,48 @@ export class BacktestController {
     }
   }
 
+  private suppressPendingBacktestWindow(key: BacktestAdapterKey, epoch: number, revision: number): boolean {
+    const cell = this.cellWindowLoads.get(key.cellId);
+    if (cell && cell.phase !== 'executing') return true;
+    const id = keyOf(key);
+    const pending = this.pendingBacktestWindows.get(id);
+    if (!pending) return false;
+    // Any envelope from the old run is suppressed, including a higher
+    // revision emitted while Vela is still painting the previous dataset.
+    // Only a settled ledger with a new epoch/run identity can open the gate.
+    const latest = this.latestSnapshots.get(id);
+    const fresh = epoch > pending.epoch
+      || (latest?.runToken != null && latest.runToken !== pending.runId);
+    return pending.phase !== 'executing' || epoch < pending.epoch
+      || (epoch === pending.epoch && revision <= pending.revision) || !fresh;
+  }
+
   private acceptSnapshot(snapshot: BacktestAdapterSnapshot): void {
     const settingsId = keyOf(snapshot.key);
+    const observed = this.latestSnapshots.get(settingsId);
+    if (observed && (snapshot.epoch < observed.epoch
+      || (snapshot.epoch === observed.epoch && snapshot.revision < observed.revision))) return;
+    this.latestSnapshots.set(settingsId, snapshot);
+    const cellLoad = this.cellWindowLoads.get(snapshot.key.cellId);
+    if (cellLoad && cellLoad.phase !== 'executing') {
+      if (!this.pendingBacktestWindows.has(settingsId)) this.beginBacktestWindowLoad(snapshot.key);
+      this.publishWindowUnavailable(snapshot.key, cellLoad.error);
+      return;
+    }
+    const pendingWindow = this.pendingBacktestWindows.get(settingsId);
+    if (pendingWindow) {
+      const identityChanged = snapshot.runToken != null && snapshot.runToken !== pendingWindow.runId;
+      const settled = snapshot.seriesState === 'ready'
+        && snapshot.ledgerState === 'ready'
+        && snapshot.ledgerRevision === snapshot.revision
+        && (snapshot.status === 'ready' || snapshot.status === 'no-trades' || snapshot.status === 'open-only')
+        && isSettledFinality(snapshot.finality);
+      const terminalWithoutLedger = snapshot.status === 'no-data' && snapshot.epoch > pendingWindow.epoch;
+      const currentFailure = snapshot.status === 'error' && snapshot.epoch > pendingWindow.epoch;
+      if (!(pendingWindow.phase === 'executing'
+        && ((identityChanged && settled) || terminalWithoutLedger || currentFailure))) return;
+      this.pendingBacktestWindows.delete(settingsId);
+    }
     const identity = { runId: snapshot.reportSeries?.runId ?? snapshot.auditLedger?.runId ?? null,
       epoch: snapshot.epoch, revision: snapshot.revision };
     const latest = this.latestSettingsIdentity.get(settingsId);
@@ -855,8 +1051,10 @@ export class BacktestController {
       }
       this.invalidSettings.delete(settingsId);
     }
+    this.latestSnapshots.set(settingsId, snapshot);
     const domain = mapSnapshotDomain(snapshot, {
       getMarket: this.options.getMarket,
+      backtestWindow: this.backtestWindows.get(snapshot.key.cellId),
     });
     const id = keyOf(snapshot.key);
     const requestedChange = this.simulationSettings.get(id);
@@ -987,6 +1185,7 @@ function isSettledFinality(finality: string | undefined): boolean {
 interface MappingOptions {
   readonly getMarket?: (key: BacktestAdapterKey) => BacktestMarketIdentity | undefined;
   readonly isFavorite?: (key: BacktestAdapterKey) => boolean;
+  readonly backtestWindow?: BacktestResolvedWindow;
 }
 
 export function mapSnapshot(
@@ -1000,7 +1199,7 @@ export function mapSnapshot(
 /** Provider-neutral domain mapping exported for Store/selector tests. */
 export function mapSnapshotDomain(
   snapshot: BacktestAdapterSnapshot,
-  options: Pick<MappingOptions, 'getMarket'> = {},
+  options: Pick<MappingOptions, 'getMarket' | 'backtestWindow'> = {},
 ): DomainBacktestReport {
   const baseContext = toDomainContext(options.getMarket?.(snapshot.key));
   const context = baseContext && !baseContext.range
@@ -1037,6 +1236,7 @@ export function mapSnapshotDomain(
     finality: snapshot.finality,
     forming: snapshot.run?.forming,
     context,
+    window: options.backtestWindow,
     settings: toSettingsSnapshot(snapshot),
     execution: toExecutionSnapshot(snapshot),
     history: historyCoverageOf(snapshot),
@@ -1131,6 +1331,9 @@ export function mapSnapshotDomain(
       ? (snapshot.errorDetails ?? backtestAdapterErrorOf(snapshot.error))
       : null,
   });
+  // A selected window describes the bounded dataset that the engine ran. It
+  // is metadata only; ledger, account and curves must always come from that
+  // fresh engine snapshot rather than being projected from an older report.
   return domain;
 }
 
@@ -1450,6 +1653,7 @@ function domainToUiReport(
       : undefined,
     metrics,
     summary: summaryUi,
+    window: domain.window,
     comparison,
     analysis: analysisUi,
     equity: hasExactEquityCurve

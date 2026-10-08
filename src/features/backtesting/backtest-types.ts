@@ -12,6 +12,12 @@ import type {
 } from '../../domain/ports/backtest-settings.ts';
 import type { BacktestExecutionSnapshot } from '../../domain/ports/backtest-results.ts';
 import type { BacktestDockPreferences } from '../../domain/ports/backtest-preferences.ts';
+import type {
+  BacktestResolvedWindow,
+  BacktestWindowSelection,
+} from '../../domain/ports/backtest-window.ts';
+
+export type { BacktestResolvedWindow, BacktestWindowPreset, BacktestWindowSelection } from '../../domain/ports/backtest-window.ts';
 
 export type {
   BacktestSettingCondition,
@@ -295,6 +301,8 @@ export interface BacktestReport {
   source?: string;
   status?: BacktestStatus;
   range?: BacktestRange;
+  /** The independent calculation window selected in the Dock. */
+  window?: BacktestResolvedWindow;
   /** Closed-trade activity shown in Dock/Viewer; does not narrow loaded history.
    * null hides the label when the accepted ledger has no closed activity.
    * undefined preserves the range fallback for older host integrations. */
@@ -359,6 +367,9 @@ export interface BacktestWorkbenchPort {
   /** Simulation controls are local to one mounted report tab, not workspace preferences. */
   onSimulationSessionEnd?: (key: NonNullable<BacktestReport['key']>) => void;
   onRetry?: () => void;
+  /** Read and change the calculation window without changing chart timeframe. */
+  getBacktestWindow?: (report: BacktestReport) => BacktestWindowSelection;
+  onBacktestWindowChange?: (report: BacktestReport, window: BacktestWindowSelection) => void;
   /** Read and commit the selected strategy's Inputs/Properties settings. */
   settings?: BacktestSettingsPort;
 }

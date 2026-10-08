@@ -14,9 +14,8 @@ import { errorFromWorker, serializeWorkerError } from './error-envelope';
 import {
     barMagnifierRequested,
     materializeBarMagnifierRequest,
-    type PropsFilter,
-    type PineExecutionRequest,
-} from '../pinets/runtime';
+} from '../pinets/bar-magnifier-request';
+import type { PropsFilter, PineExecutionRequest } from '../pinets/runtime';
 import workerCode from 'inline-worker:./worker.ts';
 import { updatePineSettings } from '../pinets/settingsBatch';
 import { hasCurrentBuildSentinel, PINE_EXECUTION_BUILD_INFO } from '../build-info';

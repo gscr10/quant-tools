@@ -24,6 +24,7 @@ import {
   type BacktestTrade,
   type BacktestWorkbenchOptions,
   type BacktestWorkbenchPort,
+  type BacktestWindowSelection,
 } from './backtest-types.ts';
 import type { BacktestDockPreferences } from '../../domain/ports/backtest-preferences.ts';
 import type { SettingsControlsPort } from '../../shared/settings-controls.ts';
@@ -41,6 +42,7 @@ const CHART_HIDDEN_BELOW = 190;
 const AXES_HIDDEN_BELOW = 230;
 /** Bound SVG/Highcharts work while retaining the complete tooltip source. */
 const MAX_DOCK_RENDER_POINTS = 2_000;
+let backtestWindowMenuId = 0;
 
 function resolveRoot(root: HTMLElement | string): HTMLElement {
   if (typeof root !== 'string') return root;
@@ -194,6 +196,7 @@ function reportSurfaceSignature(report: BacktestReport | null): string {
     strategyName: report.strategyName,
     status: ['compiling', 'computing', 'updating'].includes(report.status ?? '') ? 'live' : report.status,
     range: report.range,
+    window: report.window,
     currency: report.currency,
     symbol: report.symbol,
     timeframe: report.timeframe,
@@ -225,6 +228,11 @@ export class BacktestWorkbench {
   private readonly dockBody: HTMLElement;
   private readonly dockTitle: HTMLElement;
   private readonly dockRange: HTMLElement;
+  private readonly windowButton: HTMLButtonElement;
+  private readonly windowMenu: HTMLElement;
+  private readonly windowFromInput: HTMLInputElement;
+  private readonly windowToInput: HTMLInputElement;
+  private readonly windowError: HTMLElement;
   private readonly collapsedNet: HTMLElement;
   private readonly dockMetrics: HTMLElement;
   private readonly collapseButton: HTMLButtonElement;
@@ -251,6 +259,8 @@ export class BacktestWorkbench {
   private simulationMounted = false;
   private simulationSessionKey: BacktestReport['key'];
   private destroyed = false;
+  private windowMenuCleanup: (() => void) | null = null;
+  private windowDraftDirty = false;
 
   constructor(root: HTMLElement | string, options: BacktestWorkbenchRuntimeOptions = {}) {
     const host = resolveRoot(root);
@@ -304,7 +314,118 @@ export class BacktestWorkbench {
     this.dockTitle = element(doc, 'strong', 'quant-backtest-dock-title');
     this.dockRange = element(doc, 'span', 'quant-backtest-dock-range');
     this.collapsedNet = element(doc, 'span', 'quant-backtest-dock-collapsed-net');
-    identity.append(this.dockTitle, this.dockRange, this.collapsedNet);
+    this.windowButton = button(doc, 'Default · 2,000 bars', 'quant-backtest-window-button');
+    this.windowButton.setAttribute('aria-haspopup', 'menu');
+    this.windowButton.setAttribute('aria-expanded', 'false');
+    this.windowButton.setAttribute('aria-label', 'Backtest calculation window');
+    this.windowButton.title = 'Backtest calculation window';
+    identity.append(this.dockTitle, this.dockRange, this.windowButton, this.collapsedNet);
+
+    this.windowMenu = element(doc, 'div', 'quant-backtest-window-menu');
+    this.windowMenu.setAttribute('role', 'menu');
+    this.windowMenu.hidden = true;
+    const menuOptions: Array<[string, BacktestWindowSelection]> = [
+      ['Default · 2,000 bars', { preset: 'default' }],
+      ['1 month', { preset: '1M' }],
+      ['3 months', { preset: '3M' }],
+      ['6 months', { preset: '6M' }],
+      ['1 year', { preset: '1Y' }],
+    ];
+    menuOptions.forEach(([label, selection]) => {
+      const option = button(doc, label, 'quant-backtest-window-option');
+      option.setAttribute('role', 'menuitemradio');
+      option.dataset.windowPreset = selection.preset;
+      option.addEventListener('click', () => this.selectBacktestWindow(selection));
+      this.windowMenu.appendChild(option);
+    });
+    const custom = element(doc, 'div', 'quant-backtest-window-custom');
+    const customLabel = element(doc, 'span', 'quant-backtest-window-custom-title');
+    customLabel.textContent = 'Custom dates (UTC)';
+    this.windowFromInput = doc.createElement('input');
+    this.windowFromInput.type = 'date';
+    this.windowFromInput.setAttribute('aria-label', 'Backtest start date');
+    this.windowToInput = doc.createElement('input');
+    this.windowToInput.type = 'date';
+    this.windowToInput.setAttribute('aria-label', 'Backtest end date');
+    const customApply = button(doc, 'Apply', 'quant-backtest-window-apply');
+    const customError = element(doc, 'span', 'quant-backtest-window-error');
+    this.windowError = customError;
+    customError.id = `quant-backtest-window-error-${++backtestWindowMenuId}`;
+    customError.setAttribute('role', 'alert');
+    customError.textContent = 'Choose a valid start and end date. Start must be before now.';
+    customError.hidden = true;
+    this.windowFromInput.setAttribute('aria-describedby', customError.id);
+    this.windowToInput.setAttribute('aria-describedby', customError.id);
+    const dateHint = element(doc, 'span', 'quant-backtest-window-hint');
+    dateHint.id = `${customError.id}-hint`;
+    dateHint.textContent = 'UTC dates. Uses closed candles inside the selected range. Future end dates stop at now.';
+    this.windowFromInput.setAttribute('aria-describedby', `${dateHint.id} ${customError.id}`);
+    this.windowToInput.setAttribute('aria-describedby', `${dateHint.id} ${customError.id}`);
+    for (const input of [this.windowFromInput, this.windowToInput]) {
+      input.addEventListener('input', () => {
+        this.windowDraftDirty = true;
+        delete this.windowMenu.dataset.error;
+        customError.hidden = true;
+        input.removeAttribute('aria-invalid');
+      });
+    }
+    customApply.addEventListener('click', () => {
+      const from = Date.parse(`${this.windowFromInput.value}T00:00:00.000Z`);
+      const to = Date.parse(`${this.windowToInput.value}T23:59:59.999Z`);
+      if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || from >= to || from >= Date.now()) {
+        this.windowMenu.dataset.error = 'true';
+        customError.hidden = false;
+        this.windowFromInput.setAttribute('aria-invalid', 'true');
+        this.windowToInput.setAttribute('aria-invalid', 'true');
+        this.positionBacktestWindowMenu();
+        return;
+      }
+      delete this.windowMenu.dataset.error;
+      customError.hidden = true;
+      this.selectBacktestWindow({ preset: 'custom', from, to });
+    });
+    custom.append(customLabel, this.windowFromInput, this.windowToInput, customApply, dateHint, customError);
+    this.windowMenu.appendChild(custom);
+    this.windowButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.toggleBacktestWindowMenu();
+    });
+    const outside = (event: Event) => {
+      if (!this.windowMenu.hidden && event.target instanceof Node
+        && !this.windowMenu.contains(event.target) && event.target !== this.windowButton) {
+        this.closeBacktestWindowMenu();
+      }
+    };
+    const keydown = (event: KeyboardEvent) => {
+      if (this.windowMenu.hidden) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.closeBacktestWindowMenu();
+        this.windowButton.focus();
+        return;
+      }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp'
+        || event.key === 'Home' || event.key === 'End') {
+        const options = [...this.windowMenu.querySelectorAll<HTMLButtonElement>('[data-window-preset]')];
+        if (options.length === 0) return;
+        const current = options.indexOf(doc.activeElement as HTMLButtonElement);
+        if (current < 0 && doc.activeElement !== this.windowButton) return;
+        const index = event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? options.length - 1
+            : (current < 0 ? 0 : current + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+        event.preventDefault();
+        options[index].focus();
+      }
+    };
+    doc.addEventListener('pointerdown', outside, true);
+    doc.addEventListener('keydown', keydown, true);
+    this.windowMenuCleanup = () => {
+      doc.removeEventListener('pointerdown', outside, true);
+      doc.removeEventListener('keydown', keydown, true);
+    };
+    identity.append(this.windowMenu);
     const actions = element(doc, 'div', 'quant-backtest-dock-actions');
     this.collapseButton = button(doc, 'Collapse', 'quant-backtest-icon-button');
     this.collapseButton.prepend(dockIcon(doc, 'chevron-down'));
@@ -404,6 +525,7 @@ export class BacktestWorkbench {
     this.resizeListener = () => {
       this.clampDockToViewport();
       this.syncResponsiveVisibility();
+      if (!this.windowMenu.hidden) this.positionBacktestWindowMenu();
     };
     doc.defaultView?.addEventListener('resize', this.resizeListener);
     this.render();
@@ -425,6 +547,10 @@ export class BacktestWorkbench {
   setReport(report: BacktestReport | null): void {
     if (this.destroyed) return;
     const previousReport = this.report;
+    if (previousReport?.key?.cellId !== report?.key?.cellId
+      || previousReport?.key?.indicatorId !== report?.key?.indicatorId) {
+      this.closeBacktestWindowMenu();
+    }
     const signature = reportSurfaceSignature(report);
     this.report = report;
     if (this.simulationMounted
@@ -460,6 +586,7 @@ export class BacktestWorkbench {
 
   openViewer(): void {
     if (this.destroyed || !this.report) return;
+    this.closeBacktestWindowMenu();
     const active = this.element.ownerDocument.activeElement;
     this.viewerReturnFocus = active instanceof HTMLElement ? active : this.viewerButton;
     this.viewer.open(this.report);
@@ -502,6 +629,9 @@ export class BacktestWorkbench {
     this.viewer.destroy();
     this.endSimulationSession();
     this.settingsPanel.destroy();
+    this.closeBacktestWindowMenu();
+    this.windowMenuCleanup?.();
+    this.windowMenuCleanup = null;
     this.viewerReturnFocus = null;
     this.settingsReturnFocus = null;
     this.notifyPort(() => this.port.onResize?.(0));
@@ -527,6 +657,7 @@ export class BacktestWorkbench {
 
   private render(): void {
     if (!this.report) {
+      this.closeBacktestWindowMenu();
       this.element.dataset.state = 'empty';
       this.closeViewer();
       // A report can disappear without destroying the Workbench (for example
@@ -537,6 +668,7 @@ export class BacktestWorkbench {
       this.dockMetrics.replaceChildren();
       this.dockTitle.textContent = '';
       this.dockRange.textContent = '';
+      this.renderBacktestWindowControl(null);
       this.collapsedNet.textContent = '';
       this.dockRange.removeAttribute('title');
       this.dockRange.removeAttribute('aria-label');
@@ -551,6 +683,7 @@ export class BacktestWorkbench {
     }
     this.element.dataset.state = this.report.status ?? 'ready';
     this.dockTitle.textContent = this.report.strategyName;
+    this.renderBacktestWindowControl(this.report);
     this.updateCollapsedNet(this.report);
     const range = formatBacktestRange(this.report);
     const precision = formatExecutionPrecision(this.report.execution?.precision);
@@ -593,6 +726,7 @@ export class BacktestWorkbench {
   /** Open the selected strategy's Inputs/Properties panel from Dock or Viewer. */
   openSettings(): void {
     if (this.destroyed || !this.report || !this.port.settings) return;
+    this.closeBacktestWindowMenu();
     try {
       const snapshot = this.port.settings.read(this.report);
       if (snapshot) {
@@ -610,6 +744,95 @@ export class BacktestWorkbench {
     } catch {
       // Settings are an optional enhancement; a torn-down chart must not break
       // report navigation or the host Workspace lifecycle.
+    }
+  }
+
+  private toggleBacktestWindowMenu(): void {
+    if (this.destroyed || !this.report) return;
+    if (this.windowMenu.hidden) {
+      this.windowMenu.hidden = false;
+      this.windowButton.setAttribute('aria-expanded', 'true');
+      this.renderBacktestWindowControl(this.report);
+      this.positionBacktestWindowMenu();
+      const active = this.windowMenu.querySelector<HTMLElement>('[data-window-preset].active')
+        ?? this.windowMenu.querySelector<HTMLElement>('[data-window-preset]');
+      active?.focus();
+    } else {
+      this.closeBacktestWindowMenu();
+    }
+  }
+
+  private positionBacktestWindowMenu(): void {
+    const view = this.element.ownerDocument.defaultView;
+    if (!view || this.windowMenu.hidden) return;
+    // The Dock may sit close to the bottom edge in a short chart. Measure the
+    // real menu after opening and flip it above the header when the natural
+    // downward placement would create document overflow.
+    this.windowMenu.dataset.placement = 'below';
+    this.windowMenu.style.top = 'calc(100% + 6px)';
+    this.windowMenu.style.bottom = 'auto';
+    this.windowMenu.style.maxHeight = '';
+    let rect = this.windowMenu.getBoundingClientRect();
+    if (rect.bottom > view.innerHeight - 8 && rect.top >= rect.height + 8) {
+      this.windowMenu.dataset.placement = 'above';
+      this.windowMenu.style.top = 'auto';
+      this.windowMenu.style.bottom = 'calc(100% + 6px)';
+      rect = this.windowMenu.getBoundingClientRect();
+    }
+    if (rect.bottom > view.innerHeight - 8) {
+      this.windowMenu.style.maxHeight = `${Math.max(96, view.innerHeight - rect.top - 8)}px`;
+    } else if (rect.top < 8) {
+      this.windowMenu.dataset.placement = 'below';
+      this.windowMenu.style.top = 'calc(100% + 6px)';
+      this.windowMenu.style.bottom = 'auto';
+      rect = this.windowMenu.getBoundingClientRect();
+      this.windowMenu.style.maxHeight = `${Math.max(96, view.innerHeight - rect.top - 8)}px`;
+    }
+  }
+
+  private closeBacktestWindowMenu(): void {
+    this.windowMenu.hidden = true;
+    this.windowButton.setAttribute('aria-expanded', 'false');
+    this.windowDraftDirty = false;
+    delete this.windowMenu.dataset.error;
+    this.windowError.hidden = true;
+    this.windowFromInput.removeAttribute('aria-invalid');
+    this.windowToInput.removeAttribute('aria-invalid');
+  }
+
+  private selectBacktestWindow(selection: BacktestWindowSelection): void {
+    const report = this.report;
+    if (!report) return;
+    this.closeBacktestWindowMenu();
+    this.notifyPort(() => this.port.onBacktestWindowChange?.(report, selection));
+    // The selected menu item is about to be re-rendered or hidden while the
+    // chart/provider request runs. Keep keyboard focus on the stable trigger
+    // so the next Tab/Escape action has a visible, deterministic owner.
+    this.windowButton.focus();
+  }
+
+  private renderBacktestWindowControl(report: BacktestReport | null): void {
+    if (!report) {
+      this.windowButton.textContent = 'Default · 2,000 bars';
+      this.windowButton.hidden = true;
+      return;
+    }
+    this.windowButton.hidden = false;
+    const selection = this.port.getBacktestWindow?.(report)
+      ?? (report.window ? { preset: report.window.preset, from: report.window.from, to: report.window.to } : { preset: 'default' });
+    const labels: Record<BacktestWindowSelection['preset'], string> = {
+      default: 'Default · 2,000 bars',
+      '1M': '1 month', '3M': '3 months', '6M': '6 months', '1Y': '1 year', custom: 'Custom dates',
+    };
+    this.windowButton.textContent = labels[selection.preset];
+    [...this.windowMenu.querySelectorAll<HTMLElement>('[data-window-preset]')].forEach((option) => {
+      const active = option.dataset.windowPreset === selection.preset;
+      option.setAttribute('aria-checked', String(active));
+      option.classList.toggle('active', active);
+    });
+    if (selection.preset === 'custom' && !this.windowDraftDirty) {
+      if (typeof selection.from === 'number') this.windowFromInput.value = new Date(selection.from).toISOString().slice(0, 10);
+      if (typeof selection.to === 'number') this.windowToInput.value = new Date(selection.to).toISOString().slice(0, 10);
     }
   }
 
@@ -840,6 +1063,7 @@ export class BacktestWorkbench {
   }
 
   private toggleCollapsed(): void {
+    this.closeBacktestWindowMenu();
     this.collapsed = !this.collapsed;
     this.dock.classList.toggle('is-collapsed', this.collapsed);
     this.updateCollapseA11y();
