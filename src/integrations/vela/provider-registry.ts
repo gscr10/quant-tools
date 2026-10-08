@@ -351,6 +351,75 @@ function normalizeMetadataCacheTtl(value: number | undefined): number {
   return Math.max(1_000, Math.floor(value as number));
 }
 
+type BinanceEnumerationRuntime = DataProvider & {
+  /** Vela 0.7.7 keeps this helper on the provider prototype. */
+  listFutures?: () => Promise<unknown>;
+  /** Installed by guardProviderNetwork before the enumeration runs. */
+  json?: (url: string) => Promise<unknown>;
+  __quantToolsTradFiEnumeration?: true;
+};
+
+/**
+ * Vela 0.7.7 only includes `PERPETUAL` contracts in its Binance futures
+ * picker. Binance's public futures exchangeInfo now also exposes TradFi
+ * perpetuals (for example XAUUSDT, TSLAUSDT and SPYUSDT) under the
+ * `TRADIFI_PERPETUAL` contract type. They use the same klines and WebSocket
+ * endpoints as crypto perpetuals, so the existing `.P` routing remains valid;
+ * only the symbol index needs to include this additional contract type.
+ *
+ * Install this on the workspace-owned instance rather than editing
+ * node_modules. The wrapper deliberately calls the guarded `json()` seam at
+ * invocation time, preserving the request timeout, endpoint diagnostics and
+ * metadata cache already provided by provider-network.ts.
+ */
+function enableBinanceTradFiEnumeration<T extends DataProvider>(provider: T): T {
+  const runtime = provider as BinanceEnumerationRuntime;
+  if (runtime.__quantToolsTradFiEnumeration || typeof runtime.listFutures !== 'function') {
+    return provider;
+  }
+  const upstreamListFutures = runtime.listFutures.bind(provider);
+  Object.defineProperty(runtime, 'listFutures', {
+    configurable: true,
+    enumerable: false,
+    value: async (): Promise<unknown> => {
+      const json = runtime.json;
+      if (typeof json !== 'function') return upstreamListFutures();
+      const payload = await json('https://fapi.binance.com/fapi/v1/exchangeInfo');
+      if (payload === null || typeof payload !== 'object') return [];
+      const symbols = (payload as { symbols?: unknown }).symbols;
+      if (!Array.isArray(symbols)) return [];
+      return symbols
+        .filter((symbol): symbol is {
+          symbol: string;
+          baseAsset?: string;
+          quoteAsset?: string;
+          contractType?: string;
+          status?: string;
+        } => (
+          symbol !== null
+          && typeof symbol === 'object'
+          && typeof (symbol as { symbol?: unknown }).symbol === 'string'
+          && (symbol as { status?: unknown }).status === 'TRADING'
+          && ((symbol as { contractType?: unknown }).contractType === 'PERPETUAL'
+            || (symbol as { contractType?: unknown }).contractType === 'TRADIFI_PERPETUAL')
+        ))
+        .map((symbol) => ({
+          ticker: `${symbol.symbol}.P`,
+          description: `${symbol.baseAsset ?? symbol.symbol} / ${symbol.quoteAsset ?? 'USDT'} Perpetual`,
+          type: 'futures',
+        }));
+    },
+    writable: true,
+  });
+  Object.defineProperty(runtime, '__quantToolsTradFiEnumeration', {
+    configurable: false,
+    enumerable: false,
+    value: true,
+    writable: false,
+  });
+  return provider;
+}
+
 function prepareProvider<T extends DataProvider>(
   provider: T,
   kind: 'binance' | 'hyperliquid',
@@ -359,9 +428,11 @@ function prepareProvider<T extends DataProvider>(
   // Keep all compatibility seams instance-local.  The 30s index budget is
   // intentionally wider than the bounded network path; it prevents a hung
   // provider from parking a bare symbol without truncating normal cold loads.
+  const networked = guardProviderNetwork(provider, kind, options);
+  if (kind === 'binance') enableBinanceTradFiEnumeration(networked);
   const guarded = guardProviderIndex(
     guardProviderSubscription(
-      guardProviderHistory(guardProviderNetwork(provider, kind, options), kind),
+      guardProviderHistory(networked, kind),
       kind,
     ),
     kind,

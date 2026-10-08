@@ -1114,6 +1114,12 @@ test('bundled Binance listSymbols retries after its rejected cache settles', asy
             status: 'TRADING',
             baseAsset: 'BTC',
             quoteAsset: 'USDT',
+          }, {
+            symbol: 'XAUUSDT',
+            contractType: 'TRADIFI_PERPETUAL',
+            status: 'TRADING',
+            baseAsset: 'XAU',
+            quoteAsset: 'USDT',
           }] });
         }
         return jsonResponse({ symbols: [{
@@ -1139,11 +1145,54 @@ test('bundled Binance listSymbols retries after its rejected cache settles', asy
     assert.deepEqual(symbols, [
       { ticker: 'ETHUSDT', description: 'ETH / USDT', type: 'crypto' },
       { ticker: 'BTCUSDT.P', description: 'BTC / USDT Perpetual', type: 'futures' },
+      { ticker: 'XAUUSDT.P', description: 'XAU / USDT Perpetual', type: 'futures' },
     ]);
     assert.ok(calls.length > failedCalls, 'a failed cached enumeration must be retried');
     const successfulCalls = calls.length;
     assert.deepEqual(await provider.listSymbols(), symbols);
     assert.equal(calls.length, successfulCalls, 'successful enumeration remains cached');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Binance exposes TradFi perpetual metadata through the futures symbol info path', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  try {
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      calls.push(url);
+      if (url === 'https://fapi.binance.com/fapi/v1/exchangeInfo') {
+        return jsonResponse({ symbols: [{
+          symbol: 'XAUUSDT',
+          contractType: 'TRADIFI_PERPETUAL',
+          status: 'TRADING',
+          baseAsset: 'XAU',
+          quoteAsset: 'USDT',
+          filters: [{ filterType: 'PRICE_FILTER', tickSize: '0.01' }],
+        }] });
+      }
+      throw new Error(`unexpected request: ${url}`);
+    };
+
+    const provider = createWorkspaceProviders({ requestTimeoutMs: 100 }).binance();
+    const info = await provider.getSymbolInfo('XAUUSDT.P');
+
+    assert.deepEqual(info, {
+      ticker: 'XAUUSDT.P',
+      tickerid: 'BINANCE:XAUUSDT.P',
+      prefix: 'BINANCE',
+      description: 'XAU / USDT Perpetual',
+      type: 'futures',
+      basecurrency: 'XAU',
+      currency: 'USDT',
+      mintick: 0.01,
+      pricescale: 100,
+      timezone: 'Etc/UTC',
+      session: '24x7',
+    });
+    assert.deepEqual(calls, ['https://fapi.binance.com/fapi/v1/exchangeInfo']);
   } finally {
     globalThis.fetch = originalFetch;
   }
